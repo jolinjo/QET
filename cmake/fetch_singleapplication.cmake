@@ -26,3 +26,21 @@ FetchContent_Declare(
   GIT_TAG        v3.5.4)
 
 FetchContent_MakeAvailable(SingleApplication)
+
+# QET macOS fix: force SystemV shared memory for the single-instance lock.
+# On macOS, Qt's QSharedMemory defaults to POSIX shm, which is NOT released
+# when a process exits uncleanly (crash / SIGKILL / QCommandLineParser's
+# ::exit()). The orphaned segment then makes every later launch believe another
+# instance is already running, so the app silently exits at start-up.
+# SystemV segments are auto-detached by the kernel on process death, which lets
+# SingleApplication's built-in Unix crash-recovery reclaim the primary slot.
+if(APPLE)
+  set(_qet_sa_cpp "${singleapplication_SOURCE_DIR}/singleapplication.cpp")
+  file(READ "${_qet_sa_cpp}" _qet_sa_content)
+  string(REPLACE
+    "QNativeIpcKey( d->blockServerName )"
+    "QNativeIpcKey( d->blockServerName, QNativeIpcKey::Type::SystemV )"
+    _qet_sa_content "${_qet_sa_content}")
+  file(WRITE "${_qet_sa_cpp}" "${_qet_sa_content}")
+  message(STATUS " - QET: patched SingleApplication to use SystemV shared memory")
+endif()
