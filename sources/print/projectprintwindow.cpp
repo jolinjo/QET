@@ -127,6 +127,9 @@ ProjectPrintWindow::ProjectPrintWindow(QETProject *project, QPrinter *printer, Q
 {
 	ui->setupUi(this);
 
+	// le centrage n'a de sens que lorsque le folio est adapté à la page
+	ui->m_center_in_page_cb->setEnabled(ui->m_fit_in_page_cb->isChecked());
+
 	loadPageSetupForCurrentPrinter();
 
 	m_preview = new QPrintPreviewWidget(m_printer);
@@ -259,7 +262,23 @@ void ProjectPrintWindow::printDiagram(Diagram *diagram, bool fit_page, QPainter 
 	auto full_page = printer->fullPage();
 	auto diagram_rect = QRectF(diagramRect(diagram, option));
 	if (fit_page) {
-		diagram->render(painter, QRectF(), diagram_rect, Qt::KeepAspectRatio);
+		if (ui->m_center_in_page_cb->isChecked()) {
+			// centre le folio horizontalement et verticalement
+			// dans la zone imprimable
+			QRectF viewport_rect(painter->viewport());
+			qreal ratio = qMin(
+				viewport_rect.width() / diagram_rect.width(),
+				viewport_rect.height() / diagram_rect.height());
+			QSizeF scaled_size = diagram_rect.size() * ratio;
+			QRectF target_rect(
+				viewport_rect.x() + (viewport_rect.width() - scaled_size.width()) / 2.0,
+				viewport_rect.y() + (viewport_rect.height() - scaled_size.height()) / 2.0,
+				scaled_size.width(),
+				scaled_size.height());
+			diagram->render(painter, target_rect, diagram_rect, Qt::KeepAspectRatio);
+		} else {
+			diagram->render(painter, QRectF(), diagram_rect, Qt::KeepAspectRatio);
+		}
 	} else {
 		// Print on one or several pages
 #if QT_VERSION < QT_VERSION_CHECK(5, 15, 1) // ### Qt 6: remove
@@ -686,7 +705,12 @@ void ProjectPrintWindow::on_m_draw_border_cb_clicked()          { m_preview->upd
 void ProjectPrintWindow::on_m_draw_titleblock_cb_clicked()      { m_preview->updatePreview(); }
 void ProjectPrintWindow::on_m_keep_conductor_color_cb_clicked() { m_preview->updatePreview(); }
 void ProjectPrintWindow::on_m_draw_terminal_cb_clicked()        { m_preview->updatePreview(); }
-void ProjectPrintWindow::on_m_fit_in_page_cb_clicked()          { m_preview->updatePreview(); }
+void ProjectPrintWindow::on_m_fit_in_page_cb_clicked()
+{
+	ui->m_center_in_page_cb->setEnabled(ui->m_fit_in_page_cb->isChecked());
+	m_preview->updatePreview();
+}
+void ProjectPrintWindow::on_m_center_in_page_cb_clicked()       { m_preview->updatePreview(); }
 void ProjectPrintWindow::on_m_use_full_page_cb_clicked()
 {
 	m_printer->setFullPage(ui->m_use_full_page_cb->isChecked());

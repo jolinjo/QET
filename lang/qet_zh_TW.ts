@@ -5445,6 +5445,14 @@ Les variables suivantes sont incompatibles :
 <context>
     <name>ProjectPrintWindow</name>
     <message>
+        <source>Centrer le folio dans la page</source>
+        <translation>頁面置中</translation>
+    </message>
+    <message>
+        <source>Si cette option est cochée, le folio adapté à la page sera centré horizontalement et verticalement dans la zone imprimable.</source>
+        <translation>如果勾選此選項，適應紙張的頁面將在可列印區域內水平與垂直置中。</translation>
+    </message>
+    <message>
         <location filename="../sources/print/projectprintwindow.ui" line="20"/>
         <source>MainWindow</source>
         <translation>主視窗</translation>
