@@ -25,6 +25,8 @@
 
 #include <QApplication>
 #include <QImage>
+#include <QPageSize>
+#include <QPdfWriter>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -165,17 +167,40 @@ int cmdRender(QETProject *project, const CliOptions &opt)
 			size = QSize(opt.width,
 			             size.height() * opt.width / qMax(1, size.width()));
 
-		QImage image(size, QImage::Format_RGB32);
-		image.fill(Qt::white);
-		if (!diagram->toPaintDevice(image, size.width(), size.height()))
-			return fail(QStringLiteral("rendering folio %1 failed").arg(i));
-
 		QString path = opt.out;
 		if (opt.folio < 0 && diagrams.count() > 1) {
 			const int dot = path.lastIndexOf(QLatin1Char('.'));
 			path.insert(dot < 0 ? path.size() : dot,
 			            QStringLiteral("_%1").arg(i + 1));
 		}
+
+		if (path.endsWith(QLatin1String(".pdf"), Qt::CaseInsensitive)) {
+			// PDF at the folio's true size (folio scale is 4 px/mm),
+			// zero margins → prints with no extra whitespace, correct
+			// aspect ratio, and vector output.
+			const QSize folio = diagram->imageSize();
+			const double px_to_pt = 72.0 / (25.4 * 4.0);
+			QPdfWriter pdf(path);
+			pdf.setPageSize(QPageSize(
+				QSizeF(folio.width() * px_to_pt,
+				       folio.height() * px_to_pt),
+				QPageSize::Point, QStringLiteral("folio"),
+				QPageSize::ExactMatch));
+			pdf.setPageMargins(QMarginsF(0, 0, 0, 0));
+			if (!diagram->toPaintDevice(pdf, pdf.width(), pdf.height()))
+				return fail(QStringLiteral("rendering folio %1 to PDF "
+				            "failed").arg(i));
+			rendered.append(QJsonObject{
+				{"folio", i}, {"file", path}, {"format", "pdf"},
+				{"width", folio.width()}, {"height", folio.height()},
+			});
+			continue;
+		}
+
+		QImage image(size, QImage::Format_RGB32);
+		image.fill(Qt::white);
+		if (!diagram->toPaintDevice(image, size.width(), size.height()))
+			return fail(QStringLiteral("rendering folio %1 failed").arg(i));
 		if (!image.save(path))
 			return fail(QStringLiteral("cannot write %1").arg(path));
 		rendered.append(QJsonObject{
