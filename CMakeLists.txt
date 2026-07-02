@@ -17,7 +17,7 @@
 cmake_minimum_required(VERSION 3.5...4.2)
 
 project(qelectrotech
-  VERSION 0.100.7
+  VERSION 0.100.8
   DESCRIPTION "QET is a CAD/CAE editor focusing on schematics drawing features."
   HOMEPAGE_URL "https://qelectrotech.org/"
   LANGUAGES CXX)
@@ -64,6 +64,8 @@ qt_add_executable(
   ${QM_FILES}
   ${QET_DIR}/qelectrotech.qrc
   )
+
+target_compile_definitions(${PROJECT_NAME} PRIVATE QET_PROJECT_VERSION="${PROJECT_VERSION}")
 
 if(QMFILES_AS_RESOURCE)
   qt_add_translations(${PROJECT_NAME} TS_FILES ${TS_FILES} RESOURCE_PREFIX "/lang")

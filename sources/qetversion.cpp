@@ -28,7 +28,13 @@ namespace QetVersion
 
 	QString displayedVersion()
 	{
+#ifdef QET_PROJECT_VERSION
+		// 顯示版本以 CMakeLists 的 project VERSION 為準；
+		// currentVersion() 仍維持上游值，避免存檔被標成較新版本。
+		auto str = QStringLiteral(QET_PROJECT_VERSION);
+#else
 		auto str = currentVersion().toString();
+#endif
 
 		switch (VERSION_TYPE) {
 			case dev:
