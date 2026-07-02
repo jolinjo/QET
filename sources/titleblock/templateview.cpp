@@ -17,6 +17,8 @@
 */
 #include "templateview.h"
 
+#include <QSettings>
+
 #include "../qeticons.h"
 #include "dimensionwidget.h"
 #include "gridlayoutanimation.h"
@@ -549,8 +551,15 @@ qreal TitleBlockTemplateView::templateHeight() const
 	@param e QWheelEvent describing the wheel event
 */
 void TitleBlockTemplateView::wheelEvent(QWheelEvent *e) {
-	// si la touche Ctrl est enfoncee, on zoome / dezoome
-	if (e -> modifiers() & Qt::ControlModifier) {
+	// meme comportement que DiagramView : molette seule = zoom (souris) ;
+	// en mode gestes (trackpad), seul Ctrl+molette zoome
+	QSettings settings;
+	bool gestures = settings.value(QStringLiteral("diagramview/gestures"), false).toBool();
+	bool zoom_requested = gestures
+		? (e -> modifiers() & Qt::ControlModifier)
+		: (e -> modifiers() == Qt::NoModifier
+		   || (e -> modifiers() & Qt::ControlModifier));
+	if (zoom_requested) {
 		if (e -> angleDelta().y() > 0) {
 			zoomIn();
 		} else {

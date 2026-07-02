@@ -81,19 +81,15 @@ if(APPLE)
   set_source_files_properties(${QET_DIR}/ico/mac_icon/qelectrotech.icns
     PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
   # 元件庫與圖框複製進 bundle Resources（排除 submodule 的 .git）
+  # 自用組建：.app 僅作外殼（圖示 + Resources），Qt 由系統 brew 提供
+  # （@rpath 指向 /opt/homebrew）。不執行 macdeployqt，避免 bundle 內
+  # 另塞一套 Qt 而與 brew Qt 雙重載入導致啟動即崩潰。cocoa/offscreen
+  # 平台外掛都由 brew Qt 供給，毋須複製進 bundle。
   add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND rsync -a --delete --exclude=.git
             ${QET_DIR}/elements $<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/
     COMMAND rsync -a --delete
             ${QET_DIR}/titleblocks $<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/)
-  # offscreen 平台外掛複製進 bundle：--cli-* headless 模式需要
-  # （macdeployqt 只帶 cocoa；缺它 CLI 會因找不到平台外掛而無法啟動）
-  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-            $<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/PlugIns/platforms
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${QT6_INSTALL_PREFIX}/${QT6_INSTALL_PLUGINS}/platforms/libqoffscreen.dylib
-            $<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/PlugIns/platforms/)
 endif()
 
 if(QMFILES_AS_RESOURCE)

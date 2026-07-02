@@ -16,6 +16,7 @@
 	along with QElectroTech.  If not, see <http://www.gnu.org/licenses/>.
 */
 #include "qetdiagrameditor.h"
+#include "qetversion.h"
 #include <QCoreApplication>
 #include "ElementsCollection/elementscollectionwidget.h"
 #include "QWidgetAnimation/qwidgetanimation.h"
@@ -100,7 +101,7 @@ QETDiagramEditor::QETDiagramEditor(const QStringList &files, QWidget *parent) :
 	connect(&windowMapper, &QSignalMapper::mappedObject, this,
 		[this](QObject *o) { activateWidget(qobject_cast<QWidget *>(o)); });
 
-	setWindowTitle(tr("QElectroTech", "window title"));
+	setWindowTitle(tr("QElectroTech", "window title") + " " + QetVersion::displayedVersion());
 	setWindowIcon(QET::Icons::QETLogo);
 	statusBar() -> showMessage(tr("QElectroTech", "status bar message"));
 

@@ -184,14 +184,22 @@ int main(int argc, char **argv)
 	QGuiApplication::setHighDpiScaleFactorRoundingPolicy(QetSettings::hdpiScaleFactorRoundingPolicy());
 
 
-	SingleApplication app(argc, argv, true);
 #ifdef Q_OS_MACOS
+	/* macOS：SingleApplication 的共享記憶體鎖不可靠（POSIX segment 遇
+	 * crash/kill 會殘留；SysV 在由 LaunchServices 啟動時被拒絕），會讓
+	 * app 啟動即退出。macOS 的 LaunchServices 本身就保證 GUI 單一實例，
+	 * 檔案開啟也走 Apple Events（MacOSXOpenEvent），故直接用 QApplication。 */
+	QApplication app(argc, argv);
 	//Handle the opening of QET when user double click on a .qet .elmt .tbt file
 	//or drop these same files to the QET icon of the dock
 	MacOSXOpenEvent open_event;
 	app.installEventFilter(&open_event);
 	app.setStyle(QStyleFactory::create("Fusion"));
-#endif
+
+	QETApp qetapp;
+	QETApp::instance()->installEventFilter(&qetapp);
+#else
+	SingleApplication app(argc, argv, true);
 
 	if (app.isSecondary())
 	{
@@ -209,6 +217,7 @@ int main(int argc, char **argv)
 	QETApp::instance()->installEventFilter(&qetapp);
 	QObject::connect(&app, &SingleApplication::receivedMessage,
 			 &qetapp, &QETApp::receiveMessage);
+#endif
 
 	QtConcurrent::run([=]()
 	{
