@@ -107,6 +107,11 @@ void TitleBlockTemplateCellWidget::initWidgets()
 	font_size_label_ = new QLabel(tr("Police :"));
 	font_size_input_ = new QSpinBox();
 	font_adjust_input_ = new QCheckBox(tr("Ajuster la taille de police si besoin"));
+	background_color_checkbox_ = new QCheckBox(tr("Couleur de fond :"));
+	background_color_input_ = new QPushButton();
+	background_color_input_ -> setFixedSize(40, 20);
+	background_color_ = QColor(Qt::white);
+	updateBackgroundColorButton();
 	
 	// layout
 	QHBoxLayout *label_edition = new QHBoxLayout();
@@ -140,7 +145,9 @@ void TitleBlockTemplateCellWidget::initWidgets()
 	cell_editor_text_layout_ -> addWidget(logo_label_,         5, 0);
 	cell_editor_text_layout_ -> addWidget(logo_input_,         5, 1);
 	cell_editor_text_layout_ -> addWidget(add_logo_input_,     5, 2);
-	cell_editor_text_layout_ -> addWidget(empty_label_,        6, 0);
+	cell_editor_text_layout_ -> addWidget(background_color_checkbox_, 6, 0);
+	cell_editor_text_layout_ -> addWidget(background_color_input_,    6, 1, Qt::AlignLeft);
+	cell_editor_text_layout_ -> addWidget(empty_label_,        7, 0, 1, 4);
 	cell_editor_text_layout_ -> setColumnStretch(4, 4000);
 	cell_editor_layout_ = new QVBoxLayout();
 	cell_editor_layout_ -> addLayout(cell_editor_type_and_name_layout_);
@@ -162,6 +169,8 @@ void TitleBlockTemplateCellWidget::initWidgets()
 	connect(vert_align_input_,  SIGNAL(activated(int)),           this, SLOT(editAlignment()));
 	connect(font_size_input_,   SIGNAL(valueChanged(int)),        this, SLOT(editFontSize()));
 	connect(font_adjust_input_, SIGNAL(clicked(bool)),            this, SLOT(editAdjust()));
+	connect(background_color_checkbox_, SIGNAL(clicked(bool)),   this, SLOT(editBackgroundColorDisplayed(bool)));
+	connect(background_color_input_,    SIGNAL(released()),      this, SLOT(editBackgroundColor()));
 	connect(logo_input_,        SIGNAL(activated(int)),           this, SLOT(editLogo()));
 	
 	updateFormType(TitleBlockCell::TextCell);
@@ -224,7 +233,12 @@ void TitleBlockTemplateCellWidget::edit(TitleBlockCell *cell) {
 	font_size_input_   -> blockSignals(true); // QSpinBox has no signal triggered for each non-programmatic change
 	font_size_input_   -> setValue(TitleBlockTemplate::fontForCell(*cell).pointSize());
 	font_size_input_   -> blockSignals(false);
-	
+
+	background_color_checkbox_ -> setChecked(cell -> background_color.isValid());
+	background_color_ = cell -> background_color.isValid()
+		? cell -> background_color : QColor(Qt::white);
+	updateBackgroundColorButton();
+
 	logo_input_        -> setCurrentIndex(logo_input_ -> findData(cell -> logo_reference));
 }
 
@@ -305,6 +319,42 @@ void TitleBlockTemplateCellWidget::editAdjust()
 }
 
 /**
+	Ask the user for a background color, then emit the matching
+	modification command.
+	@see ModifyTitleBlockCellCommand
+*/
+void TitleBlockTemplateCellWidget::editBackgroundColor()
+{
+	QColor new_color = QColorDialog::getColor(
+		background_color_, this,
+		tr("Couleur de fond de la cellule"));
+	if (!new_color.isValid()) return;
+	background_color_ = new_color;
+	updateBackgroundColorButton();
+	background_color_checkbox_ -> setChecked(true);
+	emitModification("bgcolor", new_color);
+}
+
+/**
+	Emit a background color modification command; an unchecked box means
+	no fill (invalid color).
+	@see ModifyTitleBlockCellCommand
+*/
+void TitleBlockTemplateCellWidget::editBackgroundColorDisplayed(bool checked)
+{
+	emitModification("bgcolor", checked ? QVariant(background_color_) : QVariant(QColor()));
+}
+
+/**
+	Update the color swatch shown on the background color button.
+*/
+void TitleBlockTemplateCellWidget::updateBackgroundColorButton()
+{
+	background_color_input_ -> setStyleSheet(
+		QStringLiteral("background-color: %1;").arg(background_color_.name()));
+}
+
+/**
 	Emit a logo modification command.
 	@see ModifyTitleBlockCellCommand
 */
@@ -356,6 +406,8 @@ void TitleBlockTemplateCellWidget::setReadOnly(bool read_only) {
 	vert_align_input_ -> setEnabled(!read_only_);
 	font_size_input_ -> setReadOnly(read_only_);
 	font_adjust_input_ -> setEnabled(!read_only_);
+	background_color_checkbox_ -> setEnabled(!read_only_);
+	background_color_input_ -> setEnabled(!read_only_);
 }
 
 /**

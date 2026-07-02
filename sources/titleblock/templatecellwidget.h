@@ -74,6 +74,9 @@ class TitleBlockTemplateCellWidget : public QWidget {
 		QLabel        *font_size_label_;
 		QSpinBox      *font_size_input_;
 		QCheckBox     *font_adjust_input_;
+		QCheckBox     *background_color_checkbox_;
+		QPushButton   *background_color_input_;
+		QColor         background_color_;
 		QVBoxLayout   *cell_editor_layout_;
 		QHBoxLayout   *cell_editor_type_and_name_layout_;
 		QGridLayout   *cell_editor_text_layout_;
@@ -99,7 +102,8 @@ class TitleBlockTemplateCellWidget : public QWidget {
 	
 	private:
 		void initWidgets();
-	
+		void updateBackgroundColorButton();
+
 	public slots:
 		void updateFormType(int);
 		void edit(TitleBlockCell *);
@@ -111,6 +115,8 @@ class TitleBlockTemplateCellWidget : public QWidget {
 		void editAlignment();
 		void editFontSize();
 		void editAdjust();
+		void editBackgroundColor();
+		void editBackgroundColorDisplayed(bool);
 		void editLogo();
 		void updateLogosComboBox(const TitleBlockTemplate *);
 		void setReadOnly(bool);

@@ -16,6 +16,7 @@ TitleBlockCell::TitleBlockCell()
 	font_size = 9;
 	hadjust = false;
 	logo_reference = QString("");
+	background_color = QColor();
 }
 
 /**
@@ -76,6 +77,8 @@ void TitleBlockCell::setAttribute(const QString &attribute, const QVariant &attr
 		font_size = attr_value.toInt();
 	} else if (attribute == "horizontal_adjust") {
 		hadjust = attr_value.toBool();
+	} else if (attribute == "bgcolor") {
+		background_color = qvariant_cast<QColor>(attr_value);
 	}
 }
 
@@ -102,6 +105,8 @@ QVariant TitleBlockCell::attribute(const QString &attribute) {
 		return(TitleBlockTemplate::fontForCell(*this).pointSizeF());
 	} else if (attribute == "horizontal_adjust") {
 		return(hadjust);
+	} else if (attribute == "bgcolor") {
+		return(background_color);
 	}
 	return(QVariant());
 }
@@ -129,6 +134,8 @@ QString TitleBlockCell::attributeName(const QString &attribute) {
 		return(QObject::tr("taille du texte", "title block cell property human name"));
 	} else if (attribute == "horizontal_adjust") {
 		return(QObject::tr("ajustement horizontal", "title block cell property human name"));
+	} else if (attribute == "bgcolor") {
+		return(QObject::tr("couleur de fond", "title block cell property human name"));
 	}
 	return(QString());
 }
@@ -155,6 +162,7 @@ void TitleBlockCell::loadContentFromCell(const TitleBlockCell &other_cell) {
 	font_size = other_cell.font_size;
 	alignment = other_cell.alignment;
 	hadjust = other_cell.hadjust;
+	background_color = other_cell.background_color;
 }
 
 /**
@@ -164,6 +172,12 @@ void TitleBlockCell::loadContentFromXml(const QDomElement &cell_element) {
 	// common properties
 	if (cell_element.hasAttribute("name") && !cell_element.attribute("name").isEmpty()) {
 		value_name = cell_element.attribute("name");
+	}
+	if (cell_element.hasAttribute("bgcolor")) {
+		QColor loaded_color(cell_element.attribute("bgcolor"));
+		if (loaded_color.isValid()) {
+			background_color = loaded_color;
+		}
 	}
 	
 	// specific properties
@@ -228,6 +242,9 @@ void TitleBlockCell::loadContentFromXml(const QDomElement &cell_element) {
 */
 void TitleBlockCell::saveContentToXml(QDomElement &cell_elmt) {
 	cell_elmt.setAttribute("name", value_name);
+	if (background_color.isValid()) {
+		cell_elmt.setAttribute("bgcolor", background_color.name());
+	}
 	
 	if (type() == TitleBlockCell::EmptyCell) {
 		cell_elmt.setTagName("empty");

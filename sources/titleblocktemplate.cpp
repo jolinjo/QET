@@ -1645,6 +1645,11 @@ void TitleBlockTemplate::renderCell(QPainter &painter,
 					const DiagramContext &diagram_context,
 					const QRect &cell_rect) const
 {
+	// fill the cell background when a color was set
+	if (cell.background_color.isValid()) {
+		painter.fillRect(cell_rect, cell.background_color);
+	}
+
 	// draw the border rect of the current cell
 	QPen pen(QBrush(), 1, Qt::SolidLine, Qt::SquareCap, Qt::MiterJoin);
 	pen.setColor(Qt::black);

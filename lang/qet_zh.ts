@@ -8661,6 +8661,11 @@ Que désirez vous faire ?</source>
         </translation>
     </message>
     <message>
+        <source>couleur de fond</source>
+        <comment>title block cell property human name</comment>
+        <translation>底色</translation>
+    </message>
+    <message>
         <location filename="../sources/titleblockcell.cpp" line="115"/>
         <source>type</source>
         <comment>title block cell property human name</comment>
@@ -13854,6 +13859,14 @@ associer le nom &quot;volta&quot; et la valeur &quot;1745&quot; remplacera %{vol
 </context>
 <context>
     <name>TitleBlockTemplateCellWidget</name>
+    <message>
+        <source>Couleur de fond :</source>
+        <translation>底色：</translation>
+    </message>
+    <message>
+        <source>Couleur de fond de la cellule</source>
+        <translation>单元格底色</translation>
+    </message>
     <message>
         <location filename="../sources/titleblock/templatecellwidget.cpp" line="58"/>
         <source>Type de cellule :</source>
