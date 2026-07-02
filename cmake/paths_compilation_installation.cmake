@@ -37,8 +37,10 @@ endif()
 
 if(APPLE)
   # for MacOS X or iOS, watchOS, tvOS (since 3.10.3)
+  # INSTALL_PREFIX 留空：路徑定義為相對於執行檔的 bundle 內路徑
+  # （見 define_definitions.cmake 的 QET_COMMON_COLLECTION_PATH_RELATIVE_TO_BINARY_PATH）
   set(COMPIL_PREFIX               "./")
-  set(INSTALL_PREFIX              "/usr/local/")
+  set(INSTALL_PREFIX              "")
   set(QET_BINARY_PATH             "bin/")
   set(QET_COMMON_COLLECTION_PATH  "../Resources/elements/")
   set(QET_COMMON_TBT_PATH         "../Resources/titleblocks/")

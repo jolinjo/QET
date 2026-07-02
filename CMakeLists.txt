@@ -67,6 +67,25 @@ qt_add_executable(
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE QET_PROJECT_VERSION="${PROJECT_VERSION}")
 
+if(APPLE)
+  set_target_properties(${PROJECT_NAME} PROPERTIES
+    MACOSX_BUNDLE TRUE
+    MACOSX_BUNDLE_BUNDLE_NAME "QElectroTech"
+    MACOSX_BUNDLE_GUI_IDENTIFIER "org.qelectrotech.qelectrotech"
+    MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+    MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+    MACOSX_BUNDLE_ICON_FILE "qelectrotech.icns")
+  target_sources(${PROJECT_NAME} PRIVATE ${QET_DIR}/ico/mac_icon/qelectrotech.icns)
+  set_source_files_properties(${QET_DIR}/ico/mac_icon/qelectrotech.icns
+    PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+  # 元件庫與圖框複製進 bundle Resources（排除 submodule 的 .git）
+  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND rsync -a --delete --exclude=.git
+            ${QET_DIR}/elements $<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/
+    COMMAND rsync -a --delete
+            ${QET_DIR}/titleblocks $<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/)
+endif()
+
 if(QMFILES_AS_RESOURCE)
   qt_add_translations(${PROJECT_NAME} TS_FILES ${TS_FILES} RESOURCE_PREFIX "/lang")
 else()
@@ -124,7 +143,7 @@ target_include_directories(
   ${QET_DIR}/sources/svg
   )
 
-install(TARGETS ${PROJECT_NAME})
+install(TARGETS ${PROJECT_NAME} BUNDLE DESTINATION "." RUNTIME DESTINATION bin)
 if (NOT MINGW)
 
 install(DIRECTORY ico/breeze-icons/16x16 DESTINATION ${QET_ICONS_PATH})
