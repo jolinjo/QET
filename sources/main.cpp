@@ -15,6 +15,7 @@
 	You should have received a copy of the GNU General Public License
 	along with QElectroTech.  If not, see <http://www.gnu.org/licenses/>.
 */
+#include "cli/qetcli.h"
 #include "machine_info.h"
 #include "qet.h"
 #include "qetapp.h"
@@ -164,6 +165,10 @@ void delete_old_log_files(int days)
 */
 int main(int argc, char **argv)
 {
+	// headless command-line mode: no GUI, no single-instance logic
+	if (QetCli::isCliInvocation(argc, argv))
+		return QetCli::run(argc, argv);
+
 	// before creating Application:
 	// export environment-variable "QT_HASH_SEED" with value "0" to
 	// disable radomisation for hashes in order to obtain "clean" XML-diffs:
