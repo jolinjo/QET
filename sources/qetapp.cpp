@@ -119,7 +119,7 @@ QETApp::QETApp() :
 	initSplashScreen();
 	initSystemTray();
 
-	connect(&signal_map, SIGNAL(mapped(QWidget *)),
+	connect(&signal_map, SIGNAL(mappedWidget(QWidget *)),
 		this, SLOT(invertMainWindowVisibility(QWidget *)));
 	qApp->setQuitOnLastWindowClosed(false);
 	connect(qApp, &QApplication::lastWindowClosed,
@@ -1215,7 +1215,14 @@ QString QETApp::languagesPath()
 	if (!lang_dir.isEmpty()) {
 		return(lang_dir);
 	} else {
-#ifndef QET_LANG_PATH
+#ifdef QMFILES_AS_RESOURCE
+	/* translations are embedded in the binary as Qt resources
+	 *  (see the QMFILES_AS_RESOURCE build option), load them from there
+	 * les traductions sont embarquees dans le binaire comme ressources Qt
+	 *  (voir l'option de compilation QMFILES_AS_RESOURCE)
+	 */
+	return(QStringLiteral(":/lang/"));
+#elif !defined(QET_LANG_PATH)
 	/* in the absence of a compilation option, we use the lang folder,
 	 *  located next to the executable binary
 	 * en l'absence d'option de compilation, on utilise le dossier lang,

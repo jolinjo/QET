@@ -139,12 +139,12 @@ QWidget *ExportDialog::initDiagramsListPart()
 	reset_mapper_     = new QSignalMapper(this);
 	clipboard_mapper_ = new QSignalMapper(this);
 	
-	connect(preview_mapper_,   SIGNAL(mapped(int)), this, SLOT(slot_previewDiagram(int)));
-	connect(width_mapper_,     SIGNAL(mapped(int)), this, SLOT(slot_correctHeight(int)));
-	connect(height_mapper_,    SIGNAL(mapped(int)), this, SLOT(slot_correctWidth(int)));
-	connect(ratio_mapper_,     SIGNAL(mapped(int)), this, SLOT(slot_keepRatioChanged(int)));
-	connect(reset_mapper_,     SIGNAL(mapped(int)), this, SLOT(slot_resetSize(int)));
-	connect(clipboard_mapper_, SIGNAL(mapped(int)), this, SLOT(slot_exportToClipBoard(int)));
+	connect(preview_mapper_,   SIGNAL(mappedInt(int)), this, SLOT(slot_previewDiagram(int)));
+	connect(width_mapper_,     SIGNAL(mappedInt(int)), this, SLOT(slot_correctHeight(int)));
+	connect(height_mapper_,    SIGNAL(mappedInt(int)), this, SLOT(slot_correctWidth(int)));
+	connect(ratio_mapper_,     SIGNAL(mappedInt(int)), this, SLOT(slot_keepRatioChanged(int)));
+	connect(reset_mapper_,     SIGNAL(mappedInt(int)), this, SLOT(slot_resetSize(int)));
+	connect(clipboard_mapper_, SIGNAL(mappedInt(int)), this, SLOT(slot_exportToClipBoard(int)));
 	
 	diagrams_list_layout_ = new QGridLayout();
 	
