@@ -78,10 +78,14 @@ void TitleBlockTemplateCellWidget::initWidgets()
 	label_checkbox_ = new QCheckBox(tr("Afficher un label :"));
 	label_input_ = new QLineEdit();
 	label_input_ -> setReadOnly(true);
+	// column 4 takes all the stretch, so give the read-only
+	// previews a usable width instead of their tiny minimum
+	label_input_ -> setMinimumWidth(160);
 	label_edit_ = new QPushButton(tr("Editer"));
 	value_label_ = new QLabel(tr("Texte :"));
 	value_input_ = new QLineEdit();
 	value_input_ -> setReadOnly(true);
+	value_input_ -> setMinimumWidth(160);
 	value_edit_ = new QPushButton(tr("Editer"));
 	align_label_ = new QLabel(tr("Alignement :"));
 	horiz_align_label_ = new QLabel(tr("horizontal :"));
