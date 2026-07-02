@@ -28,6 +28,27 @@ if(BUILD_KF6)
 
     Include(FetchContent)
 
+    # QET macOS/FetchContent workaround:
+    # ECM's ECMGenerateQDoc.cmake creates global aggregate targets (prepare_docs,
+    # generate_docs, ...) at include time without an include guard. When several
+    # KF6 frameworks are pulled into the same build tree via FetchContent, each
+    # include re-creates those targets and CMake aborts with CMP0002 (duplicate
+    # target names). We leave the system ECM untouched and instead build a
+    # patched local copy that adds the missing include guard, then redirect
+    # ECM_DIR to it so the fetched frameworks pick it up.
+    find_package(ECM 6.22.0 REQUIRED NO_MODULE)
+    set(_qet_ecm_patched "${CMAKE_BINARY_DIR}/ecm-patched")
+    if(NOT EXISTS "${_qet_ecm_patched}/share/ECM/cmake/ECMConfig.cmake")
+      get_filename_component(_qet_ecm_share "${ECM_DIR}/.." ABSOLUTE)
+      file(COPY "${_qet_ecm_share}" DESTINATION "${_qet_ecm_patched}/share")
+      set(_qet_qdoc "${_qet_ecm_patched}/share/ECM/modules/ECMGenerateQDoc.cmake")
+      file(READ "${_qet_qdoc}" _qet_qdoc_content)
+      file(WRITE "${_qet_qdoc}"
+        "include_guard(GLOBAL) # QET: avoid duplicate aggregate targets (CMP0002)\n${_qet_qdoc_content}")
+      message(STATUS " - QET: created patched ECM copy at ${_qet_ecm_patched}")
+    endif()
+    set(ECM_DIR "${_qet_ecm_patched}/share/ECM/cmake" CACHE PATH "QET patched ECM" FORCE)
+
     if(NOT DEFINED KF6_GIT_TAG)
       set(KF6_GIT_TAG v6.22.0)
     endif()
