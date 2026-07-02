@@ -17,7 +17,7 @@
 cmake_minimum_required(VERSION 3.5...4.2)
 
 project(qelectrotech
-  VERSION 0.100.13
+  VERSION 0.100.14
   DESCRIPTION "QET is a CAD/CAE editor focusing on schematics drawing features."
   HOMEPAGE_URL "https://qelectrotech.org/"
   LANGUAGES CXX)
@@ -74,7 +74,9 @@ if(APPLE)
     MACOSX_BUNDLE_GUI_IDENTIFIER "org.qelectrotech.qelectrotech"
     MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
     MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
-    MACOSX_BUNDLE_ICON_FILE "qelectrotech.icns")
+    MACOSX_BUNDLE_ICON_FILE "qelectrotech.icns"
+    # NSRequiresAquaSystemAppearance：固定淺色外觀，不跟隨系統深色模式
+    MACOSX_BUNDLE_INFO_PLIST "${QET_DIR}/misc/MacOSXBundleInfo.plist.in")
   target_sources(${PROJECT_NAME} PRIVATE ${QET_DIR}/ico/mac_icon/qelectrotech.icns)
   set_source_files_properties(${QET_DIR}/ico/mac_icon/qelectrotech.icns
     PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
@@ -84,6 +86,14 @@ if(APPLE)
             ${QET_DIR}/elements $<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/
     COMMAND rsync -a --delete
             ${QET_DIR}/titleblocks $<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/)
+  # offscreen 平台外掛複製進 bundle：--cli-* headless 模式需要
+  # （macdeployqt 只帶 cocoa；缺它 CLI 會因找不到平台外掛而無法啟動）
+  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+            $<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/PlugIns/platforms
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${QT6_INSTALL_PREFIX}/${QT6_INSTALL_PLUGINS}/platforms/libqoffscreen.dylib
+            $<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/PlugIns/platforms/)
 endif()
 
 if(QMFILES_AS_RESOURCE)
