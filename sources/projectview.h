@@ -44,12 +44,12 @@ public:
 		double scale_factor = 0.005; // Decrease or increase speed of mouse wheel (0.04 = decrease)
 			if (event->modifiers() & Qt::ControlModifier) {
 				if (index != -1) {
-					delta = event->delta() * scale_factor; // Read and scale the scroll value
+					delta = event->angleDelta().y() * scale_factor; // Read and scale the scroll value
 					if (delta > 0 && (temp_index > -1)) temp_index = temp_index - abs(delta);
 					if (delta < 0 && (temp_index < count())) temp_index = temp_index + abs(delta);
 
 					index = int (temp_index);
-					qDebug() << "index" << index << "temp_index" << temp_index << "  " << event->delta() << delta;
+					qDebug() << "index" << index << "temp_index" << temp_index << "  " << event->angleDelta().y() << delta;
 
 					if (index >= 0 && index < count())
 						setCurrentIndex(index);
