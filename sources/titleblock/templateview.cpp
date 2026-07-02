@@ -130,7 +130,10 @@ void TitleBlockTemplateView::zoomOut()
 void TitleBlockTemplateView::zoomFit()
 {
 	adjustSceneRect();
-	fitInView(scene() -> sceneRect(), Qt::KeepAspectRatio);
+	// ajuster sur le contenu, pas sur la scene (qui comporte des marges)
+	QRectF content_rect(QPointF(0, 0), templateSize());
+	content_rect = content_rect.united(scene() -> itemsBoundingRect());
+	fitInView(content_rect, Qt::KeepAspectRatio);
 }
 
 /**
@@ -1228,6 +1231,11 @@ void TitleBlockTemplateView::adjustSceneRect()
 
 	// rectangle including everything on the scene
 	QRectF bounding_rect(QPointF(0, 0), templateSize());
+	bounding_rect = bounding_rect.united(scene() -> itemsBoundingRect());
+	/* marges autour du contenu : donnent de l'amplitude aux barres de
+	   defilement, ce qui permet de recadrer la vue a tout niveau de zoom */
+	bounding_rect.adjust(-bounding_rect.width(),  -bounding_rect.height(),
+	                      bounding_rect.width(),   bounding_rect.height());
 	scene() -> setSceneRect(bounding_rect);
 
 	// met a jour la scene
