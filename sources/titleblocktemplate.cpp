@@ -1503,8 +1503,12 @@ void TitleBlockTemplate::render(QPainter &painter,
 	QPen pen(Qt::black);
 	painter.setPen(pen);
 
-	// draw the titleblock border
-	painter.drawRect(QRect(0, 0, titleblock_width, titleblock_height));
+	/* the titleblock border is drawn around the bounding box of non-empty
+	   cells (see below), so templates using empty spacer columns to build
+	   corner-style title blocks do not get a page-wide outline; for
+	   classic full-width templates the bounding box is the whole template,
+	   i.e. the rendering is unchanged */
+	QRect content_bounding_rect;
 
 	// run through each individual cell
 	for (int j = 0 ; j < rows_heights_.count() ; ++ j) {
@@ -1533,12 +1537,22 @@ void TitleBlockTemplate::render(QPainter &painter,
 						cells_[i][j] -> num_row + 1 + row_span,
 						rows_heights_);
 			QRect cell_rect(x, y, w, h);
+			content_bounding_rect
+					= content_bounding_rect.united(cell_rect);
 
 			renderCell(painter, *cells_[i][j],
 				   diagram_context,
 				   cell_rect);
 		}
 	}
+
+	// draw the titleblock border
+	painter.setPen(pen);
+	painter.setBrush(Qt::NoBrush);
+	painter.drawRect(content_bounding_rect.isNull()
+			 ? QRect(0, 0, titleblock_width, titleblock_height)
+			 : content_bounding_rect);
+
 	painter.restore();
 }
 
