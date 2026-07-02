@@ -547,6 +547,48 @@ qreal TitleBlockTemplateView::templateHeight() const
 }
 
 /**
+	Pan the view when the middle mouse button is pressed.
+	@param e QMouseEvent describing the mouse event
+*/
+void TitleBlockTemplateView::mousePressEvent(QMouseEvent *e) {
+	if (e -> button() == Qt::MiddleButton) {
+		setCursor(Qt::ClosedHandCursor);
+		reference_view_ = e -> pos();
+	} else {
+		QGraphicsView::mousePressEvent(e);
+	}
+}
+
+/**
+	Pan the view while the middle mouse button is held down.
+	@param e QMouseEvent describing the mouse event
+*/
+void TitleBlockTemplateView::mouseMoveEvent(QMouseEvent *e) {
+	if (e -> buttons() == Qt::MiddleButton) {
+		QScrollBar *h = horizontalScrollBar();
+		QScrollBar *v = verticalScrollBar();
+		QPointF pos = reference_view_ - e -> pos();
+		reference_view_ = e -> pos();
+		h -> setValue(h -> value() + pos.x());
+		v -> setValue(v -> value() + pos.y());
+	} else {
+		QGraphicsView::mouseMoveEvent(e);
+	}
+}
+
+/**
+	End the middle-button panning.
+	@param e QMouseEvent describing the mouse event
+*/
+void TitleBlockTemplateView::mouseReleaseEvent(QMouseEvent *e) {
+	if (e -> button() == Qt::MiddleButton) {
+		setCursor(Qt::ArrowCursor);
+	} else {
+		QGraphicsView::mouseReleaseEvent(e);
+	}
+}
+
+/**
 	Handles mouse wheel-related actions
 	@param e QWheelEvent describing the wheel event
 */
@@ -605,6 +647,9 @@ void TitleBlockTemplateView::init()
 
 	setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
 	setBackgroundBrush(QBrush(QColor(248, 255, 160)));
+	// macOS 的覆蓋式捲軸平常不可見，改為常駐顯示
+	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+	setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
 
 	connect(scene(), SIGNAL(selectionChanged()), this, SLOT(selectionChanged()));
 }

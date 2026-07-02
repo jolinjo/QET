@@ -100,6 +100,9 @@ class TitleBlockTemplateView : public QGraphicsView {
 	virtual void loadTemplate(TitleBlockTemplate *);
 	virtual void init();
 	void wheelEvent(QWheelEvent *) override;
+	void mousePressEvent(QMouseEvent *) override;
+	void mouseMoveEvent(QMouseEvent *) override;
+	void mouseReleaseEvent(QMouseEvent *) override;
 	virtual qreal zoomFactor() const;
 	virtual void fillWithEmptyCells();
 	bool event(QEvent *) override;
@@ -145,5 +148,6 @@ class TitleBlockTemplateView : public QGraphicsView {
 	int apply_rows_heights_count_;
 	bool first_activation_;                ///< Boolean used to detect the first display of this widget
 	bool read_only_;                       ///< Boolean stating whether this view allows template edition
+	QPoint reference_view_;                ///< Point de repere pour le deplacement a la molette (pan au bouton du milieu)
 };
 #endif
