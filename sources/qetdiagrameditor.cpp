@@ -97,7 +97,8 @@ QETDiagramEditor::QETDiagramEditor(const QStringList &files, QWidget *parent) :
 	m_workspace.setTabsClosable(true);
 
 		//Set the signal mapper
-	connect(&windowMapper, SIGNAL(mappedWidget(QWidget *)), this, SLOT(activateWidget(QWidget *)));
+	connect(&windowMapper, &QSignalMapper::mappedObject, this,
+		[this](QObject *o) { activateWidget(qobject_cast<QWidget *>(o)); });
 
 	setWindowTitle(tr("QElectroTech", "window title"));
 	setWindowIcon(QET::Icons::QETLogo);
