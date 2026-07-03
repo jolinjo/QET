@@ -332,9 +332,16 @@ void QETDiagramEditor::updateWelcomeWidget()
 			QETApp::projectsRecentFiles()->files();
 		for (const QString &file : files) {
 			QFileInfo info(file);
-			if (info.exists()) {
-				entries.append({info.lastModified(), file});
-			}
+			if (!info.exists()) continue;
+			//date de derniere ouverture dans QET ; les entrees
+			//anterieures a cet horodatage retombent sur la date
+			//de modification du fichier
+			QDateTime opened =
+				QETApp::projectsRecentFiles()->lastOpened(file);
+			entries.append({opened.isValid()
+						? opened
+						: info.lastModified(),
+					file});
 		}
 		std::sort(entries.begin(), entries.end(),
 			  [](const QPair<QDateTime, QString> &a,

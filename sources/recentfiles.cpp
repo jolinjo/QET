@@ -108,6 +108,8 @@ void RecentFiles::save()
 */
 void RecentFiles::fileWasOpened(const QString &filepath) {
 	insertFile(filepath);
+	m_open_times.insert(QDir::toNativeSeparators(filepath),
+			    QDateTime::currentDateTime());
 	buildMenu();
 }
 
@@ -127,6 +129,11 @@ void RecentFiles::extractFilesFromSettings()
 		QString key(identifier_ % "-recentfiles/file" % QString::number(i));
 		QString value(settings.value(key, QString()).toString());
 		insertFile(value);
+		QDateTime opened(settings.value(key % "-opened").toDateTime());
+		if (!value.isEmpty() && opened.isValid()) {
+			m_open_times.insert(
+				QDir::toNativeSeparators(value), opened);
+		}
 	}
 }
 
@@ -159,6 +166,10 @@ void RecentFiles::saveFilesToSettings()
 	{
 		QString key(identifier_ % "-recentfiles/file" % QString::number(i + 1));
 		settings.setValue(key, list_[i]);
+		const QDateTime opened = m_open_times.value(list_[i]);
+		if (opened.isValid()) {
+			settings.setValue(key % "-opened", opened);
+		}
 	}
 }
 

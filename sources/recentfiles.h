@@ -37,6 +37,10 @@ class RecentFiles : public QObject {
 	public:
 	int size() const;
 	QList<QString> files() const { return list_; }
+	/// date/heure de derniere ouverture du fichier dans QET
+	QDateTime lastOpened(const QString &filepath) const {
+		return m_open_times.value(QDir::toNativeSeparators(filepath));
+	}
 	QMenu *menu() const;
 	QIcon iconForFiles() const;
 	void setIconForFiles(const QIcon &);
@@ -60,6 +64,7 @@ class RecentFiles : public QObject {
 	QString identifier_;
 	int size_;
 	QList<QString> list_;
+	QHash<QString, QDateTime> m_open_times;
 	QMenu *menu_;
 	QSignalMapper *mapper_;
 	QIcon files_icon_;
