@@ -139,6 +139,9 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 		}
 	}
 	m_table->setItemDelegateForColumn(1, new RevisionDateDelegate(m_table));
+	// edition au simple clic (sinon l'editeur calendrier ne sort
+	// qu'au double-clic, ce qui n'est pas intuitif)
+	m_table->setEditTriggers(QAbstractItemView::AllEditTriggers);
 	m_table->setMinimumWidth(680);
 
 	auto *buttons = new QDialogButtonBox(

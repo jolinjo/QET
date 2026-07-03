@@ -1276,7 +1276,13 @@ Diagram *QETProject::addNewDiagram(int pos)
 	Diagram *diagram = new Diagram(this);
 
 	diagram->border_and_titleblock.importBorder(defaultBorderProperties());
-	diagram->border_and_titleblock.importTitleBlock(defaultTitleBlockProperties());
+	TitleBlockProperties tbp = defaultTitleBlockProperties();
+	// nouveau folio : etat du document initialise a « brouillon »
+	if (tbp.context.value(QStringLiteral("doc-status")).toString().isEmpty()) {
+		tbp.context.addValue(QStringLiteral("doc-status"),
+				     QStringLiteral("草案 Draft"));
+	}
+	diagram->border_and_titleblock.importTitleBlock(tbp);
 	diagram->defaultConductorProperties = defaultConductorProperties();
 
 	addDiagram(diagram, pos);

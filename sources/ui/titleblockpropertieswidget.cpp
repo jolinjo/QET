@@ -177,10 +177,6 @@ void TitleBlockPropertiesWidget::setProperties(
 		m_doc_type_cb->setEditText(properties.context
 			.value(QStringLiteral("doc-type")).toString());
 	}
-	if (m_doc_status_cb) {
-		m_doc_status_cb->setEditText(properties.context
-			.value(QStringLiteral("doc-status")).toString());
-	}
 	if (m_project_doc_id_le) {
 		m_orig_doc_id = properties.context
 				.value(QStringLiteral("doc-id")).toString();
@@ -197,12 +193,12 @@ void TitleBlockPropertiesWidget::setProperties(
 	const QList<QString> keys = properties.context.keys();
 	for (const QString &key : keys) {
 		const bool show = properties.context.keyMustShow(key);
-		if (rev_key.match(key).hasMatch()) {
+		if (rev_key.match(key).hasMatch()
+		    || key == QLatin1String("doc-status")) {
 			m_reserved_context.addValue(
 				key, properties.context.value(key), show);
 		} else if (!m_company_fields.contains(key)
 			   && key != QLatin1String("doc-type")
-			   && key != QLatin1String("doc-status")
 			   && !(m_project_doc_id_le
 				&& key == QLatin1String("doc-id"))) {
 			remainder.addValue(
@@ -418,16 +414,6 @@ void TitleBlockPropertiesWidget::initDialog(
 		QStringLiteral("&EFA 概觀圖/單線圖"),
 	});
 	company_form->addRow(tr("Type de document :"), m_doc_type_cb);
-	/* etat du document : usages ISO 7200 / IEC 82045 */
-	m_doc_status_cb = new QComboBox(this);
-	m_doc_status_cb->setEditable(true);
-	m_doc_status_cb->addItems({
-		QStringLiteral("草案 Draft"),
-		QStringLiteral("審核中 Under review"),
-		QStringLiteral("正式發行 Released"),
-		QStringLiteral("作廢 Obsolete"),
-	});
-	company_form->addRow(tr("État du document :"), m_doc_status_cb);
 	const QList<QPair<QString, QString>> company_keys {
 		{QStringLiteral("techref"),     tr("Référence technique :")},
 		{QStringLiteral("checked-by"),  tr("Vérifié par :")},
@@ -650,10 +636,6 @@ void TitleBlockPropertiesWidget::applyCompanyFields(TitleBlockProperties &proper
 	if (m_doc_type_cb) {
 		properties.context.addValue(QStringLiteral("doc-type"),
 					    m_doc_type_cb->currentText());
-	}
-	if (m_doc_status_cb) {
-		properties.context.addValue(QStringLiteral("doc-status"),
-					    m_doc_status_cb->currentText());
 	}
 	if (m_project_doc_id_le) {
 		properties.context.addValue(QStringLiteral("doc-id"),
