@@ -26,6 +26,7 @@
 #include <QStyledItemDelegate>
 #include <QFormLayout>
 #include <QHeaderView>
+#include <QKeyEvent>
 #include <QLineEdit>
 #include <QTableWidget>
 #include <QVBoxLayout>
@@ -139,9 +140,14 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 		}
 	}
 	m_table->setItemDelegateForColumn(1, new RevisionDateDelegate(m_table));
-	// edition au simple clic (sinon l'editeur calendrier ne sort
-	// qu'au double-clic, ce qui n'est pas intuitif)
-	m_table->setEditTriggers(QAbstractItemView::AllEditTriggers);
+	/* clic sur cellule selectionnee / double-clic / touche : le mode
+	 * « toujours editer » ecrivait une date au simple passage ; la
+	 * touche Suppr/Retour arriere vide les cellules selectionnees */
+	m_table->setEditTriggers(QAbstractItemView::SelectedClicked
+				 | QAbstractItemView::DoubleClicked
+				 | QAbstractItemView::EditKeyPressed
+				 | QAbstractItemView::AnyKeyPressed);
+	m_table->installEventFilter(this);
 	m_table->setMinimumWidth(680);
 
 	auto *buttons = new QDialogButtonBox(
@@ -163,6 +169,27 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 		m_issue_date->setReadOnly(true);
 		m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
 	}
+}
+
+/**
+	Delete / Backspace clears the selected revision cells (this is the
+	only way to empty a date cell, since the calendar editor always
+	commits a valid date).
+*/
+bool FolioRevisionsDialog::eventFilter(QObject *watched, QEvent *event)
+{
+	if (watched == m_table && event->type() == QEvent::KeyPress) {
+		auto *key_event = static_cast<QKeyEvent *>(event);
+		if (key_event->key() == Qt::Key_Delete
+		    || key_event->key() == Qt::Key_Backspace) {
+			const auto items = m_table->selectedItems();
+			for (QTableWidgetItem *item : items) {
+				item->setText(QString());
+			}
+			return true;
+		}
+	}
+	return QDialog::eventFilter(watched, event);
 }
 
 /**

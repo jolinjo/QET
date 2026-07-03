@@ -42,6 +42,9 @@ class FolioRevisionsDialog : public QDialog
 	public:
 	static void edit(Diagram *diagram, QWidget *parent = nullptr);
 
+	protected:
+	bool eventFilter(QObject *watched, QEvent *event) override;
+
 	private:
 	FolioRevisionsDialog(Diagram *diagram, QWidget *parent = nullptr);
 	TitleBlockProperties editedProperties() const;
