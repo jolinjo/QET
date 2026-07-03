@@ -23,7 +23,10 @@
 #include "../titleblocktemplate.h"
 #include "ui_titleblockpropertieswidget.h"
 
+#include <QFormLayout>
+#include <QLineEdit>
 #include <QMenu>
+#include <QRegularExpression>
 #include <utility>
 
 /**
@@ -162,7 +165,32 @@ void TitleBlockPropertiesWidget::setProperties(
 	}
 	ui -> m_tbt_cb -> setCurrentIndex(index);
 
-	m_dcw -> setContext(properties.context);
+	/* champs societe dedies */
+	for (auto it = m_company_fields.constBegin() ;
+	     it != m_company_fields.constEnd() ; ++it) {
+		it.value()->setText(
+			properties.context.value(it.key()).toString());
+	}
+
+	/* les cles de revision sont editees via le dialogue dedie et les
+	 * champs societe via les champs ci-dessus ; l'onglet
+	 * « personnalise » ne montre que le reste */
+	static const QRegularExpression rev_key(
+		QStringLiteral("^rev[1-6]-(idx|date|zone|desc|by|appd)$"));
+	m_reserved_context = DiagramContext();
+	DiagramContext remainder;
+	const QList<QString> keys = properties.context.keys();
+	for (const QString &key : keys) {
+		const bool show = properties.context.keyMustShow(key);
+		if (rev_key.match(key).hasMatch()) {
+			m_reserved_context.addValue(
+				key, properties.context.value(key), show);
+		} else if (!m_company_fields.contains(key)) {
+			remainder.addValue(
+				key, properties.context.value(key), show);
+		}
+	}
+	m_dcw -> setContext(remainder);
 }
 
 /**
@@ -201,6 +229,7 @@ TitleBlockProperties TitleBlockPropertiesWidget::properties() const
 	}
 
 	prop.context = m_dcw -> context();
+	applyCompanyFields(prop);
 
 	prop.auto_page_num = ui->auto_page_cb->currentText();
 
@@ -244,6 +273,7 @@ TitleBlockProperties TitleBlockPropertiesWidget::propertiesAutoNum(
 	}
 
 	prop.context = m_dcw -> context();
+	applyCompanyFields(prop);
 
 	prop.auto_page_num = std::move(autoNum);
 
@@ -320,6 +350,32 @@ void TitleBlockPropertiesWidget::initDialog(
 {
 	m_dcw = new DiagramContextWidget();
 	ui -> m_tab2_vlayout -> addWidget(m_dcw);
+
+	/* adaptation cartouche societe : masquer les champs standards non
+	 * utilises et exposer les champs du cartouche societe en premiere
+	 * classe (stockes dans le contexte personnalise) */
+	ui -> label_5  -> hide();  ui -> m_file_le  -> hide();
+	ui -> label_6  -> hide();  ui -> m_folio_le -> hide();
+	ui -> label_10 -> hide();  ui -> m_plant    -> hide();
+	ui -> label_11 -> hide();  ui -> m_loc      -> hide();
+
+	auto *company_form = new QFormLayout();
+	const QList<QPair<QString, QString>> company_keys {
+		{QStringLiteral("subtitle"),    tr("Sous-titre :")},
+		{QStringLiteral("doc-id"),      tr("Numéro de document :")},
+		{QStringLiteral("doc-type"),    tr("Type de document :")},
+		{QStringLiteral("doc-status"),  tr("État du document :")},
+		{QStringLiteral("techref"),     tr("Référence technique :")},
+		{QStringLiteral("checked-by"),  tr("Vérifié par :")},
+		{QStringLiteral("approved-by"), tr("Approuvé par :")},
+		{QStringLiteral("remarks"),     tr("Remarques :")},
+	};
+	for (const auto &pair : company_keys) {
+		auto *edit = new QLineEdit(this);
+		m_company_fields.insert(pair.first, edit);
+		company_form->addRow(pair.second, edit);
+	}
+	ui -> verticalLayout_2 -> addLayout(company_form);
 
 	setTitleBlockTemplatesVisible(false);
 	ui -> m_current_date_rb -> setVisible(current_date);
@@ -482,5 +538,25 @@ void TitleBlockPropertiesWidget::on_m_edit_autofolionum_pb_clicked()
 	if (ui->auto_page_cb->currentText()!=tr("Créer un Folio Numérotation Auto"))
 	{
 		//still to implement: load current auto folio num settings
+	}
+}
+
+/**
+	Reinjecte dans \a properties les cles gerees hors de l'onglet
+	« personnalise » : les lignes de revision (preservees telles quelles,
+	editees via le dialogue dedie) et les champs societe dedies.
+*/
+void TitleBlockPropertiesWidget::applyCompanyFields(TitleBlockProperties &properties) const
+{
+	const QList<QString> reserved_keys = m_reserved_context.keys();
+	for (const QString &key : reserved_keys) {
+		properties.context.addValue(
+			key,
+			m_reserved_context.value(key),
+			m_reserved_context.keyMustShow(key));
+	}
+	for (auto it = m_company_fields.constBegin() ;
+	     it != m_company_fields.constEnd() ; ++it) {
+		properties.context.addValue(it.key(), it.value()->text());
 	}
 }

@@ -24,7 +24,10 @@
 #include "../titleblockproperties.h"
 #include "diagramcontextwidget.h"
 
+#include <QHash>
 #include <QWidget>
+
+class QLineEdit;
 
 class NumerotationContext;
 class QETProject;
@@ -91,6 +94,8 @@ class TitleBlockPropertiesWidget : public QWidget
 		void openAutoNumFolioEditor (QString);
 
 	private:
+		void applyCompanyFields(TitleBlockProperties &) const;
+
 		Ui::TitleBlockPropertiesWidget *ui;
 		DiagramContextWidget *m_dcw;
 		QAction *m_tbt_edit, *m_tbt_duplicate;
@@ -98,6 +103,11 @@ class TitleBlockPropertiesWidget : public QWidget
 		QList <TitleBlockTemplatesCollection *> m_tbt_collection_list;
 		QList <QET::QetCollection> m_map_index_to_collection_type;
 		QList <QString> keys_2;
+
+		/// champs dedies au cartouche societe (cles du contexte)
+		QHash<QString, QLineEdit *> m_company_fields;
+		/// cles gerees ailleurs (revisions), preservees telles quelles
+		DiagramContext m_reserved_context;
 };
 
 #endif // TITLEBLOCKPROPERTIESWIDGET_H

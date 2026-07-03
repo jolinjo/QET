@@ -13726,6 +13726,38 @@ Les autres champs ne sont pas utilisés.</source>
 <context>
     <name>TitleBlockPropertiesWidget</name>
     <message>
+        <source>Sous-titre :</source>
+        <translation>补充图名：</translation>
+    </message>
+    <message>
+        <source>Numéro de document :</source>
+        <translation>文件识别号：</translation>
+    </message>
+    <message>
+        <source>Type de document :</source>
+        <translation>文件类别：</translation>
+    </message>
+    <message>
+        <source>État du document :</source>
+        <translation>文件状态：</translation>
+    </message>
+    <message>
+        <source>Référence technique :</source>
+        <translation>技术参考：</translation>
+    </message>
+    <message>
+        <source>Vérifié par :</source>
+        <translation>审核：</translation>
+    </message>
+    <message>
+        <source>Approuvé par :</source>
+        <translation>核准：</translation>
+    </message>
+    <message>
+        <source>Remarques :</source>
+        <translation>备注：</translation>
+    </message>
+    <message>
         <location filename="../sources/ui/titleblockpropertieswidget.ui" line="26"/>
         <source>Form</source>
         <translation>窗体</translation>
