@@ -58,6 +58,10 @@ void QETMainWindow::initCommonActions()
 
 	configure_action_ = new QAction(QET::Icons::Configure, tr("&Configurer QElectroTech"), this);
 	configure_action_ -> setStatusTip(tr("Permet de régler différents paramètres de QElectroTech", "status bar tip"));
+	/* role explicite : en locale CJK beaucoup d'actions commencent par
+	 * « 設定 » et l'heuristique texte de Qt peut affecter le role
+	 * « Preferences » du menu application a la mauvaise action */
+	configure_action_ -> setMenuRole(QAction::PreferencesRole);
 	connect(configure_action_, &QAction::triggered, [qet_app]()
 	{
 		qet_app->configureQET();

@@ -1969,7 +1969,14 @@ void QETApp::configureQET()
 	// cree le dialogue
 	ConfigDialog cd;
 	cd.setWindowTitle(tr("Configurer QElectroTech", "window title"));
+#ifdef Q_OS_MACOS
+	/* WindowModal + parent = presentation en « sheet » macOS, dont le
+	 * rendu est defaillant ici (panneau invisible, cf. aussi le dialogue
+	 * des revisions de folio) : fenetre modale classique a la place */
+	cd.setWindowModality(Qt::ApplicationModal);
+#else
 	cd.setWindowModality(Qt::WindowModal);
+#endif
 	cd.addPage(new GeneralConfigurationPage());
 	cd.addPage(new NewDiagramPage());
 	cd.addPage(new ExportConfigPage());
