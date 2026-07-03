@@ -13744,7 +13744,7 @@ Les autres champs ne sont pas utilisés.</source>
     </message>
     <message>
         <source>Sous-titre :</source>
-        <translation>補充圖名：</translation>
+        <translation>分頁圖名：</translation>
     </message>
     <message>
         <source>Numéro de document :</source>
