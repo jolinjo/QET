@@ -516,30 +516,7 @@ void BorderTitleBlock::draw(QPainter *painter)
 	QSettings settings;
 
 	//Draw the borer
-	if (display_border_) {
-		painter -> drawRect(diagram_rect_);
-
-		/* contour exterieur renforce a l'impression uniquement :
-		 * - trace en retrait d'une demi-largeur de trait, afin que le
-		 *   trait entier reste dans la zone exportee (sinon la moitie
-		 *   exterieure est rognee et l'epaisseur varie selon le cote)
-		 * - englobe le cartouche pour un contour continu sur la page
-		 * A l'ecran tout reste au trait standard. */
-		if (painter -> device()
-		    && painter -> device() -> devType() == QInternal::Printer) {
-			const qreal frame_width = 2.0;
-			QPen frame_pen(Qt::black);
-			frame_pen.setWidthF(frame_width);
-			frame_pen.setJoinStyle(Qt::MiterJoin);
-			painter -> setPen(frame_pen);
-			QRectF outline = display_titleblock_
-				? borderAndTitleBlockRect() : diagram_rect_;
-			outline.adjust(frame_width / 2.0,  frame_width / 2.0,
-			               -frame_width / 2.0, -frame_width / 2.0);
-			painter -> drawRect(outline);
-			painter -> setPen(pen);
-		}
-	}
+	if (display_border_) painter -> drawRect(diagram_rect_);
 
 	painter -> setFont(QETApp::diagramTextsFont());
 
@@ -625,6 +602,27 @@ void BorderTitleBlock::draw(QPainter *painter)
 			painter->rotate(90);
 			painter -> translate(-tbt_rect.topLeft());
 		}
+	}
+
+	/* contour exterieur renforce, a l'impression uniquement.
+	 * Dessine en dernier (au-dessus des fonds de cellules) et sous forme
+	 * de rectangles pleins colles a l'interieur de la limite : epaisseur
+	 * exacte sur les quatre cotes, sans rognage ni effet de phase du
+	 * trace centre. A l'ecran tout reste au trait standard. */
+	if (display_border_
+	    && painter -> device()
+	    && painter -> device() -> devType() == QInternal::Printer) {
+		const qreal fw = 2.0;
+		QRectF b = display_titleblock_
+			? borderAndTitleBlockRect() : diagram_rect_;
+		painter -> fillRect(
+			QRectF(b.left(), b.top(), b.width(), fw), Qt::black);
+		painter -> fillRect(
+			QRectF(b.left(), b.bottom() - fw, b.width(), fw), Qt::black);
+		painter -> fillRect(
+			QRectF(b.left(), b.top(), fw, b.height()), Qt::black);
+		painter -> fillRect(
+			QRectF(b.right() - fw, b.top(), fw, b.height()), Qt::black);
 	}
 
 	painter -> restore();
