@@ -521,7 +521,7 @@ void BorderTitleBlock::draw(QPainter *painter)
 	 * les separations des en-tetes gardent le trait standard */
 	if (display_border_) {
 		QPen frame_pen(Qt::black);
-		frame_pen.setWidthF(1.5);
+		frame_pen.setWidthF(2.0);
 		painter -> setPen(frame_pen);
 		painter -> drawRect(diagram_rect_);
 		painter -> setPen(pen);
