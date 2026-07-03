@@ -1093,6 +1093,12 @@ void ElementsCollectionWidget::loadingFinished()
 		m_new_model = nullptr;
 		expandFirstItems();
 		hideElementRows();
+		/* les elements ajoutes apres coup (projets ouverts, imports)
+		 * doivent aussi rester caches dans l'arbre */
+		connect(m_model, &QStandardItemModel::rowsInserted, this,
+			[this](const QModelIndex &parent, int, int) {
+			hideElementRows(parent);
+		});
 	}
 	else {
 		m_model->highlightUnusedElement();
