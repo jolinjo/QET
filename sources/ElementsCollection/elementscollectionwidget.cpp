@@ -332,6 +332,25 @@ void ElementsCollectionWidget::updateGridGeometry()
 }
 
 /**
+	Hide every element row of the tree : elements are browsed in the
+	grid view below, the tree only shows the directory structure.
+*/
+void ElementsCollectionWidget::hideElementRows(const QModelIndex &parent)
+{
+	if (!m_model) return;
+	const int count = m_model->rowCount(parent);
+	for (int row = 0 ; row < count ; ++row) {
+		const QModelIndex index = m_model->index(row, 0, parent);
+		ElementCollectionItem *eci = elementCollectionItemForIndex(index);
+		if (eci && eci->isElement()) {
+			m_tree_view->setRowHidden(row, parent, true);
+		} else {
+			hideElementRows(index);
+		}
+	}
+}
+
+/**
 	@brief ElementsCollectionWidget::updateGridRoot
 	Show in the grid view the content of the directory clicked in the
 	tree (or the directory of the clicked element).
@@ -1073,6 +1092,7 @@ void ElementsCollectionWidget::loadingFinished()
 		m_model = m_new_model;
 		m_new_model = nullptr;
 		expandFirstItems();
+		hideElementRows();
 	}
 	else {
 		m_model->highlightUnusedElement();
@@ -1149,6 +1169,7 @@ void ElementsCollectionWidget::search()
 			m_tree_view->setCurrentIndex(current_index);
 			m_tree_view->scrollTo(current_index);
 		}
+		hideElementRows();
 		return;
 	}
 

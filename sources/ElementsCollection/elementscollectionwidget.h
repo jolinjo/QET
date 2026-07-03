@@ -65,6 +65,7 @@ class ElementsCollectionWidget : public QWidget
 	private:
 		void placeElementAtIndex(const QModelIndex &index);
 		void updateGridRoot(const QModelIndex &index);
+		void hideElementRows(const QModelIndex &parent = QModelIndex());
 		void applyGridDisplaySettings();
 		void updateGridGeometry();
 		void setUpAction();
