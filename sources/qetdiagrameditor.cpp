@@ -797,6 +797,64 @@ void QETDiagramEditor::setUpToolBar()
 	m_depth_tool_bar->setObjectName("diagram_depth_toolbar");
 	m_depth_tool_bar->addActions(m_depth_action_group->actions());
 
+	/* libelles courts sous les icones (le texte complet reste dans
+	 * les menus : seul iconText est redefini) */
+	const auto set_icon_texts = [](const QList<QAction *> &actions,
+				       const QStringList &texts) {
+		for (int i = 0 ; i < actions.count() && i < texts.count() ; ++i) {
+			actions.at(i)->setIconText(texts.at(i));
+		}
+	};
+	set_icon_texts(m_file_actions_group.actions(),
+		       { tr("Nouveau", "toolbar icon text"),
+			 tr("Ouvrir", "toolbar icon text"),
+			 tr("Enregistrer", "toolbar icon text"),
+			 tr("Enregistrer sous", "toolbar icon text"),
+			 tr("Fermer", "toolbar icon text") });
+	set_icon_texts(m_zoom_action_toolBar,
+		       { tr("Zoom contenu", "toolbar icon text"),
+			 tr("Zoom folio", "toolbar icon text"),
+			 tr("Zoom 1:1", "toolbar icon text") });
+	set_icon_texts(m_add_item_actions_group.actions(),
+		       { tr("Texte", "toolbar icon text"),
+			 tr("Image", "toolbar icon text"),
+			 tr("Ligne", "toolbar icon text"),
+			 tr("Rectangle", "toolbar icon text"),
+			 tr("Ellipse", "toolbar icon text"),
+			 tr("Polyligne", "toolbar icon text"),
+			 tr("Bornier", "toolbar icon text") });
+	set_icon_texts(m_depth_action_group->actions(),
+		       { tr("Premier plan", "toolbar icon text"),
+			 tr("Rapprocher", "toolbar icon text"),
+			 tr("Éloigner", "toolbar icon text"),
+			 tr("Arrière plan", "toolbar icon text") });
+	m_print->setIconText(tr("Imprimer", "toolbar icon text"));
+	m_export_to_pdf->setIconText(tr("Exporter en PDF", "toolbar icon text"));
+	undo->setIconText(tr("Annuler", "toolbar icon text"));
+	redo->setIconText(tr("Refaire", "toolbar icon text"));
+	m_cut->setIconText(tr("Couper", "toolbar icon text"));
+	m_copy->setIconText(tr("Copier", "toolbar icon text"));
+	m_paste->setIconText(tr("Coller", "toolbar icon text"));
+	m_delete_selection->setIconText(tr("Supprimer", "toolbar icon text"));
+	m_rotate_selection->setIconText(tr("Pivoter", "toolbar icon text"));
+	m_mode_selection->setIconText(tr("Sélection", "toolbar icon text"));
+	m_mode_visualise->setIconText(tr("Visualisation", "toolbar icon text"));
+	m_draw_grid->setIconText(tr("Grille", "toolbar icon text"));
+	m_grey_background->setIconText(tr("Fond gris", "toolbar icon text"));
+	m_edit_diagram_properties->setIconText(
+		tr("Cartouche", "toolbar icon text"));
+	m_edit_folio_revisions->setIconText(
+		tr("Révisions", "toolbar icon text"));
+	m_conductor_reset->setIconText(tr("Recâblage", "toolbar icon text"));
+	m_auto_conductor->setIconText(tr("Câblage auto", "toolbar icon text"));
+
+	const QList<QToolBar *> top_toolbars {
+		main_tool_bar, view_tool_bar, diagram_tool_bar,
+		m_add_item_tool_bar, m_depth_tool_bar };
+	for (QToolBar *tool_bar : top_toolbars) {
+		tool_bar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+	}
+
 	addToolBar(Qt::TopToolBarArea, main_tool_bar);
 	addToolBar(Qt::TopToolBarArea, view_tool_bar);
 	addToolBar(Qt::TopToolBarArea, diagram_tool_bar);

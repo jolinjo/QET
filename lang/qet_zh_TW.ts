@@ -6115,6 +6115,186 @@ Options disponibles :
 <context>
     <name>QETDiagramEditor</name>
     <message>
+        <source>Nouveau</source>
+        <comment>toolbar icon text</comment>
+        <translation>新增</translation>
+    </message>
+    <message>
+        <source>Ouvrir</source>
+        <comment>toolbar icon text</comment>
+        <translation>開啟</translation>
+    </message>
+    <message>
+        <source>Enregistrer</source>
+        <comment>toolbar icon text</comment>
+        <translation>儲存</translation>
+    </message>
+    <message>
+        <source>Enregistrer sous</source>
+        <comment>toolbar icon text</comment>
+        <translation>另存</translation>
+    </message>
+    <message>
+        <source>Fermer</source>
+        <comment>toolbar icon text</comment>
+        <translation>關閉</translation>
+    </message>
+    <message>
+        <source>Imprimer</source>
+        <comment>toolbar icon text</comment>
+        <translation>列印</translation>
+    </message>
+    <message>
+        <source>Exporter en PDF</source>
+        <comment>toolbar icon text</comment>
+        <translation>匯出PDF</translation>
+    </message>
+    <message>
+        <source>Annuler</source>
+        <comment>toolbar icon text</comment>
+        <translation>復原</translation>
+    </message>
+    <message>
+        <source>Refaire</source>
+        <comment>toolbar icon text</comment>
+        <translation>重做</translation>
+    </message>
+    <message>
+        <source>Couper</source>
+        <comment>toolbar icon text</comment>
+        <translation>剪下</translation>
+    </message>
+    <message>
+        <source>Copier</source>
+        <comment>toolbar icon text</comment>
+        <translation>複製</translation>
+    </message>
+    <message>
+        <source>Coller</source>
+        <comment>toolbar icon text</comment>
+        <translation>貼上</translation>
+    </message>
+    <message>
+        <source>Supprimer</source>
+        <comment>toolbar icon text</comment>
+        <translation>刪除</translation>
+    </message>
+    <message>
+        <source>Pivoter</source>
+        <comment>toolbar icon text</comment>
+        <translation>旋轉</translation>
+    </message>
+    <message>
+        <source>Sélection</source>
+        <comment>toolbar icon text</comment>
+        <translation>選取</translation>
+    </message>
+    <message>
+        <source>Visualisation</source>
+        <comment>toolbar icon text</comment>
+        <translation>瀏覽</translation>
+    </message>
+    <message>
+        <source>Grille</source>
+        <comment>toolbar icon text</comment>
+        <translation>格線</translation>
+    </message>
+    <message>
+        <source>Fond gris</source>
+        <comment>toolbar icon text</comment>
+        <translation>底色</translation>
+    </message>
+    <message>
+        <source>Zoom contenu</source>
+        <comment>toolbar icon text</comment>
+        <translation>適合內容</translation>
+    </message>
+    <message>
+        <source>Zoom folio</source>
+        <comment>toolbar icon text</comment>
+        <translation>適合頁面</translation>
+    </message>
+    <message>
+        <source>Zoom 1:1</source>
+        <comment>toolbar icon text</comment>
+        <translation>原始比例</translation>
+    </message>
+    <message>
+        <source>Cartouche</source>
+        <comment>toolbar icon text</comment>
+        <translation>圖框資訊</translation>
+    </message>
+    <message>
+        <source>Révisions</source>
+        <comment>toolbar icon text</comment>
+        <translation>修訂紀錄</translation>
+    </message>
+    <message>
+        <source>Recâblage</source>
+        <comment>toolbar icon text</comment>
+        <translation>重佈導線</translation>
+    </message>
+    <message>
+        <source>Câblage auto</source>
+        <comment>toolbar icon text</comment>
+        <translation>自動接線</translation>
+    </message>
+    <message>
+        <source>Texte</source>
+        <comment>toolbar icon text</comment>
+        <translation>文字</translation>
+    </message>
+    <message>
+        <source>Image</source>
+        <comment>toolbar icon text</comment>
+        <translation>圖片</translation>
+    </message>
+    <message>
+        <source>Ligne</source>
+        <comment>toolbar icon text</comment>
+        <translation>直線</translation>
+    </message>
+    <message>
+        <source>Rectangle</source>
+        <comment>toolbar icon text</comment>
+        <translation>矩形</translation>
+    </message>
+    <message>
+        <source>Ellipse</source>
+        <comment>toolbar icon text</comment>
+        <translation>橢圓</translation>
+    </message>
+    <message>
+        <source>Polyligne</source>
+        <comment>toolbar icon text</comment>
+        <translation>折線</translation>
+    </message>
+    <message>
+        <source>Bornier</source>
+        <comment>toolbar icon text</comment>
+        <translation>端子排</translation>
+    </message>
+    <message>
+        <source>Premier plan</source>
+        <comment>toolbar icon text</comment>
+        <translation>最上層</translation>
+    </message>
+    <message>
+        <source>Rapprocher</source>
+        <comment>toolbar icon text</comment>
+        <translation>上移</translation>
+    </message>
+    <message>
+        <source>Éloigner</source>
+        <comment>toolbar icon text</comment>
+        <translation>下移</translation>
+    </message>
+    <message>
+        <source>Arrière plan</source>
+        <comment>toolbar icon text</comment>
+        <translation>最下層</translation>
+    </message>
+    <message>
         <source>Révisions du folio</source>
         <translation>頁面修訂紀錄</translation>
     </message>
