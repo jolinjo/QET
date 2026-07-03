@@ -18,6 +18,7 @@
 #include "qetdiagrameditor.h"
 
 #include <QListWidget>
+#include <QStyledItemDelegate>
 #include "qetversion.h"
 #include <QCoreApplication>
 #include "ElementsCollection/elementscollectionwidget.h"
@@ -159,6 +160,82 @@ QETDiagramEditor::~QETDiagramEditor()
 {
 }
 
+namespace
+{
+	/* rendu « carte » des fichiers recents de la vue d'accueil :
+	 * nom du fichier en gras, chemin en petit et gris dessous */
+	class RecentFileDelegate : public QStyledItemDelegate
+	{
+		public:
+		using QStyledItemDelegate::QStyledItemDelegate;
+		static const int ROW_HEIGHT = 58;
+
+		void paint(QPainter *painter,
+			   const QStyleOptionViewItem &option,
+			   const QModelIndex &index) const override
+		{
+			painter->save();
+			painter->setRenderHint(QPainter::Antialiasing);
+			const QRect cell = option.rect.adjusted(2, 2, -2, -2);
+
+			if (option.state
+			    & (QStyle::State_Selected | QStyle::State_MouseOver)) {
+				QColor hover = option.palette.highlight().color();
+				hover.setAlpha(option.state & QStyle::State_Selected
+					       ? 60 : 30);
+				painter->setPen(Qt::NoPen);
+				painter->setBrush(hover);
+				painter->drawRoundedRect(cell, 6, 6);
+			}
+
+			const QRect icon_rect(cell.left() + 10,
+					      cell.top() + (cell.height() - 32) / 2,
+					      32, 32);
+			QET::Icons::ProjectFile.paint(painter, icon_rect);
+
+			const int text_x = icon_rect.right() + 12;
+			const QRect name_rect(text_x, cell.top() + 6,
+					      cell.right() - text_x - 8,
+					      cell.height() / 2 - 6);
+			const QRect path_rect(text_x, name_rect.bottom(),
+					      cell.right() - text_x - 8,
+					      cell.bottom() - name_rect.bottom() - 4);
+
+			QFont name_font = option.font;
+			name_font.setBold(true);
+			name_font.setPointSizeF(name_font.pointSizeF() * 1.1);
+			painter->setFont(name_font);
+			painter->setPen(option.palette.text().color());
+			painter->drawText(name_rect,
+					  Qt::AlignLeft | Qt::AlignVCenter,
+					  QFontMetrics(name_font).elidedText(
+						  index.data().toString(),
+						  Qt::ElideMiddle,
+						  name_rect.width()));
+
+			QFont path_font = option.font;
+			path_font.setPointSizeF(path_font.pointSizeF() * 0.85);
+			painter->setFont(path_font);
+			QColor grey = option.palette.text().color();
+			grey.setAlpha(140);
+			painter->setPen(grey);
+			painter->drawText(path_rect,
+					  Qt::AlignLeft | Qt::AlignVCenter,
+					  QFontMetrics(path_font).elidedText(
+						  index.data(Qt::UserRole).toString(),
+						  Qt::ElideMiddle,
+						  path_rect.width()));
+			painter->restore();
+		}
+
+		QSize sizeHint(const QStyleOptionViewItem &,
+			       const QModelIndex &) const override
+		{
+			return QSize(0, ROW_HEIGHT);
+		}
+	};
+}
+
 /**
 	Welcome view shown in the workspace when no project is opened :
 	the recently opened files, a single click opens one.
@@ -170,26 +247,31 @@ void QETDiagramEditor::setUpWelcomeWidget()
 	auto *title = new QLabel(
 		tr("Fichiers récents", "welcome view"), m_welcome_widget);
 	QFont title_font = title->font();
-	title_font.setPointSizeF(title_font.pointSizeF() * 1.6);
+	title_font.setPointSizeF(title_font.pointSizeF() * 1.8);
 	title_font.setBold(true);
 	title->setFont(title_font);
 	title->setAlignment(Qt::AlignHCenter);
 
 	m_welcome_list = new QListWidget(m_welcome_widget);
-	m_welcome_list->setFixedWidth(680);
-	m_welcome_list->setMaximumHeight(520);
-	m_welcome_list->setIconSize(QSize(32, 32));
-	m_welcome_list->setSpacing(2);
+	m_welcome_list->setFixedWidth(720);
+	m_welcome_list->setFrameShape(QFrame::NoFrame);
+	m_welcome_list->setStyleSheet(
+		QStringLiteral("QListWidget { background: transparent; }"));
+	m_welcome_list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	m_welcome_list->setMouseTracking(true);
+	m_welcome_list->setItemDelegate(new RecentFileDelegate(m_welcome_list));
+	m_welcome_list->setCursor(Qt::PointingHandCursor);
 	connect(m_welcome_list, &QListWidget::itemClicked, this,
 		[this](QListWidgetItem *item) {
 		openRecentFile(item->data(Qt::UserRole).toString());
 	});
 
 	auto *layout = new QVBoxLayout(m_welcome_widget);
-	layout->setAlignment(Qt::AlignCenter);
+	layout->addStretch(3);
 	layout->addWidget(title, 0, Qt::AlignHCenter);
-	layout->addSpacing(12);
+	layout->addSpacing(18);
 	layout->addWidget(m_welcome_list, 0, Qt::AlignHCenter);
+	layout->addStretch(5);
 
 	m_workspace.viewport()->installEventFilter(this);
 }
@@ -206,15 +288,18 @@ void QETDiagramEditor::updateWelcomeWidget()
 		m_welcome_list->clear();
 		const QList<QString> files =
 			QETApp::projectsRecentFiles()->files();
-		const QIcon icon =
-			QETApp::projectsRecentFiles()->iconForFiles();
 		for (const QString &file : files) {
 			auto *item = new QListWidgetItem(
-				icon,
-				QFileInfo(file).fileName() + QChar('\n') + file,
+				QFileInfo(file).completeBaseName(),
 				m_welcome_list);
 			item->setData(Qt::UserRole, file);
+			item->setToolTip(file);
 		}
+		m_welcome_list->setFixedHeight(qMin(
+			m_welcome_list->count()
+					* RecentFileDelegate::ROW_HEIGHT
+				+ 8,
+			560));
 		m_welcome_widget->setGeometry(m_workspace.viewport()->rect());
 		m_welcome_widget->raise();
 	}
