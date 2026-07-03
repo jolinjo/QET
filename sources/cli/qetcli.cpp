@@ -26,7 +26,9 @@
 #include <QApplication>
 #include <QImage>
 #include <QPageSize>
+#include <QPainter>
 #include <QPdfWriter>
+#include <QPrinter>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -69,6 +71,7 @@ CliOptions parseArguments(const QStringList &args)
 		if      (a == QLatin1String("--cli-validate")) opt.command = "validate";
 		else if (a == QLatin1String("--cli-netlist"))  opt.command = "netlist";
 		else if (a == QLatin1String("--cli-render"))   opt.command = "render";
+		else if (a == QLatin1String("--cli-export-pdf")) opt.command = "exportpdf";
 		else if (a == QLatin1String("--out"))          opt.out = value();
 		else if (a == QLatin1String("--folio"))        opt.folio = value().toInt();
 		else if (a == QLatin1String("--width"))        opt.width = value().toInt();
@@ -81,6 +84,8 @@ CliOptions parseArguments(const QStringList &args)
 		opt.error = QStringLiteral("no project file given");
 	else if (opt.command == QLatin1String("render") && opt.out.isEmpty())
 		opt.error = QStringLiteral("--cli-render requires --out <base.png>");
+	else if (opt.command == QLatin1String("exportpdf") && opt.out.isEmpty())
+		opt.error = QStringLiteral("--cli-export-pdf requires --out <file.pdf>");
 	return opt;
 }
 
@@ -214,6 +219,40 @@ int cmdRender(QETProject *project, const CliOptions &opt)
 	return 0;
 }
 
+/*
+	Export via the application's real print pipeline (QPrinter in PDF
+	mode + fit-to-page scene render) so print-only rendering issues can
+	be reproduced headlessly.
+*/
+int cmdExportPdf(QETProject *project, const CliOptions &opt)
+{
+	const auto diagrams = project->diagrams();
+	QPrinter printer;
+	printer.setOutputFormat(QPrinter::PdfFormat);
+	printer.setOutputFileName(opt.out);
+	printer.setPageSize(QPageSize(QPageSize::A4));
+	printer.setPageOrientation(QPageLayout::Landscape);
+
+	QPainter painter;
+	if (!painter.begin(&printer))
+		return fail(QStringLiteral("cannot open printer painter"));
+
+	bool first = true;
+	for (int i = 0; i < diagrams.count(); ++i) {
+		if (opt.folio >= 0 && opt.folio != i) continue;
+		Diagram *diagram = diagrams.at(i);
+		if (!first) printer.newPage();
+		first = false;
+		QRectF diagram_rect = diagram
+			->border_and_titleblock.borderAndTitleBlockRect();
+		diagram->render(&painter, QRectF(), diagram_rect,
+				Qt::KeepAspectRatio);
+	}
+	painter.end();
+	printJson({{"ok", true}, {"file", opt.out}});
+	return 0;
+}
+
 } // anonymous namespace
 
 namespace QetCli {
@@ -242,6 +281,7 @@ int run(int argc, char **argv)
 
 	if (opt.command == QLatin1String("validate")) return cmdValidate(&project);
 	if (opt.command == QLatin1String("netlist"))  return cmdNetlist(&project);
+	if (opt.command == QLatin1String("exportpdf")) return cmdExportPdf(&project, opt);
 	return cmdRender(&project, opt);
 }
 

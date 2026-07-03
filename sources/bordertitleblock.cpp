@@ -510,6 +510,10 @@ void BorderTitleBlock::draw(QPainter *painter)
 	//Set the QPainter
 	painter -> save();
 	QPen pen(Qt::black);
+	/* le cadre est legerement plus epais que les traits du cartouche :
+	 * compense le rendu plus fin du chemin « rect flottant » du cadre a
+	 * l'export PDF, et suit l'usage normatif (cadre plus fort) */
+	pen.setWidthF(1.5);
 	painter -> setPen(pen);
 	painter -> setBrush(Qt::NoBrush);
 
