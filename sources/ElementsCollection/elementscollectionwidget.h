@@ -59,8 +59,10 @@ class ElementsCollectionWidget : public QWidget
 
 	protected:
 		void leaveEvent(QEvent *event) override;
+		bool eventFilter(QObject *watched, QEvent *event) override;
 
 	private:
+		void placeCurrentElement();
 		void setUpAction();
 		void setUpWidget();
 		void setUpConnection();

@@ -20,6 +20,10 @@
 #include "../editor/ui/qetelementeditor.h"
 #include "../elementscategoryeditor.h"
 #include "../newelementwizard.h"
+#include "../diagram.h"
+#include "../diagramevent/diagrameventaddelement.h"
+#include "../diagramview.h"
+#include "../projectview.h"
 #include "../qetapp.h"
 #include "../qetdiagrameditor.h"
 #include "../qeticons.h"
@@ -40,6 +44,7 @@
 #include <QtGlobal>
 #include <QProgressBar>
 #include <QStatusBar>
+#include <QKeyEvent>
 #include <QLineEdit>
 
 /**
@@ -140,6 +145,45 @@ void ElementsCollectionWidget::leaveEvent(QEvent *event)
 	QWidget::leaveEvent(event);
 }
 
+/**
+	Space key on an element of the tree starts the click-to-place mode on
+	the current diagram (same interface as drag and drop: left click place
+	the element, space rotate it, right click / escape finish).
+*/
+bool ElementsCollectionWidget::eventFilter(QObject *watched, QEvent *event)
+{
+	if (watched == m_tree_view
+	    && event->type() == QEvent::KeyPress
+	    && static_cast<QKeyEvent *>(event)->key() == Qt::Key_Space) {
+		placeCurrentElement();
+		return true;
+	}
+	return QWidget::eventFilter(watched, event);
+}
+
+void ElementsCollectionWidget::placeCurrentElement()
+{
+	ElementCollectionItem *eci =
+		elementCollectionItemForIndex(m_tree_view->currentIndex());
+	if (!(eci && eci->isElement())
+	    || eci->collectionPath().endsWith(QLatin1String(".qetmak"))) {
+		return;
+	}
+
+	QETDiagramEditor *qde = QETApp::diagramEditorAncestorOf(this);
+	if (!qde) return;
+	ProjectView *pv = qde->currentProjectView();
+	if (!pv) return;
+	DiagramView *dv = pv->currentDiagram();
+	if (!(dv && dv->diagram())) return;
+
+	ElementsLocation location(eci->collectionPath());
+	dv->diagram()->setEventInterface(new DiagramEventAddElement(
+		location, dv->diagram(),
+		dv->mapToScene(dv->viewport()->rect().center())));
+	dv->setFocus();
+}
+
 void ElementsCollectionWidget::setUpAction()
 {
 	m_open_dir = new QAction(QET::Icons::FolderOpen,
@@ -190,6 +234,7 @@ void ElementsCollectionWidget::setUpWidget()
 	m_tree_view->setAnimated(true);
 	m_tree_view->setMouseTracking(true);
 	m_tree_view->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+	m_tree_view->installEventFilter(this);
 
 	//Setup the macros tree view
 	m_macros_tree_view = new ElementsTreeView(this);
