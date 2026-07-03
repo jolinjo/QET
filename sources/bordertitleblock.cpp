@@ -510,6 +510,14 @@ void BorderTitleBlock::draw(QPainter *painter)
 	//Set the QPainter
 	painter -> save();
 	QPen pen(Qt::black);
+	/* compensation d'export : dans le PDF, les traits du cartouche
+	 * ressortent visuellement ~1,5x plus epais que ceux du cadre
+	 * (particularite du moteur Qt, cf. chemins QRect / QRectF) ;
+	 * on aligne donc le cadre a l'impression. A l'ecran tout reste 1.0. */
+	if (painter -> device()
+	    && painter -> device() -> devType() == QInternal::Printer) {
+		pen.setWidthF(1.5);
+	}
 	painter -> setPen(pen);
 	painter -> setBrush(Qt::NoBrush);
 
