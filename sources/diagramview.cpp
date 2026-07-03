@@ -39,6 +39,7 @@
 #include "NameList/nameslist.h"
 #include "elementdialog.h"
 #include <QDropEvent>
+#include <QTimer>
 
 /**
 	Constructeur
@@ -1002,8 +1003,11 @@ void DiagramView::resetConductors()
 bool DiagramView::event(QEvent *e) {
 	if (Q_UNLIKELY(m_first_activation)) {
 		if (e -> type() == QEvent::Show) {
-			zoomFit();
 			m_first_activation = false;
+			/* differer le zoomFit : au premier Show la sous-fenetre
+			 * MDI n'a pas encore sa taille definitive et le cadrage
+			 * serait calcule sur une vue minuscule */
+			QTimer::singleShot(0, this, &DiagramView::zoomFit);
 		}
 	}
 	// By default touch events are converted to mouse events. So
