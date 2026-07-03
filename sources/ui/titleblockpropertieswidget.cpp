@@ -361,7 +361,6 @@ void TitleBlockPropertiesWidget::initDialog(
 
 	auto *company_form = new QFormLayout();
 	const QList<QPair<QString, QString>> company_keys {
-		{QStringLiteral("subtitle"),    tr("Sous-titre :")},
 		{QStringLiteral("doc-id"),      tr("Numéro de document :")},
 		{QStringLiteral("doc-type"),    tr("Type de document :")},
 		{QStringLiteral("doc-status"),  tr("État du document :")},
@@ -376,6 +375,10 @@ void TitleBlockPropertiesWidget::initDialog(
 		company_form->addRow(pair.second, edit);
 	}
 	ui -> verticalLayout_2 -> addLayout(company_form);
+
+	/* dans le cartouche societe, la cellule « titre complementaire »
+	 * affiche %{title} (le titre du folio) : renommer le champ */
+	ui -> label_2 -> setText(tr("Sous-titre :"));
 
 	setTitleBlockTemplatesVisible(false);
 	ui -> m_current_date_rb -> setVisible(current_date);
