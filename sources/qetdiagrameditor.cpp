@@ -16,6 +16,8 @@
 	along with QElectroTech.  If not, see <http://www.gnu.org/licenses/>.
 */
 #include "qetdiagrameditor.h"
+
+#include <QListWidget>
 #include "qetversion.h"
 #include <QCoreApplication>
 #include "ElementsCollection/elementscollectionwidget.h"
@@ -131,6 +133,8 @@ QETDiagramEditor::QETDiagramEditor(const QStringList &files, QWidget *parent) :
 		 this,
 		 SLOT(slot_updatePasteAction()));
 
+	setUpWelcomeWidget();
+
 	readSettings();
 	show();
 
@@ -145,6 +149,7 @@ QETDiagramEditor::QETDiagramEditor(const QStringList &files, QWidget *parent) :
 	}
 
 	slot_updateActions();
+	updateWelcomeWidget();
 }
 
 /**
@@ -152,6 +157,78 @@ QETDiagramEditor::QETDiagramEditor(const QStringList &files, QWidget *parent) :
 */
 QETDiagramEditor::~QETDiagramEditor()
 {
+}
+
+/**
+	Welcome view shown in the workspace when no project is opened :
+	the recently opened files, a single click opens one.
+*/
+void QETDiagramEditor::setUpWelcomeWidget()
+{
+	m_welcome_widget = new QWidget(m_workspace.viewport());
+
+	auto *title = new QLabel(
+		tr("Fichiers récents", "welcome view"), m_welcome_widget);
+	QFont title_font = title->font();
+	title_font.setPointSizeF(title_font.pointSizeF() * 1.6);
+	title_font.setBold(true);
+	title->setFont(title_font);
+	title->setAlignment(Qt::AlignHCenter);
+
+	m_welcome_list = new QListWidget(m_welcome_widget);
+	m_welcome_list->setFixedWidth(680);
+	m_welcome_list->setMaximumHeight(520);
+	m_welcome_list->setIconSize(QSize(32, 32));
+	m_welcome_list->setSpacing(2);
+	connect(m_welcome_list, &QListWidget::itemClicked, this,
+		[this](QListWidgetItem *item) {
+		openRecentFile(item->data(Qt::UserRole).toString());
+	});
+
+	auto *layout = new QVBoxLayout(m_welcome_widget);
+	layout->setAlignment(Qt::AlignCenter);
+	layout->addWidget(title, 0, Qt::AlignHCenter);
+	layout->addSpacing(12);
+	layout->addWidget(m_welcome_list, 0, Qt::AlignHCenter);
+
+	m_workspace.viewport()->installEventFilter(this);
+}
+
+/**
+	Show the welcome view when the workspace is empty, hide it otherwise.
+*/
+void QETDiagramEditor::updateWelcomeWidget()
+{
+	if (!m_welcome_widget) return;
+
+	const bool show_welcome = m_workspace.subWindowList().isEmpty();
+	if (show_welcome) {
+		m_welcome_list->clear();
+		const QList<QString> files =
+			QETApp::projectsRecentFiles()->files();
+		const QIcon icon =
+			QETApp::projectsRecentFiles()->iconForFiles();
+		for (const QString &file : files) {
+			auto *item = new QListWidgetItem(
+				icon,
+				QFileInfo(file).fileName() + QChar('\n') + file,
+				m_welcome_list);
+			item->setData(Qt::UserRole, file);
+		}
+		m_welcome_widget->setGeometry(m_workspace.viewport()->rect());
+		m_welcome_widget->raise();
+	}
+	m_welcome_widget->setVisible(show_welcome);
+}
+
+bool QETDiagramEditor::eventFilter(QObject *watched, QEvent *event)
+{
+	if (watched == m_workspace.viewport()
+	    && event->type() == QEvent::Resize
+	    && m_welcome_widget && m_welcome_widget->isVisible()) {
+		m_welcome_widget->setGeometry(m_workspace.viewport()->rect());
+	}
+	return QETMainWindow::eventFilter(watched, event);
 }
 
 /**
@@ -2227,6 +2304,7 @@ void QETDiagramEditor::projectWasClosed(ProjectView *project_view)
 	m_selection_properties_editor->setDiagram(nullptr);
 	project_view -> deleteLater();
 	project -> deleteLater();
+	updateWelcomeWidget();
 }
 
 /**
@@ -2521,6 +2599,7 @@ void QETDiagramEditor::subWindowActivated(QMdiSubWindow *subWindows)
 	slot_updateActions();
 	slot_updateWindowsMenu();
 	emit syncElementsPanel();
+	updateWelcomeWidget();
 }
 
 /**

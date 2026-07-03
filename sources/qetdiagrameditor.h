@@ -28,6 +28,7 @@
 #include <QSignalMapper>
 #include <QUndoGroup>
 
+class QListWidget;
 class QMdiSubWindow;
 class QETProject;
 class QETResult;
@@ -79,8 +80,11 @@ class QETDiagramEditor : public QETMainWindow
 
 	  protected:
 		bool event(QEvent *) override;
+		bool eventFilter(QObject *, QEvent *) override;
 	private:
 		QETDiagramEditor(const QETDiagramEditor &);
+		void setUpWelcomeWidget();
+		void updateWelcomeWidget();
 		void setUpElementsPanel ();
 		void setUpElementsCollectionWidget();
 		void setUpUndoStack     ();
@@ -229,6 +233,8 @@ class QETDiagramEditor : public QETMainWindow
 		void removeDiagramSilent(Diagram *diagram);
 
 		QMdiArea m_workspace;
+		QWidget *m_welcome_widget = nullptr;
+		QListWidget *m_welcome_list = nullptr;
 		QSignalMapper windowMapper;
 		QDir open_dialog_dir; /// Directory to use for file dialogs such as File > save
 

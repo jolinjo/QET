@@ -6116,6 +6116,11 @@ Options disponibles :
 <context>
     <name>QETDiagramEditor</name>
     <message>
+        <source>Fichiers récents</source>
+        <comment>welcome view</comment>
+        <translation>最近打开的文件</translation>
+    </message>
+    <message>
         <source>Nouveau</source>
         <comment>toolbar icon text</comment>
         <translation>新建</translation>

@@ -36,6 +36,7 @@ class RecentFiles : public QObject {
 	// methods
 	public:
 	int size() const;
+	QList<QString> files() const { return list_; }
 	QMenu *menu() const;
 	QIcon iconForFiles() const;
 	void setIconForFiles(const QIcon &);

@@ -1349,6 +1349,13 @@ void DiagramView::mouseDoubleClickEvent(QMouseEvent *e)
 {
 	if (m_event_interface && m_event_interface -> mouseDoubleClickEvent(e)) return;
 
+	//double clic du bouton du milieu : cadrer le folio entier
+	if (e->button() == Qt::MiddleButton) {
+		e->accept();
+		zoomFit();
+		return;
+	}
+
 	BorderTitleBlock &bi = m_diagram -> border_and_titleblock;
 
 	//Get the click pos on the diagram
