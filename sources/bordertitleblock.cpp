@@ -516,24 +516,7 @@ void BorderTitleBlock::draw(QPainter *painter)
 	QSettings settings;
 
 	//Draw the borer
-	/* seul le contour exterieur est plus epais : compense le rendu plus
-	 * fin a l'export PDF et suit l'usage normatif (cadre plus fort) ;
-	 * les separations des en-tetes gardent le trait standard */
-	if (display_border_) {
-		// separation schema / cartouche : trait standard
-		painter -> drawRect(diagram_rect_);
-
-		QPen frame_pen(Qt::black);
-		frame_pen.setWidthF(2.0);
-		frame_pen.setJoinStyle(Qt::MiterJoin);
-		painter -> setPen(frame_pen);
-		/* le contour englobe le schema ET le cartouche, pour un trait
-		 * fort continu aux quatre coins de la page */
-		QRectF outline = display_titleblock_
-			? borderAndTitleBlockRect() : diagram_rect_;
-		painter -> drawRect(outline);
-		painter -> setPen(pen);
-	}
+	if (display_border_) painter -> drawRect(diagram_rect_);
 
 	painter -> setFont(QETApp::diagramTextsFont());
 

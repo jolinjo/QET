@@ -115,7 +115,8 @@ class TitleBlockTemplate : public QObject {
 	void renderCell(QPainter &,
 			const TitleBlockCell &,
 			const DiagramContext &,
-			const QRect &) const;
+			const QRect &,
+			bool draw_background = true) const;
 	void applyCellSpans();
 	void forgetSpanning();
 	void forgetSpanning(TitleBlockCell *, bool = true);

@@ -1506,37 +1506,50 @@ void TitleBlockTemplate::render(QPainter &painter,
 	// draw the titleblock border
 	painter.drawRect(QRect(0, 0, titleblock_width, titleblock_height));
 
-	// run through each individual cell
-	for (int j = 0 ; j < rows_heights_.count() ; ++ j) {
-		for (int i = 0 ; i < columns_width_.count() ; ++ i) {
-			if (cells_[i][j] -> spanner_cell
-					|| cells_[i][j] -> cell_type
-					== TitleBlockCell::EmptyCell)
-				continue;
+	/* premier passage : les fonds de cellules, afin que les traits
+	 * dessines au second passage ne soient pas recouverts par le fond
+	 * d'une cellule voisine */
+	for (int pass = 0 ; pass < 2 ; ++ pass) {
+		for (int j = 0 ; j < rows_heights_.count() ; ++ j) {
+			for (int i = 0 ; i < columns_width_.count() ; ++ i) {
+				if (cells_[i][j] -> spanner_cell
+						|| cells_[i][j] -> cell_type
+						== TitleBlockCell::EmptyCell)
+					continue;
 
-			// calculate the border rect of the current cell
-			int x = lengthRange(0, cells_[i][j] -> num_col, widths);
-			int y = lengthRange(0,
-						cells_[i][j] -> num_row,
-						rows_heights_);
+				// calculate the border rect of the current cell
+				int x = lengthRange(0, cells_[i][j] -> num_col, widths);
+				int y = lengthRange(0,
+							cells_[i][j] -> num_row,
+							rows_heights_);
 
-			int row_span = 0, col_span = 0;
-			if (cells_[i][j] -> span_state
-					!= TitleBlockCell::Disabled) {
-				row_span = cells_[i][j] -> applied_row_span;
-				col_span = cells_[i][j] -> applied_col_span;
+				int row_span = 0, col_span = 0;
+				if (cells_[i][j] -> span_state
+						!= TitleBlockCell::Disabled) {
+					row_span = cells_[i][j] -> applied_row_span;
+					col_span = cells_[i][j] -> applied_col_span;
+				}
+				int w = lengthRange(cells_[i][j] -> num_col,
+							cells_[i][j] -> num_col + 1 + col_span,
+							widths);
+				int h = lengthRange(cells_[i][j] -> num_row,
+							cells_[i][j] -> num_row + 1 + row_span,
+							rows_heights_);
+				QRect cell_rect(x, y, w, h);
+
+				if (pass == 0) {
+					if (cells_[i][j] -> background_color.isValid()) {
+						painter.fillRect(
+							cell_rect,
+							cells_[i][j] -> background_color);
+					}
+				} else {
+					renderCell(painter, *cells_[i][j],
+						   diagram_context,
+						   cell_rect,
+						   false);
+				}
 			}
-			int w = lengthRange(cells_[i][j] -> num_col,
-						cells_[i][j] -> num_col + 1 + col_span,
-						widths);
-			int h = lengthRange(cells_[i][j] -> num_row,
-						cells_[i][j] -> num_row + 1 + row_span,
-						rows_heights_);
-			QRect cell_rect(x, y, w, h);
-
-			renderCell(painter, *cells_[i][j],
-				   diagram_context,
-				   cell_rect);
 		}
 	}
 	painter.restore();
@@ -1643,10 +1656,12 @@ void TitleBlockTemplate::renderDxf(QRectF &title_block_rect,
 void TitleBlockTemplate::renderCell(QPainter &painter,
 					const TitleBlockCell &cell,
 					const DiagramContext &diagram_context,
-					const QRect &cell_rect) const
+					const QRect &cell_rect,
+					bool draw_background) const
 {
-	// fill the cell background when a color was set
-	if (cell.background_color.isValid()) {
+	/* fill the cell background when a color was set ; render() le fait
+	 * en passe separee pour ne pas recouvrir les traits voisins */
+	if (draw_background && cell.background_color.isValid()) {
 		painter.fillRect(cell_rect, cell.background_color);
 	}
 
