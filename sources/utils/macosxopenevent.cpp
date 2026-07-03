@@ -17,6 +17,8 @@
 */
 #include "macosxopenevent.h"
 
+#include "../qetapp.h"
+#include "../qetarguments.h"
 #include "singleapplication.h"
 
 #include <QFileOpenEvent>
@@ -39,10 +41,20 @@ bool MacOSXOpenEvent::eventFilter(QObject *watched, QEvent *event)
 {
 	if (event->type() == QEvent::FileOpen)
 	{
-		SingleApplication *app = dynamic_cast<SingleApplication *>(watched);
 		QFileOpenEvent *open_event = static_cast<QFileOpenEvent*>(event);
-		QString message = "launched-with-args: " + open_event->file();
-		app->sendMessage(message.toUtf8());
+		/* sur macOS l'application est un simple QApplication (voir
+		 * main.cpp) : le dynamic_cast echouait et l'appel dereferencait
+		 * un pointeur nul a chaque evenement d'ouverture ; dans ce cas
+		 * ouvrir le fichier directement dans ce processus */
+		if (SingleApplication *app =
+				dynamic_cast<SingleApplication *>(watched)) {
+			QString message = "launched-with-args: "
+					  + open_event->file();
+			app->sendMessage(message.toUtf8());
+		} else if (QETApp *qetapp = QETApp::instance()) {
+			qetapp->openFiles(QETArguments(
+				QStringList{open_event->file()}));
+		}
 		return true;
 	}
 	return false;
