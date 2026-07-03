@@ -39,6 +39,7 @@
 #include "ui/bomexportdialog.h"
 #include "ui/diagrampropertieseditordockwidget.h"
 #include "ui/dialogwaiting.h"
+#include "ui/foliorevisionsdialog.h"
 #include "undocommand/addelementtextcommand.h"
 #include "undocommand/rotateselectioncommand.h"
 #include "undocommand/rotatetextscommand.h"
@@ -393,6 +394,19 @@ void QETDiagramEditor::setUpActions()
 		{
 			activateProject(project_view);
 			project_view->editCurrentDiagramProperties();
+		}
+	});
+
+		//Edit current diagram revision history
+	m_edit_folio_revisions = new QAction(QET::Icons::DocumentSpreadsheet, tr("Révisions du folio"), this);
+	m_edit_folio_revisions->setStatusTip(tr("Édite l'historique des révisions du cartouche du folio courant", "status bar tip"));
+	connect(m_edit_folio_revisions, &QAction::triggered, [this]() {
+		if (ProjectView *project_view = currentProjectView())
+		{
+			activateProject(project_view);
+			if (DiagramView *dv = project_view->currentDiagram()) {
+				FolioRevisionsDialog::edit(dv->diagram(), this);
+			}
 		}
 	});
 
@@ -771,6 +785,7 @@ void QETDiagramEditor::setUpToolBar()
 	view_tool_bar -> addActions(m_zoom_action_toolBar);
 
 	diagram_tool_bar -> addAction (m_edit_diagram_properties);
+	diagram_tool_bar -> addAction (m_edit_folio_revisions);
 	diagram_tool_bar -> addAction (m_conductor_reset);
 	diagram_tool_bar -> addAction (m_auto_conductor);
 
@@ -837,6 +852,7 @@ void QETDiagramEditor::setUpMenu()
 	menu_edition -> addAction(m_conductor_reset);
 	menu_edition -> addSeparator();
 	menu_edition -> addAction(m_edit_diagram_properties);
+	menu_edition -> addAction(m_edit_folio_revisions);
 	menu_edition -> addActions(m_row_column_actions_group.actions());
 	menu_edition -> addSeparator();
 	menu_edition -> addActions(m_depth_action_group->actions());
@@ -1572,6 +1588,7 @@ void QETDiagramEditor::slot_updateActions()
 	m_print->                       setEnabled(opened_diagram);
 	m_export_to_pdf->               setEnabled(opened_diagram);
 	m_edit_diagram_properties->     setEnabled(opened_diagram);
+	m_edit_folio_revisions->        setEnabled(opened_diagram);
 	m_zoom_actions_group.           setEnabled(opened_diagram);
 	m_select_actions_group.         setEnabled(opened_diagram);
 	m_add_item_actions_group.       setEnabled(editable_project);

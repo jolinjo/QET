@@ -160,6 +160,7 @@ class QETDiagramEditor : public QETMainWindow
 	public:
 		QAction
 		*m_edit_diagram_properties, ///< Show a dialog to edit diagram properties
+		*m_edit_folio_revisions,    ///< Show a dialog to edit the folio revision history
 		*m_conductor_reset,         ///< Reset paths of selected conductors
 		*m_cut,                     ///< Cut selection to clipboard
 		*m_copy;                    ///< Copy selection to clipboard

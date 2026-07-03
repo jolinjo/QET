@@ -6058,7 +6058,60 @@ Options disponibles :
     </message>
 </context>
 <context>
+    <name>FolioRevisionsDialog</name>
+    <message>
+        <source>Révisions du folio</source>
+        <comment>window title</comment>
+        <translation>页面修订记录</translation>
+    </message>
+    <message>
+        <source>Indice de révision :</source>
+        <translation>修订索引：</translation>
+    </message>
+    <message>
+        <source>État du document :</source>
+        <translation>文件状态：</translation>
+    </message>
+    <message>
+        <source>Date de publication :</source>
+        <translation>发行日期：</translation>
+    </message>
+    <message>
+        <source>Indice</source>
+        <translation>版次</translation>
+    </message>
+    <message>
+        <source>Date</source>
+        <translation>日期</translation>
+    </message>
+    <message>
+        <source>Zone</source>
+        <translation>坐标</translation>
+    </message>
+    <message>
+        <source>Description de la révision</source>
+        <translation>修改内容</translation>
+    </message>
+    <message>
+        <source>Par</source>
+        <translation>修改</translation>
+    </message>
+    <message>
+        <source>Approuvé</source>
+        <translation>核准</translation>
+    </message>
+</context>
+<context>
     <name>QETDiagramEditor</name>
+    <message>
+        <source>Révisions du folio</source>
+        <translation>页面修订记录</translation>
+    </message>
+    <message>
+        <source>Édite l&apos;historique des révisions du cartouche du folio courant</source>
+        <comment>status bar tip</comment>
+        <translation>编辑当前页面图框的修订历史</translation>
+    </message>
     <message>
         <location filename="../sources/qetdiagrameditor.cpp" line="102"/>
         <source>QElectroTech</source>
