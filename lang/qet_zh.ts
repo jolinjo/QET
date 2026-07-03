@@ -1225,7 +1225,7 @@ Note: These options DO NOT allow or block Auto Numberings, only their Update Pol
         <location filename="../sources/diagramview.cpp" line="91"/>
         <source>Créer un template</source>
         <comment>context menu action</comment>
-        <translation>创建模板</translation>
+        <translation>建立模组</translation>
     </message>
     <message>
         <location filename="../sources/diagramview.cpp" line="514"/>
@@ -2563,7 +2563,7 @@ Note: These options DO NOT allow or block Auto Numberings, only their Update Pol
     <message>
         <location filename="../sources/ElementsCollection/elementscollectionwidget.cpp" line="154"/>
         <source>Recharger les collections</source>
-        <translation>重新加载集合</translation>
+        <translation>重新载入元件库</translation>
     </message>
     <message>
         <location filename="../sources/ElementsCollection/elementscollectionwidget.cpp" line="156"/>
@@ -2684,12 +2684,12 @@ Tout les éléments et les dossier contenus dans ce dossier seront supprimés.</
     <message>
         <location filename="../sources/ElementsCollection/elementscollectionwidget.cpp" line="208"/>
         <source>Collections</source>
-        <translation>集合</translation>
+        <translation>元件库</translation>
     </message>
     <message>
         <location filename="../sources/ElementsCollection/elementscollectionwidget.cpp" line="209"/>
         <source>Modèles</source>
-        <translation>模板</translation>
+        <translation>模组</translation>
     </message>
     <message>
         <location filename="../sources/ElementsCollection/elementscollectionwidget.cpp" line="680"/>
@@ -3467,12 +3467,12 @@ that you create. Text and number inputs are
     <message>
         <location filename="../sources/ui/configpage/generalconfigurationpage.ui" line="225"/>
         <source>Collections</source>
-        <translation>集合</translation>
+        <translation>元件库</translation>
     </message>
     <message>
         <location filename="../sources/ui/configpage/generalconfigurationpage.ui" line="231"/>
         <source>Accès aux collections</source>
-        <translation>访问集合</translation>
+        <translation>存取元件库</translation>
     </message>
     <message>
         <location filename="../sources/ui/configpage/generalconfigurationpage.ui" line="243"/>
@@ -3564,7 +3564,7 @@ Vous pouvez spécifier ici la valeur par défaut de ce champ pour les éléments
     <message>
         <location filename="../sources/ui/configpage/generalconfigurationpage.ui" line="355"/>
         <source>Répertoire des Macros utilisateur</source>
-        <translation>用户宏目录</translation>
+        <translation>用户模组目录</translation>
     </message>
     <message>
         <location filename="../sources/ui/configpage/generalconfigurationpage.ui" line="423"/>
@@ -3876,7 +3876,7 @@ Vous pouvez spécifier ici la valeur par défaut de ce champ pour les éléments
     <message>
         <location filename="../sources/ui/configpage/generalconfigurationpage.cpp" line="543"/>
         <source>Chemin des macros utilisateur</source>
-        <translation>用户宏路径</translation>
+        <translation>用户模组路径</translation>
     </message>
     <message>
         <location filename="../sources/ui/configpage/generalconfigurationpage.cpp" line="573"/>
@@ -6833,7 +6833,7 @@ Options disponibles :
     <message>
         <location filename="../sources/qetdiagrameditor.cpp" line="195"/>
         <source>Collections</source>
-        <translation>集合</translation>
+        <translation>元件库</translation>
     </message>
     <message>
         <location filename="../sources/qetdiagrameditor.cpp" line="316"/>
@@ -9099,22 +9099,22 @@ Que désirez vous faire ?</source>
     <message>
         <location filename="../sources/ElementsCollection/fileelementcollectionitem.cpp" line="127"/>
         <source>Collection QET</source>
-        <translation>QET集合</translation>
+        <translation>QET元件库</translation>
     </message>
     <message>
         <location filename="../sources/ElementsCollection/fileelementcollectionitem.cpp" line="129"/>
         <source>Collection Company</source>
-        <translation>公司集合</translation>
+        <translation>公司元件库</translation>
     </message>
     <message>
         <location filename="../sources/ElementsCollection/fileelementcollectionitem.cpp" line="131"/>
         <source>Collection utilisateur</source>
-        <translation>用户集合</translation>
+        <translation>用户元件库</translation>
     </message>
     <message>
         <location filename="../sources/ElementsCollection/fileelementcollectionitem.cpp" line="133"/>
         <source>Makros</source>
-        <translation>宏</translation>
+        <translation>模组</translation>
     </message>
     <message>
         <location filename="../sources/ElementsCollection/fileelementcollectionitem.cpp" line="135"/>
