@@ -516,23 +516,28 @@ void BorderTitleBlock::draw(QPainter *painter)
 	QSettings settings;
 
 	//Draw the borer
-	/* compensation d'export : dans le PDF, les traits du cartouche
-	 * ressortent visuellement plus epais que ceux du cadre
-	 * (particularite du moteur Qt, cf. chemins QRect / QRectF) ;
-	 * on aligne donc le contour exterieur a l'impression, les
-	 * separations d'en-tetes gardent le trait standard.
-	 * A l'ecran tout reste 1.0. */
 	if (display_border_) {
+		painter -> drawRect(diagram_rect_);
+
+		/* contour exterieur renforce a l'impression uniquement :
+		 * - trace en retrait d'une demi-largeur de trait, afin que le
+		 *   trait entier reste dans la zone exportee (sinon la moitie
+		 *   exterieure est rognee et l'epaisseur varie selon le cote)
+		 * - englobe le cartouche pour un contour continu sur la page
+		 * A l'ecran tout reste au trait standard. */
 		if (painter -> device()
 		    && painter -> device() -> devType() == QInternal::Printer) {
+			const qreal frame_width = 2.0;
 			QPen frame_pen(Qt::black);
-			frame_pen.setWidthF(2.0);
+			frame_pen.setWidthF(frame_width);
 			frame_pen.setJoinStyle(Qt::MiterJoin);
 			painter -> setPen(frame_pen);
-			painter -> drawRect(diagram_rect_);
+			QRectF outline = display_titleblock_
+				? borderAndTitleBlockRect() : diagram_rect_;
+			outline.adjust(frame_width / 2.0,  frame_width / 2.0,
+			               -frame_width / 2.0, -frame_width / 2.0);
+			painter -> drawRect(outline);
 			painter -> setPen(pen);
-		} else {
-			painter -> drawRect(diagram_rect_);
 		}
 	}
 
