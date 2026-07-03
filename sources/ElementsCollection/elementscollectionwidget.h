@@ -65,6 +65,8 @@ class ElementsCollectionWidget : public QWidget
 	private:
 		void placeElementAtIndex(const QModelIndex &index);
 		void updateGridRoot(const QModelIndex &index);
+		void applyGridDisplaySettings();
+		void updateGridGeometry();
 		void setUpAction();
 		void setUpWidget();
 		void setUpConnection();
@@ -101,6 +103,7 @@ class ElementsCollectionWidget : public QWidget
 		QTimer m_search_timer;
 		ElementsTreeView *m_tree_view;
 		QListView *m_grid_view = nullptr;
+		int m_grid_columns = 0;
 		ElementsTreeView *m_macros_tree_view = nullptr;
 		QTabWidget *m_tab_widget = nullptr;
 		QVBoxLayout *m_main_vlayout;

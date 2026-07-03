@@ -47,6 +47,7 @@
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QListView>
+#include <QSettings>
 #include <QSplitter>
 
 /**
@@ -148,6 +149,41 @@ void ElementsCollectionWidget::leaveEvent(QEvent *event)
 }
 
 /**
+	Icon size and items-per-row of the grid view, from the general
+	configuration (elementspanel/grid-icon-size, elementspanel/grid-columns;
+	columns = 0 means as many as the width allows).
+*/
+void ElementsCollectionWidget::applyGridDisplaySettings()
+{
+	QSettings settings;
+	const int icon_size = qBound(
+		24,
+		settings.value(QStringLiteral("elementspanel/grid-icon-size"),
+			       60).toInt(),
+		256);
+	m_grid_columns = qBound(
+		0,
+		settings.value(QStringLiteral("elementspanel/grid-columns"),
+			       0).toInt(),
+		30);
+	m_grid_view->setIconSize(QSize(icon_size, icon_size));
+	updateGridGeometry();
+}
+
+void ElementsCollectionWidget::updateGridGeometry()
+{
+	const int icon = m_grid_view->iconSize().width();
+	const int text_h = m_grid_view->fontMetrics().height() * 2;
+	int cell_w = icon + 28;
+	if (m_grid_columns > 0) {
+		cell_w = qMax(icon + 8,
+			      m_grid_view->viewport()->width()
+				      / m_grid_columns - 1);
+	}
+	m_grid_view->setGridSize(QSize(cell_w, icon + text_h + 14));
+}
+
+/**
 	@brief ElementsCollectionWidget::updateGridRoot
 	Show in the grid view the content of the directory clicked in the
 	tree (or the directory of the clicked element).
@@ -172,6 +208,10 @@ void ElementsCollectionWidget::updateGridRoot(const QModelIndex &index)
 */
 bool ElementsCollectionWidget::eventFilter(QObject *watched, QEvent *event)
 {
+	if (watched == m_grid_view && event->type() == QEvent::Resize
+	    && m_grid_columns > 0) {
+		updateGridGeometry();
+	}
 	if ((watched == m_tree_view || watched == m_grid_view)
 	    && event->type() == QEvent::KeyPress
 	    && static_cast<QKeyEvent *>(event)->key() == Qt::Key_Space) {
@@ -263,8 +303,6 @@ void ElementsCollectionWidget::setUpWidget()
 	m_grid_view->setResizeMode(QListView::Adjust);
 	m_grid_view->setMovement(QListView::Static);
 	m_grid_view->setWrapping(true);
-	m_grid_view->setIconSize(QSize(60, 60));
-	m_grid_view->setGridSize(QSize(88, 96));
 	m_grid_view->setUniformItemSizes(true);
 	m_grid_view->setWordWrap(true);
 	m_grid_view->setTextElideMode(Qt::ElideRight);
@@ -275,6 +313,9 @@ void ElementsCollectionWidget::setUpWidget()
 	QFont grid_font = m_grid_view->font();
 	grid_font.setPointSizeF(grid_font.pointSizeF() * 0.8);
 	m_grid_view->setFont(grid_font);
+	applyGridDisplaySettings();
+	connect(QETApp::instance(), &QETApp::settingsChanged,
+		this, &ElementsCollectionWidget::applyGridDisplaySettings);
 	//cases delimitees, facon bibliotheque FluidSIM
 	m_grid_view->setStyleSheet(
 		QStringLiteral("QListView::item { border: 1px solid #c8c8c8;"

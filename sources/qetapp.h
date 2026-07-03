@@ -64,8 +64,13 @@ class QETApp : public QObject
 		QETApp(const QETApp &);
 	
 		// methods
+	signals:
+		/// emitted after the configuration dialog wrote new settings
+		void settingsChanged();
+
 	public:
 		static QETApp *instance();
+		void notifySettingsChanged() { emit settingsChanged(); }
 		void setLanguage(const QString &);
 		static QString langFromSetting ();
 		void switchLayout(Qt::LayoutDirection);

@@ -3351,6 +3351,14 @@ that you create. Text and number inputs are
 <context>
     <name>GeneralConfigurationPage</name>
     <message>
+        <source>Taille des icônes de la grille d'éléments (px)</source>
+        <translation>元件網格圖示大小 (px)</translation>
+    </message>
+    <message>
+        <source>Éléments par rangée dans la grille (0 = automatique)</source>
+        <translation>網格每列元件數（0 = 自動）</translation>
+    </message>
+    <message>
         <location filename="../sources/ui/configpage/generalconfigurationpage.ui" line="24"/>
         <source>Apparence</source>
         <translation>外觀</translation>

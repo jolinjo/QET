@@ -78,6 +78,8 @@ GeneralConfigurationPage::GeneralConfigurationPage(QWidget *parent) :
 		ui->m_use_windows_mode_rb->setChecked(true);
 	ui->m_zoom_out_beyond_folio->setChecked(settings.value("diagrameditor/zoom-out-beyond-of-folio", false).toBool());
 	ui->m_use_gesture_trackpad->setChecked(settings.value("diagramview/gestures", false).toBool());
+	ui->m_grid_icon_size_sb->setValue(settings.value("elementspanel/grid-icon-size", 60).toInt());
+	ui->m_grid_columns_sb->setValue(settings.value("elementspanel/grid-columns", 0).toInt());
 	ui->m_save_label_paste->setChecked(settings.value("diagramcommands/erase-label-on-copy", true).toBool());
 	ui->m_use_folio_label->setChecked(settings.value("genericpanel/folio", true).toBool());
 	ui->m_border_0->setChecked(settings.value("border-columns_0", false).toBool());
@@ -220,6 +222,11 @@ void GeneralConfigurationPage::applyConf()
 
 		//DIAGRAM VIEW
 	settings.setValue("diagramview/gestures", ui->m_use_gesture_trackpad->isChecked());
+
+		//ELEMENTS PANEL GRID
+	settings.setValue("elementspanel/grid-icon-size", ui->m_grid_icon_size_sb->value());
+	settings.setValue("elementspanel/grid-columns", ui->m_grid_columns_sb->value());
+	QETApp::instance()->notifySettingsChanged();
 
 		//DIAGRAM COMMAND
 	settings.setValue("diagramcommands/erase-label-on-copy", ui->m_save_label_paste->isChecked());
