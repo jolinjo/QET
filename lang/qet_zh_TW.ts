@@ -1246,13 +1246,13 @@ Note: These options DO NOT allow or block Auto Numberings, only their Update Pol
     <message>
         <location filename="../sources/diagramview.cpp" line="1363"/>
         <source>Modèle enregistré</source>
-        <translation>範本已儲存</translation>
+        <translation>模組已儲存</translation>
     </message>
     <message>
         <location filename="../sources/diagramview.cpp" line="1364"/>
         <source>Le modèle a été enregistré avec succès sous :
 %1</source>
-        <translation>範本已成功儲存至：
+        <translation>模組已成功儲存至：
 %1</translation>
     </message>
     <message>
@@ -1798,19 +1798,19 @@ Note: These options DO NOT allow or block Auto Numberings, only their Update Pol
         <location filename="../sources/elementdialog.cpp" line="74"/>
         <source>Enregistrer une catégorie</source>
         <comment>dialog title</comment>
-        <translation>儲存一個分類</translation>
+        <translation>錯誤</translation>
     </message>
     <message>
         <location filename="../sources/elementdialog.cpp" line="78"/>
         <source>Enregistrer un template</source>
         <comment>dialog title</comment>
-        <translation>儲存範本</translation>
+        <translation>儲存模組</translation>
     </message>
     <message>
         <location filename="../sources/elementdialog.cpp" line="79"/>
         <source>Choisissez l&apos;emplacement dans lequel vous souhaitez enregistrer votre template.</source>
         <comment>dialog content</comment>
-        <translation>請選擇儲存範本的位置。</translation>
+        <translation>請選擇儲存模組的位置。</translation>
     </message>
     <message>
         <location filename="../sources/elementdialog.cpp" line="82"/>
@@ -1830,7 +1830,7 @@ Note: These options DO NOT allow or block Auto Numberings, only their Update Pol
     <message>
         <location filename="../sources/elementdialog.cpp" line="125"/>
         <source>Nom du nouveau template</source>
-        <translation>新範本名稱</translation>
+        <translation>新模組名稱</translation>
     </message>
     <message>
         <location filename="../sources/elementdialog.cpp" line="127"/>
@@ -1841,13 +1841,13 @@ Note: These options DO NOT allow or block Auto Numberings, only their Update Pol
         <location filename="../sources/elementdialog.cpp" line="238"/>
         <source>Écraser le template ?</source>
         <comment>message box title</comment>
-        <translation>要覆蓋範本嗎？</translation>
+        <translation>要覆蓋模組嗎？</translation>
     </message>
     <message>
         <location filename="../sources/elementdialog.cpp" line="239"/>
         <source>Le template existe déjà. Voulez-vous l&apos;écraser ?</source>
         <comment>message box content</comment>
-        <translation>範本已存在，要覆蓋它嗎？</translation>
+        <translation>模組已存在，要覆蓋它嗎？</translation>
     </message>
     <message>
         <location filename="../sources/elementdialog.cpp" line="254"/>
