@@ -326,11 +326,29 @@ void ElementsCollectionWidget::updateGridRoot(const QModelIndex &index)
 	if (!m_grid_view->model()) return;
 	ElementCollectionItem *eci = elementCollectionItemForIndex(index);
 	if (!eci) return;
+
+	QModelIndex root = index;
 	if (eci->isElement()) {
-		m_grid_view->setRootIndex(index.parent());
+		root = index.parent();
+	}
+
+	/* les donnees des items (dont le libelle) sont remplies en tache de
+	 * fond ; les dossiers jamais deployes dans l'arbre peuvent encore
+	 * avoir des enfants sans texte : les completer avant affichage */
+	if (ElementCollectionItem *dir_item =
+			elementCollectionItemForIndex(root)) {
+		for (int i = 0 ; i < dir_item->rowCount() ; ++i) {
+			auto *child = static_cast<ElementCollectionItem *>(
+				dir_item->child(i));
+			if (child && child->text().isEmpty()) {
+				child->setUpData();
+			}
+		}
+	}
+
+	m_grid_view->setRootIndex(root);
+	if (eci->isElement()) {
 		m_grid_view->setCurrentIndex(index);
-	} else {
-		m_grid_view->setRootIndex(index);
 	}
 }
 
@@ -510,9 +528,9 @@ void ElementsCollectionWidget::setUpConnection()
 		if (eci->isElement()) {
 			placeElementAtIndex(index);
 		} else {
-			m_grid_view->setRootIndex(index);
 			m_tree_view->setCurrentIndex(index);
 			m_tree_view->expand(index);
+			updateGridRoot(index);
 		}
 	});
 	connect(m_search_field, &QLineEdit::textEdited,
