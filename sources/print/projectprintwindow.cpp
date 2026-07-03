@@ -31,9 +31,12 @@
 #		pragma message("@TODO remove code for QT 6 or later")
 #	endif
 #endif
+#include <QDir>
+#include <QFileInfo>
 #include <QMarginsF>
 #include <QPageSetupDialog>
 #include <QPainter>
+#include <QStandardPaths>
 #include <QPrintDialog>
 #include <QPrintPreviewWidget>
 #include <QScreen>
@@ -692,7 +695,28 @@ QList<Diagram *> ProjectPrintWindow::selectedDiagram() const
 
 void ProjectPrintWindow::exportToPDF()
 {
-	auto file_name = QFileDialog::getSaveFileName(this, tr("Exporter sous : "), m_printer->outputFileName(), tr("Fichier (*.pdf)"));
+	/* proposition par defaut : dossier Téléchargements,
+	 * nom = <nom du fichier projet>_<indice de revision>.pdf */
+	QString base = QFileInfo(m_project->filePath()).completeBaseName();
+	if (base.isEmpty()) base = m_project->title();
+	if (base.isEmpty()) base = QStringLiteral("projet");
+
+	QString indexrev;
+	if (!m_project->diagrams().isEmpty()) {
+		indexrev = m_project->diagrams().first()
+				->border_and_titleblock.indexrev();
+	}
+	QString default_name = indexrev.isEmpty()
+		? base + QStringLiteral(".pdf")
+		: base + QStringLiteral("_") + indexrev + QStringLiteral(".pdf");
+
+	QString default_dir = QStandardPaths::writableLocation(
+				QStandardPaths::DownloadLocation);
+	auto file_name = QFileDialog::getSaveFileName(
+				this,
+				tr("Exporter sous : "),
+				QDir(default_dir).filePath(default_name),
+				tr("Fichier (*.pdf)"));
 	if (file_name.isEmpty()) {
 		return;
 	}
