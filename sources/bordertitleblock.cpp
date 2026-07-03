@@ -510,17 +510,22 @@ void BorderTitleBlock::draw(QPainter *painter)
 	//Set the QPainter
 	painter -> save();
 	QPen pen(Qt::black);
-	/* le cadre est legerement plus epais que les traits du cartouche :
-	 * compense le rendu plus fin du chemin « rect flottant » du cadre a
-	 * l'export PDF, et suit l'usage normatif (cadre plus fort) */
-	pen.setWidthF(1.5);
 	painter -> setPen(pen);
 	painter -> setBrush(Qt::NoBrush);
 
 	QSettings settings;
 
 	//Draw the borer
-	if (display_border_) painter -> drawRect(diagram_rect_);
+	/* seul le contour exterieur est plus epais : compense le rendu plus
+	 * fin a l'export PDF et suit l'usage normatif (cadre plus fort) ;
+	 * les separations des en-tetes gardent le trait standard */
+	if (display_border_) {
+		QPen frame_pen(Qt::black);
+		frame_pen.setWidthF(1.5);
+		painter -> setPen(frame_pen);
+		painter -> drawRect(diagram_rect_);
+		painter -> setPen(pen);
+	}
 
 	painter -> setFont(QETApp::diagramTextsFont());
 
