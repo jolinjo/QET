@@ -46,6 +46,8 @@
 #include <QStatusBar>
 #include <QKeyEvent>
 #include <QLineEdit>
+#include <QListView>
+#include <QSplitter>
 
 /**
 	@brief ElementsCollectionWidget::ElementsCollectionWidget
@@ -146,25 +148,43 @@ void ElementsCollectionWidget::leaveEvent(QEvent *event)
 }
 
 /**
+	@brief ElementsCollectionWidget::updateGridRoot
+	Show in the grid view the content of the directory clicked in the
+	tree (or the directory of the clicked element).
+*/
+void ElementsCollectionWidget::updateGridRoot(const QModelIndex &index)
+{
+	if (!m_grid_view->model()) return;
+	ElementCollectionItem *eci = elementCollectionItemForIndex(index);
+	if (!eci) return;
+	if (eci->isElement()) {
+		m_grid_view->setRootIndex(index.parent());
+		m_grid_view->setCurrentIndex(index);
+	} else {
+		m_grid_view->setRootIndex(index);
+	}
+}
+
+/**
 	Space key on an element of the tree starts the click-to-place mode on
 	the current diagram (same interface as drag and drop: left click place
 	the element, space rotate it, right click / escape finish).
 */
 bool ElementsCollectionWidget::eventFilter(QObject *watched, QEvent *event)
 {
-	if (watched == m_tree_view
+	if ((watched == m_tree_view || watched == m_grid_view)
 	    && event->type() == QEvent::KeyPress
 	    && static_cast<QKeyEvent *>(event)->key() == Qt::Key_Space) {
-		placeCurrentElement();
+		placeElementAtIndex(
+			static_cast<QAbstractItemView *>(watched)->currentIndex());
 		return true;
 	}
 	return QWidget::eventFilter(watched, event);
 }
 
-void ElementsCollectionWidget::placeCurrentElement()
+void ElementsCollectionWidget::placeElementAtIndex(const QModelIndex &index)
 {
-	ElementCollectionItem *eci =
-		elementCollectionItemForIndex(m_tree_view->currentIndex());
+	ElementCollectionItem *eci = elementCollectionItemForIndex(index);
 	if (!(eci && eci->isElement())
 	    || eci->collectionPath().endsWith(QLatin1String(".qetmak"))) {
 		return;
@@ -236,6 +256,34 @@ void ElementsCollectionWidget::setUpWidget()
 	m_tree_view->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
 	m_tree_view->installEventFilter(this);
 
+	/* vue en grille du dossier selectionne : icones plus grandes,
+	 * texte reduit, beaucoup plus d'elements visibles a la fois */
+	m_grid_view = new QListView(this);
+	m_grid_view->setViewMode(QListView::IconMode);
+	m_grid_view->setResizeMode(QListView::Adjust);
+	m_grid_view->setMovement(QListView::Static);
+	m_grid_view->setWrapping(true);
+	m_grid_view->setIconSize(QSize(60, 60));
+	m_grid_view->setGridSize(QSize(88, 96));
+	m_grid_view->setUniformItemSizes(true);
+	m_grid_view->setWordWrap(true);
+	m_grid_view->setTextElideMode(Qt::ElideRight);
+	m_grid_view->setDragEnabled(true);
+	m_grid_view->setDragDropMode(QAbstractItemView::DragOnly);
+	m_grid_view->setSelectionMode(QAbstractItemView::SingleSelection);
+	m_grid_view->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+	QFont grid_font = m_grid_view->font();
+	grid_font.setPointSizeF(grid_font.pointSizeF() * 0.8);
+	m_grid_view->setFont(grid_font);
+	//cases delimitees, facon bibliotheque FluidSIM
+	m_grid_view->setStyleSheet(
+		QStringLiteral("QListView::item { border: 1px solid #c8c8c8;"
+			       " margin: 2px; }"
+			       "QListView::item:selected {"
+			       " background: palette(highlight);"
+			       " color: palette(highlighted-text); }"));
+	m_grid_view->installEventFilter(this);
+
 	//Setup the macros tree view
 	m_macros_tree_view = new ElementsTreeView(this);
 	m_macros_tree_view->setHeaderHidden(true);
@@ -250,7 +298,11 @@ void ElementsCollectionWidget::setUpWidget()
 	m_tab_widget = new QTabWidget(this);
 	m_tab_widget->setDocumentMode(true);
 	m_tab_widget->setTabPosition(QTabWidget::North);
-	m_tab_widget->addTab(m_tree_view, tr("Collections"));
+	auto *collections_splitter = new QSplitter(Qt::Vertical, this);
+	collections_splitter->addWidget(m_tree_view);
+	collections_splitter->addWidget(m_grid_view);
+	collections_splitter->setSizes({500, 350});
+	m_tab_widget->addTab(collections_splitter, tr("Collections"));
 	m_tab_widget->addTab(m_macros_tree_view, tr("Modèles"));
 
 	m_main_vlayout->addWidget(m_search_field);
@@ -272,6 +324,20 @@ void ElementsCollectionWidget::setUpConnection()
 {
 	connect(m_tree_view, &QTreeView::customContextMenuRequested,
 		this, &ElementsCollectionWidget::customContextMenu);
+	connect(m_tree_view, &QTreeView::clicked,
+		this, &ElementsCollectionWidget::updateGridRoot);
+	connect(m_grid_view, &QListView::doubleClicked,
+		this, [this](const QModelIndex &index) {
+		ElementCollectionItem *eci = elementCollectionItemForIndex(index);
+		if (!eci) return;
+		if (eci->isElement()) {
+			placeElementAtIndex(index);
+		} else {
+			m_grid_view->setRootIndex(index);
+			m_tree_view->setCurrentIndex(index);
+			m_tree_view->expand(index);
+		}
+	});
 	connect(m_search_field, &QLineEdit::textEdited,
 		[this]() {m_search_timer.start();});
 	connect(&m_search_timer, &QTimer::timeout,
@@ -789,6 +855,8 @@ void ElementsCollectionWidget::loadingFinished()
 	{
 		m_new_model->highlightUnusedElement();
 		m_tree_view->setModel(m_new_model);
+		m_grid_view->setModel(m_new_model);
+		m_grid_view->setRootIndex(QModelIndex());
 		m_index_at_context_menu = QModelIndex();
 		m_showed_index = QModelIndex();
 		if (m_model) delete m_model;

@@ -32,6 +32,7 @@ class ElementsCollectionModel;
 class QVBoxLayout;
 class QMenu;
 class QLineEdit;
+class QListView;
 class ElementCollectionItem;
 class QProgressBar;
 class QETProject;
@@ -62,7 +63,8 @@ class ElementsCollectionWidget : public QWidget
 		bool eventFilter(QObject *watched, QEvent *event) override;
 
 	private:
-		void placeCurrentElement();
+		void placeElementAtIndex(const QModelIndex &index);
+		void updateGridRoot(const QModelIndex &index);
 		void setUpAction();
 		void setUpWidget();
 		void setUpConnection();
@@ -98,6 +100,7 @@ class ElementsCollectionWidget : public QWidget
 		QLineEdit *m_search_field;
 		QTimer m_search_timer;
 		ElementsTreeView *m_tree_view;
+		QListView *m_grid_view = nullptr;
 		ElementsTreeView *m_macros_tree_view = nullptr;
 		QTabWidget *m_tab_widget = nullptr;
 		QVBoxLayout *m_main_vlayout;
