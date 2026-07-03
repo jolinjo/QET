@@ -87,15 +87,19 @@ class GridElementDelegate : public QStyledItemDelegate
 		const QRect cell = option.rect.adjusted(2, 2, -2, -2);
 		painter->setClipRect(cell);
 
+		/* le cadre n'entoure que l'icone ; le libelle est dessine
+		 * sous le cadre pour ne jamais chevaucher le dessin */
 		const bool selected = option.state & QStyle::State_Selected;
-		painter->fillRect(cell, selected
+		const QRect box(cell.left(), cell.top(), cell.width(),
+				m_icon_size + 6);
+		painter->fillRect(box, selected
 			? option.palette.highlight()
 			: option.palette.base());
 		painter->setPen(QColor(0xc8, 0xc8, 0xc8));
-		painter->drawRect(cell.adjusted(0, 0, -1, -1));
+		painter->drawRect(box.adjusted(0, 0, -1, -1));
 
-		const QRect icon_rect(cell.left(), cell.top() + 3,
-				      cell.width(), m_icon_size);
+		const QRect icon_rect(box.left(), box.top() + 3,
+				      box.width(), m_icon_size);
 		const QString path = m_path_for_index(index);
 		QPixmap pixmap;
 		if (!path.isEmpty()
@@ -118,12 +122,10 @@ class GridElementDelegate : public QStyledItemDelegate
 				painter, icon_rect, Qt::AlignCenter);
 		}
 
-		const QRect text_rect(cell.left() + 2, icon_rect.bottom() + 2,
+		const QRect text_rect(cell.left() + 2, box.bottom() + 2,
 				      cell.width() - 4,
-				      cell.bottom() - icon_rect.bottom() - 4);
-		painter->setPen(selected
-			? option.palette.highlightedText().color()
-			: option.palette.text().color());
+				      cell.bottom() - box.bottom() - 4);
+		painter->setPen(option.palette.text().color());
 		painter->setFont(option.font);
 		painter->drawText(text_rect,
 				  Qt::AlignHCenter | Qt::AlignTop
@@ -311,7 +313,7 @@ void ElementsCollectionWidget::updateGridGeometry()
 			      m_grid_view->viewport()->width()
 				      / m_grid_columns - 1);
 	}
-	m_grid_view->setGridSize(QSize(cell_w, icon + text_h + 14));
+	m_grid_view->setGridSize(QSize(cell_w, icon + text_h + 20));
 }
 
 /**
