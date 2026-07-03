@@ -112,6 +112,8 @@ class TitleBlockPropertiesWidget : public QWidget
 
 		/// type de document : liste DCC (IEC 61355, codes societe)
 	QComboBox *m_doc_type_cb = nullptr;
+	/// etat du document : liste ISO 7200 / IEC 82045
+	QComboBox *m_doc_status_cb = nullptr;
 
 	/// champs communs a tous les folios du projet
 		QETProject *m_project = nullptr;
