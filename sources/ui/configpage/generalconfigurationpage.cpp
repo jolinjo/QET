@@ -80,6 +80,7 @@ GeneralConfigurationPage::GeneralConfigurationPage(QWidget *parent) :
 	ui->m_use_gesture_trackpad->setChecked(settings.value("diagramview/gestures", false).toBool());
 	ui->m_grid_icon_size_sb->setValue(settings.value("elementspanel/grid-icon-size", 60).toInt());
 	ui->m_grid_columns_sb->setValue(settings.value("elementspanel/grid-columns", 0).toInt());
+	ui->m_grid_cell_width_sb->setValue(settings.value("elementspanel/grid-cell-width", 0).toInt());
 	ui->m_save_label_paste->setChecked(settings.value("diagramcommands/erase-label-on-copy", true).toBool());
 	ui->m_use_folio_label->setChecked(settings.value("genericpanel/folio", true).toBool());
 	ui->m_border_0->setChecked(settings.value("border-columns_0", false).toBool());
@@ -226,6 +227,7 @@ void GeneralConfigurationPage::applyConf()
 		//ELEMENTS PANEL GRID
 	settings.setValue("elementspanel/grid-icon-size", ui->m_grid_icon_size_sb->value());
 	settings.setValue("elementspanel/grid-columns", ui->m_grid_columns_sb->value());
+	settings.setValue("elementspanel/grid-cell-width", ui->m_grid_cell_width_sb->value());
 	QETApp::instance()->notifySettingsChanged();
 
 		//DIAGRAM COMMAND

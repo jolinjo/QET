@@ -3351,6 +3351,10 @@ that you create. Text and number inputs are
 <context>
     <name>GeneralConfigurationPage</name>
     <message>
+        <source>Largeur des cases de la grille (px, 0 = automatique)</source>
+        <translation>网格格宽 (px，0 = 自动)</translation>
+    </message>
+    <message>
         <source>Taille des icônes de la grille d'éléments (px)</source>
         <translation>元件网格图标大小 (px)</translation>
     </message>

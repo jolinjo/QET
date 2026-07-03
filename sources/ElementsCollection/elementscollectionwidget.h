@@ -103,7 +103,9 @@ class ElementsCollectionWidget : public QWidget
 		QTimer m_search_timer;
 		ElementsTreeView *m_tree_view;
 		QListView *m_grid_view = nullptr;
+		class GridElementDelegate *m_grid_delegate = nullptr;
 		int m_grid_columns = 0;
+		int m_grid_cell_width = 0;
 		ElementsTreeView *m_macros_tree_view = nullptr;
 		QTabWidget *m_tab_widget = nullptr;
 		QVBoxLayout *m_main_vlayout;

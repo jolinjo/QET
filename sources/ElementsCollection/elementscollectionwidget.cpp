@@ -33,6 +33,7 @@
 #include "elementscollectionmodel.h"
 #include "elementslocation.h"
 #include "elementstreeview.h"
+#include "../factory/elementpicturefactory.h"
 #include "fileelementcollectionitem.h"
 #include "xmlprojectelementcollectionitem.h"
 
@@ -47,8 +48,130 @@
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QListView>
+#include <QPainter>
+#include <QPicture>
+#include <QStyledItemDelegate>
+#include <functional>
 #include <QSettings>
 #include <QSplitter>
+
+/**
+	Delegate of the grid view : renders the element picture vectorially
+	at the configured icon size (crisp at any size, hidpi aware) instead
+	of upscaling the small cached pixmap, and draws the FluidSIM-like
+	framed cell with the label below.
+*/
+class GridElementDelegate : public QStyledItemDelegate
+{
+	public:
+	GridElementDelegate(
+		std::function<QString(const QModelIndex &)> path_for_index,
+		QObject *parent) :
+		QStyledItemDelegate(parent),
+		m_path_for_index(std::move(path_for_index))
+	{}
+
+	void setIconSize(int size)
+	{
+		if (m_icon_size != size) {
+			m_icon_size = size;
+			m_pixmap_cache.clear();
+		}
+	}
+
+	void paint(QPainter *painter,
+		   const QStyleOptionViewItem &option,
+		   const QModelIndex &index) const override
+	{
+		painter->save();
+		const QRect cell = option.rect.adjusted(2, 2, -2, -2);
+		painter->setClipRect(cell);
+
+		const bool selected = option.state & QStyle::State_Selected;
+		painter->fillRect(cell, selected
+			? option.palette.highlight()
+			: option.palette.base());
+		painter->setPen(QColor(0xc8, 0xc8, 0xc8));
+		painter->drawRect(cell.adjusted(0, 0, -1, -1));
+
+		const QRect icon_rect(cell.left(), cell.top() + 3,
+				      cell.width(), m_icon_size);
+		const QString path = m_path_for_index(index);
+		QPixmap pixmap;
+		if (!path.isEmpty()
+		    && path.endsWith(QLatin1String(".elmt"))) {
+			pixmap = elementPixmap(
+				path, option.widget
+					? option.widget->devicePixelRatioF()
+					: 1.0);
+		}
+		if (!pixmap.isNull()) {
+			const QSizeF logical =
+				pixmap.deviceIndependentSize();
+			painter->drawPixmap(
+				icon_rect.center()
+					- QPoint(logical.width() / 2,
+						 logical.height() / 2),
+				pixmap);
+		} else {
+			index.data(Qt::DecorationRole).value<QIcon>().paint(
+				painter, icon_rect, Qt::AlignCenter);
+		}
+
+		const QRect text_rect(cell.left() + 2, icon_rect.bottom() + 2,
+				      cell.width() - 4,
+				      cell.bottom() - icon_rect.bottom() - 4);
+		painter->setPen(selected
+			? option.palette.highlightedText().color()
+			: option.palette.text().color());
+		painter->setFont(option.font);
+		painter->drawText(text_rect,
+				  Qt::AlignHCenter | Qt::AlignTop
+					  | Qt::TextWordWrap,
+				  index.data().toString());
+		painter->restore();
+	}
+
+	private:
+	QPixmap elementPixmap(const QString &path, qreal dpr) const
+	{
+		const QString key = path + QChar('@')
+				    + QString::number(m_icon_size)
+				    + QChar('x') + QString::number(dpr);
+		const auto it = m_pixmap_cache.constFind(key);
+		if (it != m_pixmap_cache.constEnd()) {
+			return *it;
+		}
+
+		ElementsLocation location(path);
+		QPicture picture, low_picture;
+		ElementPictureFactory::instance()->getPictures(
+			location, picture, low_picture);
+		const QRect bounding = picture.boundingRect();
+		QPixmap pixmap;
+		if (!bounding.isEmpty()) {
+			const qreal margin = 4;
+			const qreal scale = qMin(
+				(m_icon_size - margin) / qreal(bounding.width()),
+				(m_icon_size - margin) / qreal(bounding.height()));
+			pixmap = QPixmap(QSize(m_icon_size, m_icon_size) * dpr);
+			pixmap.setDevicePixelRatio(dpr);
+			pixmap.fill(Qt::transparent);
+			QPainter p(&pixmap);
+			p.setRenderHint(QPainter::Antialiasing);
+			p.translate(QPointF(m_icon_size / 2.0, m_icon_size / 2.0)
+				    - QPointF(bounding.center()) * scale);
+			p.scale(scale, scale);
+			p.drawPicture(0, 0, picture);
+		}
+		m_pixmap_cache.insert(key, pixmap);
+		return pixmap;
+	}
+
+	std::function<QString(const QModelIndex &)> m_path_for_index;
+	int m_icon_size = 60;
+	mutable QHash<QString, QPixmap> m_pixmap_cache;
+};
 
 /**
 	@brief ElementsCollectionWidget::ElementsCollectionWidget
@@ -166,7 +289,13 @@ void ElementsCollectionWidget::applyGridDisplaySettings()
 		settings.value(QStringLiteral("elementspanel/grid-columns"),
 			       0).toInt(),
 		30);
+	m_grid_cell_width = qBound(
+		0,
+		settings.value(QStringLiteral("elementspanel/grid-cell-width"),
+			       0).toInt(),
+		600);
 	m_grid_view->setIconSize(QSize(icon_size, icon_size));
+	m_grid_delegate->setIconSize(icon_size);
 	updateGridGeometry();
 }
 
@@ -175,7 +304,9 @@ void ElementsCollectionWidget::updateGridGeometry()
 	const int icon = m_grid_view->iconSize().width();
 	const int text_h = m_grid_view->fontMetrics().height() * 2;
 	int cell_w = icon + 28;
-	if (m_grid_columns > 0) {
+	if (m_grid_cell_width > 0) {
+		cell_w = m_grid_cell_width;
+	} else if (m_grid_columns > 0) {
 		cell_w = qMax(icon + 8,
 			      m_grid_view->viewport()->width()
 				      / m_grid_columns - 1);
@@ -313,16 +444,19 @@ void ElementsCollectionWidget::setUpWidget()
 	QFont grid_font = m_grid_view->font();
 	grid_font.setPointSizeF(grid_font.pointSizeF() * 0.8);
 	m_grid_view->setFont(grid_font);
+	m_grid_delegate = new GridElementDelegate(
+		[this](const QModelIndex &index) -> QString {
+			ElementCollectionItem *eci =
+				elementCollectionItemForIndex(index);
+			return (eci && eci->isElement())
+				       ? eci->collectionPath()
+				       : QString();
+		},
+		m_grid_view);
+	m_grid_view->setItemDelegate(m_grid_delegate);
 	applyGridDisplaySettings();
 	connect(QETApp::instance(), &QETApp::settingsChanged,
 		this, &ElementsCollectionWidget::applyGridDisplaySettings);
-	//cases delimitees, facon bibliotheque FluidSIM
-	m_grid_view->setStyleSheet(
-		QStringLiteral("QListView::item { border: 1px solid #c8c8c8;"
-			       " margin: 2px; }"
-			       "QListView::item:selected {"
-			       " background: palette(highlight);"
-			       " color: palette(highlighted-text); }"));
 	m_grid_view->installEventFilter(this);
 
 	//Setup the macros tree view

@@ -410,6 +410,26 @@
             </property>
            </widget>
           </item>
+          <item row="10" column="0">
+           <widget class="QLabel" name="label_grid_cell_width">
+            <property name="text">
+             <string>Largeur des cases de la grille (px, 0 = automatique)</string>
+            </property>
+           </widget>
+          </item>
+          <item row="10" column="1">
+           <widget class="QSpinBox" name="m_grid_cell_width_sb">
+            <property name="minimum">
+             <number>0</number>
+            </property>
+            <property name="maximum">
+             <number>600</number>
+            </property>
+            <property name="value">
+             <number>0</number>
+            </property>
+           </widget>
+          </item>
          </layout>
         </widget>
        </item>
