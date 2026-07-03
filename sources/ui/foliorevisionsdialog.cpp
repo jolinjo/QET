@@ -68,9 +68,6 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 	m_original(diagram->border_and_titleblock.exportTitleBlock())
 {
 	setWindowTitle(tr("Révisions du folio", "window title"));
-#ifdef Q_OS_MACOS
-	setWindowFlags(Qt::Sheet);
-#endif
 
 	auto *form = new QFormLayout();
 	m_indexrev = new QLineEdit(m_original.indexrev, this);
