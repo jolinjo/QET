@@ -169,6 +169,10 @@ namespace
 		public:
 		using QStyledItemDelegate::QStyledItemDelegate;
 		static const int ROW_HEIGHT = 58;
+		static const int HEADER_HEIGHT = 40;
+		enum { PathRole = Qt::UserRole,
+		       HeaderRole = Qt::UserRole + 1,
+		       DateRole = Qt::UserRole + 2 };
 
 		void paint(QPainter *painter,
 			   const QStyleOptionViewItem &option,
@@ -177,6 +181,24 @@ namespace
 			painter->save();
 			painter->setRenderHint(QPainter::Antialiasing);
 			const QRect cell = option.rect.adjusted(2, 2, -2, -2);
+
+			//entete de groupe (aujourd'hui / hier / ...)
+			if (index.data(HeaderRole).toBool()) {
+				QFont header_font = option.font;
+				header_font.setBold(true);
+				header_font.setPointSizeF(
+					header_font.pointSizeF() * 0.9);
+				painter->setFont(header_font);
+				QColor grey = option.palette.text().color();
+				grey.setAlpha(150);
+				painter->setPen(grey);
+				painter->drawText(
+					cell.adjusted(6, 0, -6, -4),
+					Qt::AlignLeft | Qt::AlignBottom,
+					index.data().toString());
+				painter->restore();
+				return;
+			}
 
 			if (option.state
 			    & (QStyle::State_Selected | QStyle::State_MouseOver)) {
@@ -201,6 +223,21 @@ namespace
 					      cell.right() - text_x - 8,
 					      cell.bottom() - name_rect.bottom() - 4);
 
+			//date relative a droite de la ligne du nom
+			QFont date_font = option.font;
+			date_font.setPointSizeF(date_font.pointSizeF() * 0.85);
+			const QString date_text = index.data(DateRole).toString();
+			const int date_width =
+				QFontMetrics(date_font).horizontalAdvance(date_text)
+				+ 8;
+			painter->setFont(date_font);
+			QColor date_grey = option.palette.text().color();
+			date_grey.setAlpha(140);
+			painter->setPen(date_grey);
+			painter->drawText(name_rect,
+					  Qt::AlignRight | Qt::AlignVCenter,
+					  date_text);
+
 			QFont name_font = option.font;
 			name_font.setBold(true);
 			name_font.setPointSizeF(name_font.pointSizeF() * 1.1);
@@ -211,7 +248,8 @@ namespace
 					  QFontMetrics(name_font).elidedText(
 						  index.data().toString(),
 						  Qt::ElideMiddle,
-						  name_rect.width()));
+						  name_rect.width()
+							  - date_width));
 
 			QFont path_font = option.font;
 			path_font.setPointSizeF(path_font.pointSizeF() * 0.85);
@@ -229,9 +267,10 @@ namespace
 		}
 
 		QSize sizeHint(const QStyleOptionViewItem &,
-			       const QModelIndex &) const override
+			       const QModelIndex &index) const override
 		{
-			return QSize(0, ROW_HEIGHT);
+			return QSize(0, index.data(HeaderRole).toBool()
+					     ? HEADER_HEIGHT : ROW_HEIGHT);
 		}
 	};
 }
@@ -267,11 +306,11 @@ void QETDiagramEditor::setUpWelcomeWidget()
 	});
 
 	auto *layout = new QVBoxLayout(m_welcome_widget);
-	layout->addStretch(3);
+	layout->addStretch(2);
 	layout->addWidget(title, 0, Qt::AlignHCenter);
-	layout->addSpacing(18);
+	layout->addSpacing(14);
 	layout->addWidget(m_welcome_list, 0, Qt::AlignHCenter);
-	layout->addStretch(5);
+	layout->addStretch(3);
 
 	m_workspace.viewport()->installEventFilter(this);
 }
@@ -286,20 +325,79 @@ void QETDiagramEditor::updateWelcomeWidget()
 	const bool show_welcome = m_workspace.subWindowList().isEmpty();
 	if (show_welcome) {
 		m_welcome_list->clear();
+
+		//fichiers existants, tries du plus recemment modifie au plus ancien
+		QList<QPair<QDateTime, QString>> entries;
 		const QList<QString> files =
 			QETApp::projectsRecentFiles()->files();
 		for (const QString &file : files) {
-			auto *item = new QListWidgetItem(
-				QFileInfo(file).completeBaseName(),
-				m_welcome_list);
-			item->setData(Qt::UserRole, file);
-			item->setToolTip(file);
+			QFileInfo info(file);
+			if (info.exists()) {
+				entries.append({info.lastModified(), file});
+			}
 		}
+		std::sort(entries.begin(), entries.end(),
+			  [](const QPair<QDateTime, QString> &a,
+			     const QPair<QDateTime, QString> &b) {
+			return a.first > b.first;
+		});
+
+		const QDate today = QDate::currentDate();
+		const auto group_of = [&today](const QDate &date) -> int {
+			const qint64 days = date.daysTo(today);
+			if (days <= 0) return 0;
+			if (days == 1) return 1;
+			if (days <= 7) return 2;
+			return 3;
+		};
+		const QStringList group_labels {
+			tr("Aujourd'hui", "welcome view"),
+			tr("Hier", "welcome view"),
+			tr("Les 7 derniers jours", "welcome view"),
+			tr("Plus ancien", "welcome view") };
+
+		int total_height = 8;
+		int previous_group = -1;
+		for (const auto &entry : entries) {
+			const QDate date = entry.first.date();
+			const int group = group_of(date);
+			if (group != previous_group) {
+				previous_group = group;
+				auto *header = new QListWidgetItem(
+					group_labels.at(group), m_welcome_list);
+				header->setFlags(Qt::NoItemFlags);
+				header->setData(
+					RecentFileDelegate::HeaderRole, true);
+				total_height +=
+					RecentFileDelegate::HEADER_HEIGHT;
+			}
+			const qint64 days = date.daysTo(today);
+			QString date_text;
+			if (days <= 0) {
+				date_text = tr("Aujourd'hui", "welcome view");
+			} else if (days == 1) {
+				date_text = tr("Hier", "welcome view");
+			} else if (days <= 30) {
+				date_text = tr("Il y a %1 jours",
+					       "welcome view").arg(days);
+			} else {
+				date_text = date.toString(
+					QStringLiteral("yyyy/M/d"));
+			}
+
+			auto *item = new QListWidgetItem(
+				QFileInfo(entry.second).completeBaseName(),
+				m_welcome_list);
+			item->setData(RecentFileDelegate::PathRole,
+				      entry.second);
+			item->setData(RecentFileDelegate::DateRole, date_text);
+			item->setToolTip(entry.second);
+			total_height += RecentFileDelegate::ROW_HEIGHT;
+		}
+
 		m_welcome_list->setFixedHeight(qMin(
-			m_welcome_list->count()
-					* RecentFileDelegate::ROW_HEIGHT
-				+ 8,
-			560));
+			total_height,
+			qMax(400, m_workspace.viewport()->height() * 3 / 4)));
 		m_welcome_widget->setGeometry(m_workspace.viewport()->rect());
 		m_welcome_widget->raise();
 	}

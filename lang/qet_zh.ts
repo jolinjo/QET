@@ -6116,6 +6116,31 @@ Options disponibles :
 <context>
     <name>QETDiagramEditor</name>
     <message>
+        <source>Aujourd&#x27;hui</source>
+        <comment>welcome view</comment>
+        <translation>今天</translation>
+    </message>
+    <message>
+        <source>Hier</source>
+        <comment>welcome view</comment>
+        <translation>昨天</translation>
+    </message>
+    <message>
+        <source>Il y a %1 jours</source>
+        <comment>welcome view</comment>
+        <translation>%1 天前</translation>
+    </message>
+    <message>
+        <source>Les 7 derniers jours</source>
+        <comment>welcome view</comment>
+        <translation>过去 7 天</translation>
+    </message>
+    <message>
+        <source>Plus ancien</source>
+        <comment>welcome view</comment>
+        <translation>更早</translation>
+    </message>
+    <message>
         <source>Fichiers récents</source>
         <comment>welcome view</comment>
         <translation>最近打开的文件</translation>
