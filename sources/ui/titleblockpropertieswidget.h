@@ -108,6 +108,13 @@ class TitleBlockPropertiesWidget : public QWidget
 		QHash<QString, QLineEdit *> m_company_fields;
 		/// cles gerees ailleurs (revisions), preservees telles quelles
 		DiagramContext m_reserved_context;
+
+		/// champs communs a tous les folios du projet
+		QETProject *m_project = nullptr;
+		QLineEdit *m_project_title_le = nullptr;
+		QLineEdit *m_project_doc_id_le = nullptr;
+		QString m_orig_project_title;
+		QString m_orig_doc_id;
 };
 
 #endif // TITLEBLOCKPROPERTIESWIDGET_H

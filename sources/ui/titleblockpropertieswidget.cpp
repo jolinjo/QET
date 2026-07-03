@@ -17,6 +17,7 @@
 */
 #include "titleblockpropertieswidget.h"
 
+#include "../diagram.h"
 #include "../qetapp.h"
 #include "../qeticons.h"
 #include "../titleblock/templatescollection.h"
@@ -171,6 +172,11 @@ void TitleBlockPropertiesWidget::setProperties(
 		it.value()->setText(
 			properties.context.value(it.key()).toString());
 	}
+	if (m_project_doc_id_le) {
+		m_orig_doc_id = properties.context
+				.value(QStringLiteral("doc-id")).toString();
+		m_project_doc_id_le->setText(m_orig_doc_id);
+	}
 
 	/* les cles de revision sont editees via le dialogue dedie et les
 	 * champs societe via les champs ci-dessus ; l'onglet
@@ -185,7 +191,9 @@ void TitleBlockPropertiesWidget::setProperties(
 		if (rev_key.match(key).hasMatch()) {
 			m_reserved_context.addValue(
 				key, properties.context.value(key), show);
-		} else if (!m_company_fields.contains(key)) {
+		} else if (!m_company_fields.contains(key)
+			   && !(m_project_doc_id_le
+				&& key == QLatin1String("doc-id"))) {
 			remainder.addValue(
 				key, properties.context.value(key), show);
 		}
@@ -230,6 +238,24 @@ TitleBlockProperties TitleBlockPropertiesWidget::properties() const
 
 	prop.context = m_dcw -> context();
 	applyCompanyFields(prop);
+
+	/* champs « projet » : appliques immediatement a tous les folios */
+	if (m_project && m_project_title_le) {
+		if (m_project_title_le->text() != m_orig_project_title) {
+			m_project->setTitle(m_project_title_le->text());
+		}
+		const QString doc_id = m_project_doc_id_le->text();
+		if (doc_id != m_orig_doc_id) {
+			const auto diagram_list = m_project->diagrams();
+			for (Diagram *d : diagram_list) {
+				TitleBlockProperties p =
+					d->border_and_titleblock.exportTitleBlock();
+				p.context.addValue(QStringLiteral("doc-id"), doc_id);
+				d->border_and_titleblock.importTitleBlock(p);
+				d->update();
+			}
+		}
+	}
 
 	prop.auto_page_num = ui->auto_page_cb->currentText();
 
@@ -358,10 +384,18 @@ void TitleBlockPropertiesWidget::initDialog(
 	ui -> label_6  -> hide();  ui -> m_folio_le -> hide();
 	ui -> label_10 -> hide();  ui -> m_plant    -> hide();
 	ui -> label_11 -> hide();  ui -> m_loc      -> hide();
+	/* date de publication et indice de revision : geres par le
+	 * dialogue « revisions du folio » (valeurs preservees) */
+	ui -> label_4  -> hide();
+	ui -> m_no_date_rb -> hide();
+	ui -> m_fixed_date_rb -> hide();
+	ui -> m_current_date_rb -> hide();
+	ui -> m_date_edit -> hide();
+	ui -> m_date_now_pb -> hide();
+	ui -> label_12 -> hide();  ui -> m_indice -> hide();
 
 	auto *company_form = new QFormLayout();
 	const QList<QPair<QString, QString>> company_keys {
-		{QStringLiteral("doc-id"),      tr("Numéro de document :")},
 		{QStringLiteral("doc-type"),    tr("Type de document :")},
 		{QStringLiteral("doc-status"),  tr("État du document :")},
 		{QStringLiteral("techref"),     tr("Référence technique :")},
@@ -379,6 +413,26 @@ void TitleBlockPropertiesWidget::initDialog(
 	/* dans le cartouche societe, la cellule « titre complementaire »
 	 * affiche %{title} (le titre du folio) : renommer le champ */
 	ui -> label_2 -> setText(tr("Sous-titre :"));
+
+	/* onglets : « folio » pour les champs propres a la page,
+	 * « projet » pour les champs communs a tous les folios */
+	ui -> tabWidget -> setTabText(0, tr("Folio", "tab title"));
+	m_project = project;
+	if (project) {
+		auto *project_page = new QWidget(this);
+		auto *project_form = new QFormLayout(project_page);
+		m_project_title_le = new QLineEdit(project->title(), project_page);
+		project_form->addRow(tr("Titre du projet :"), m_project_title_le);
+		m_project_doc_id_le = new QLineEdit(project_page);
+		project_form->addRow(tr("Numéro de document :"), m_project_doc_id_le);
+		auto *note = new QLabel(
+			tr("Ces champs sont communs à tous les folios du projet."),
+			project_page);
+		note->setWordWrap(true);
+		project_form->addRow(note);
+		ui -> tabWidget -> insertTab(1, project_page, tr("Projet", "tab title"));
+		m_orig_project_title = project->title();
+	}
 
 	setTitleBlockTemplatesVisible(false);
 	ui -> m_current_date_rb -> setVisible(current_date);
@@ -561,5 +615,9 @@ void TitleBlockPropertiesWidget::applyCompanyFields(TitleBlockProperties &proper
 	for (auto it = m_company_fields.constBegin() ;
 	     it != m_company_fields.constEnd() ; ++it) {
 		properties.context.addValue(it.key(), it.value()->text());
+	}
+	if (m_project_doc_id_le) {
+		properties.context.addValue(QStringLiteral("doc-id"),
+					    m_project_doc_id_le->text());
 	}
 }

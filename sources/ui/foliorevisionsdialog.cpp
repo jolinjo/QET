@@ -20,8 +20,10 @@
 #include "../diagram.h"
 #include "../undocommand/changetitleblockcommand.h"
 
+#include <QComboBox>
 #include <QDateEdit>
 #include <QDialogButtonBox>
+#include <QStyledItemDelegate>
 #include <QFormLayout>
 #include <QHeaderView>
 #include <QLineEdit>
@@ -30,6 +32,36 @@
 
 namespace
 {
+	/* editeur calendrier pour la colonne « date » du tableau */
+	class RevisionDateDelegate : public QStyledItemDelegate
+	{
+		public:
+		using QStyledItemDelegate::QStyledItemDelegate;
+
+		QWidget *createEditor(QWidget *parent,
+				      const QStyleOptionViewItem &,
+				      const QModelIndex &index) const override
+		{
+			auto *editor = new QDateEdit(parent);
+			editor->setCalendarPopup(true);
+			const QDate current = QDate::fromString(
+				index.data().toString(),
+				QStringLiteral("yyyy/M/d"));
+			editor->setDate(current.isValid()
+					? current : QDate::currentDate());
+			return editor;
+		}
+
+		void setModelData(QWidget *editor,
+				  QAbstractItemModel *model,
+				  const QModelIndex &index) const override
+		{
+			model->setData(index,
+				static_cast<QDateEdit *>(editor)->date()
+					.toString(QStringLiteral("yyyy/M/d")));
+		}
+	};
+
 	// champs d'une ligne de revision, dans l'ordre des colonnes
 	const char *REV_FIELDS[] = { "idx", "date", "zone", "desc", "by", "appd" };
 	const int REV_FIELD_COUNT = 6;
@@ -73,9 +105,16 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 	m_indexrev = new QLineEdit(m_original.indexrev, this);
 	form->addRow(tr("Indice de révision :"), m_indexrev);
 
-	m_doc_status = new QLineEdit(
-		m_original.context.value(QStringLiteral("doc-status")).toString(),
-		this);
+	m_doc_status = new QComboBox(this);
+	m_doc_status->setEditable(true);
+	m_doc_status->addItems({
+		QStringLiteral("草案 Draft"),
+		QStringLiteral("審核中 Under review"),
+		QStringLiteral("正式發行 Released"),
+		QStringLiteral("作廢 Obsolete"),
+	});
+	m_doc_status->setEditText(
+		m_original.context.value(QStringLiteral("doc-status")).toString());
 	form->addRow(tr("État du document :"), m_doc_status);
 
 	m_issue_date = new QDateEdit(this);
@@ -99,6 +138,7 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 			m_table->setItem(row, column, item);
 		}
 	}
+	m_table->setItemDelegateForColumn(1, new RevisionDateDelegate(m_table));
 	m_table->setMinimumWidth(680);
 
 	auto *buttons = new QDialogButtonBox(
@@ -116,7 +156,7 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 
 	if (m_diagram->isReadOnly()) {
 		m_indexrev->setReadOnly(true);
-		m_doc_status->setReadOnly(true);
+		m_doc_status->setEnabled(false);
 		m_issue_date->setReadOnly(true);
 		m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
 	}
@@ -136,7 +176,7 @@ TitleBlockProperties FolioRevisionsDialog::editedProperties() const
 
 	/* etat du document : ne pas creer la cle si elle n'existe pas
 	 * et que le champ est vide (projets sans cartouche société) */
-	const QString doc_status = m_doc_status->text();
+	const QString doc_status = m_doc_status->currentText();
 	if (!doc_status.isEmpty()
 	    || properties.context.keys().contains(QStringLiteral("doc-status"))) {
 		properties.context.addValue(

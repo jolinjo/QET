@@ -23,6 +23,7 @@
 #include <QDialog>
 
 class Diagram;
+class QComboBox;
 class QDateEdit;
 class QLineEdit;
 class QTableWidget;
@@ -50,7 +51,7 @@ class FolioRevisionsDialog : public QDialog
 	Diagram *m_diagram;
 	TitleBlockProperties m_original;
 	QLineEdit *m_indexrev;
-	QLineEdit *m_doc_status;
+	QComboBox *m_doc_status;
 	QDateEdit *m_issue_date;
 	QTableWidget *m_table;
 };

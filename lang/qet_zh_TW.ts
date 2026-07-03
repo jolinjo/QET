@@ -13725,6 +13725,24 @@ Les autres champs ne sont pas utilisés.</source>
 <context>
     <name>TitleBlockPropertiesWidget</name>
     <message>
+        <source>Folio</source>
+        <comment>tab title</comment>
+        <translation>子頁面</translation>
+    </message>
+    <message>
+        <source>Projet</source>
+        <comment>tab title</comment>
+        <translation>專案</translation>
+    </message>
+    <message>
+        <source>Titre du projet :</source>
+        <translation>圖名：</translation>
+    </message>
+    <message>
+        <source>Ces champs sont communs à tous les folios du projet.</source>
+        <translation>這些欄位為專案內所有頁面共用。</translation>
+    </message>
+    <message>
         <source>Sous-titre :</source>
         <translation>補充圖名：</translation>
     </message>
