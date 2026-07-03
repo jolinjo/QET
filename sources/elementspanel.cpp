@@ -191,11 +191,6 @@ QTreeWidgetItem *ElementsPanel::addProject(QETProject *project,
 		}
 	}
 
-	if (TitleBlockTemplatesCollection *tbt_collection = project -> embeddedTitleBlockTemplatesCollection()) {
-		if (QTreeWidgetItem *tbt_collection_qtwi = itemForTemplatesCollection(tbt_collection)) {
-			if (first_add) tbt_collection_qtwi -> setExpanded(true);
-		}
-	}
 
 	qtwi_project -> setStatusTip(0, tr("Double-cliquez pour réduire ou développer ce projet", "Status tip"));
 
