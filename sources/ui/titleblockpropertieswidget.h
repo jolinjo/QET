@@ -27,6 +27,7 @@
 #include <QHash>
 #include <QWidget>
 
+class QComboBox;
 class QLineEdit;
 
 class NumerotationContext;
@@ -109,7 +110,10 @@ class TitleBlockPropertiesWidget : public QWidget
 		/// cles gerees ailleurs (revisions), preservees telles quelles
 		DiagramContext m_reserved_context;
 
-		/// champs communs a tous les folios du projet
+		/// type de document : liste DCC (IEC 61355, codes societe)
+	QComboBox *m_doc_type_cb = nullptr;
+
+	/// champs communs a tous les folios du projet
 		QETProject *m_project = nullptr;
 		QLineEdit *m_project_title_le = nullptr;
 		QLineEdit *m_project_doc_id_le = nullptr;

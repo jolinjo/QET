@@ -24,6 +24,7 @@
 #include "../titleblocktemplate.h"
 #include "ui_titleblockpropertieswidget.h"
 
+#include <QComboBox>
 #include <QFormLayout>
 #include <QLineEdit>
 #include <QMenu>
@@ -172,6 +173,10 @@ void TitleBlockPropertiesWidget::setProperties(
 		it.value()->setText(
 			properties.context.value(it.key()).toString());
 	}
+	if (m_doc_type_cb) {
+		m_doc_type_cb->setEditText(properties.context
+			.value(QStringLiteral("doc-type")).toString());
+	}
 	if (m_project_doc_id_le) {
 		m_orig_doc_id = properties.context
 				.value(QStringLiteral("doc-id")).toString();
@@ -192,6 +197,7 @@ void TitleBlockPropertiesWidget::setProperties(
 			m_reserved_context.addValue(
 				key, properties.context.value(key), show);
 		} else if (!m_company_fields.contains(key)
+			   && key != QLatin1String("doc-type")
 			   && !(m_project_doc_id_le
 				&& key == QLatin1String("doc-id"))) {
 			remainder.addValue(
@@ -395,8 +401,19 @@ void TitleBlockPropertiesWidget::initDialog(
 	ui -> label_12 -> hide();  ui -> m_indice -> hide();
 
 	auto *company_form = new QFormLayout();
+	/* type de document : codes DCC (IEC 61355, §5.2 du guide societe) */
+	m_doc_type_cb = new QComboBox(this);
+	m_doc_type_cb->setEditable(true);
+	m_doc_type_cb->addItems({
+		QStringLiteral("&EFS 電路圖"),
+		QStringLiteral("&EPB 零件清單"),
+		QStringLiteral("&ELD 佈置圖"),
+		QStringLiteral("&EMB 接線表"),
+		QStringLiteral("&EMA 接線圖"),
+		QStringLiteral("&EFA 概觀圖/單線圖"),
+	});
+	company_form->addRow(tr("Type de document :"), m_doc_type_cb);
 	const QList<QPair<QString, QString>> company_keys {
-		{QStringLiteral("doc-type"),    tr("Type de document :")},
 		{QStringLiteral("doc-status"),  tr("État du document :")},
 		{QStringLiteral("techref"),     tr("Référence technique :")},
 		{QStringLiteral("checked-by"),  tr("Vérifié par :")},
@@ -615,6 +632,10 @@ void TitleBlockPropertiesWidget::applyCompanyFields(TitleBlockProperties &proper
 	for (auto it = m_company_fields.constBegin() ;
 	     it != m_company_fields.constEnd() ; ++it) {
 		properties.context.addValue(it.key(), it.value()->text());
+	}
+	if (m_doc_type_cb) {
+		properties.context.addValue(QStringLiteral("doc-type"),
+					    m_doc_type_cb->currentText());
 	}
 	if (m_project_doc_id_le) {
 		properties.context.addValue(QStringLiteral("doc-id"),
