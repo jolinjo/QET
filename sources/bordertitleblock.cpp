@@ -517,7 +517,7 @@ void BorderTitleBlock::draw(QPainter *painter)
 
 	//Draw the borer
 	/* compensation d'export : dans le PDF, les traits du cartouche
-	 * ressortent visuellement ~1,5x plus epais que ceux du cadre
+	 * ressortent visuellement plus epais que ceux du cadre
 	 * (particularite du moteur Qt, cf. chemins QRect / QRectF) ;
 	 * on aligne donc le contour exterieur a l'impression, les
 	 * separations d'en-tetes gardent le trait standard.
@@ -526,7 +526,7 @@ void BorderTitleBlock::draw(QPainter *painter)
 		if (painter -> device()
 		    && painter -> device() -> devType() == QInternal::Printer) {
 			QPen frame_pen(Qt::black);
-			frame_pen.setWidthF(1.5);
+			frame_pen.setWidthF(2.0);
 			frame_pen.setJoinStyle(Qt::MiterJoin);
 			painter -> setPen(frame_pen);
 			painter -> drawRect(diagram_rect_);
