@@ -66,6 +66,7 @@ class ElementsCollectionWidget : public QWidget
 		void placeElementAtIndex(const QModelIndex &index);
 		void updateGridRoot(const QModelIndex &index);
 		void hideElementRows(const QModelIndex &parent = QModelIndex());
+		void updateLibraryFromGit();
 		void applyGridDisplaySettings();
 		void updateGridGeometry();
 		void setUpAction();
@@ -123,6 +124,7 @@ class ElementsCollectionWidget : public QWidget
 				*m_edit_dir,
 				*m_new_directory,
 				*m_new_element,
+				*m_update_library,
 				*m_show_this_dir,
 				*m_show_all_dir,
 				*m_dir_propertie;

@@ -45,10 +45,15 @@
 #include <QtGlobal>
 #include <QProgressBar>
 #include <QStatusBar>
+#include <QEventLoop>
+#include <QInputDialog>
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QListView>
+#include <QMessageBox>
 #include <QPainter>
+#include <QProcess>
+#include <QProgressDialog>
 #include <QPicture>
 #include <QStyledItemDelegate>
 #include <functional>
@@ -331,6 +336,157 @@ void ElementsCollectionWidget::updateGridGeometry()
 	m_grid_view->setGridSize(QSize(cell_w, icon + text_h + 20));
 }
 
+namespace
+{
+	/* lance un processus et attend sa fin sans bloquer l'interface */
+	bool run_process(const QString &program, const QStringList &arguments,
+			 const QString &working_dir, QString *output)
+	{
+		QProcess process;
+		if (!working_dir.isEmpty()) {
+			process.setWorkingDirectory(working_dir);
+		}
+		process.setProcessChannelMode(QProcess::MergedChannels);
+		process.start(program, arguments);
+		if (!process.waitForStarted()) {
+			if (output) {
+				*output = program + QStringLiteral(" : ")
+					  + process.errorString();
+			}
+			return false;
+		}
+		QEventLoop loop;
+		QObject::connect(
+			&process,
+			QOverload<int, QProcess::ExitStatus>::of(
+				&QProcess::finished),
+			&loop, &QEventLoop::quit);
+		loop.exec();
+		if (output) {
+			*output = QString::fromUtf8(process.readAll());
+		}
+		return process.exitStatus() == QProcess::NormalExit
+		       && process.exitCode() == 0;
+	}
+}
+
+/**
+	Download (shallow git clone) the company libraries repository and
+	mirror its collections into the QET data directory, with a tar.gz
+	backup of the current content beforehand.
+*/
+void ElementsCollectionWidget::updateLibraryFromGit()
+{
+	QSettings settings;
+	const QString settings_key =
+		QStringLiteral("elementspanel/library-git-url");
+	bool ok = false;
+	const QString url = QInputDialog::getText(
+		this,
+		tr("Mettre à jour les collections", "dialog title"),
+		tr("Adresse du dépôt Git des collections (GitHub) :"),
+		QLineEdit::Normal,
+		settings.value(settings_key,
+			       QStringLiteral("https://github.com/jolinjo/QET-Lib"))
+			.toString(),
+		&ok).trimmed();
+	if (!ok || url.isEmpty()) return;
+	settings.setValue(settings_key, url);
+
+	const QString data_dir = QETApp::dataDir();
+	const QString cache_dir =
+		data_dir % QStringLiteral("/library-git-cache");
+
+	QProgressDialog progress(
+		tr("Téléchargement des collections depuis\n%1").arg(url),
+		QString(), 0, 0, this);
+	progress.setWindowModality(Qt::ApplicationModal);
+	progress.setMinimumDuration(0);
+	progress.show();
+	QCoreApplication::processEvents();
+
+	//clone frais et superficiel a chaque fois : simple et robuste
+	QDir(cache_dir).removeRecursively();
+	QString log;
+	if (!run_process(QStringLiteral("git"),
+			 { QStringLiteral("clone"), QStringLiteral("--depth"),
+			   QStringLiteral("1"), url, cache_dir },
+			 QString(), &log)) {
+		progress.close();
+		QMessageBox::warning(
+			this,
+			tr("Mise à jour des collections", "message box title"),
+			tr("La mise à jour a échoué :\n%1").arg(log.right(1500)));
+		return;
+	}
+
+	//repertoires du depot refletes dans le dossier de donnees QET
+	const QStringList mirrored_dirs {
+		QStringLiteral("elements-company"),
+		QStringLiteral("titleblocks-company") };
+
+	//sauvegarde du contenu actuel avant remplacement
+	QStringList to_backup;
+	for (const QString &dir : mirrored_dirs) {
+		if (QFileInfo::exists(data_dir % QChar('/') % dir)) {
+			to_backup << dir;
+		}
+	}
+	const QString backup_name =
+		QStringLiteral("library-backup-")
+		% QDateTime::currentDateTime().toString(
+			  QStringLiteral("yyyyMMdd-HHmmss"))
+		% QStringLiteral(".tar.gz");
+	if (!to_backup.isEmpty()
+	    && !run_process(QStringLiteral("tar"),
+			    QStringList { QStringLiteral("czf"), backup_name }
+				    + to_backup,
+			    data_dir, &log)) {
+		progress.close();
+		QMessageBox::warning(
+			this,
+			tr("Mise à jour des collections", "message box title"),
+			tr("La mise à jour a échoué :\n%1").arg(log.right(1500)));
+		return;
+	}
+
+	QStringList updated;
+	for (const QString &dir : mirrored_dirs) {
+		const QString source = cache_dir % QChar('/') % dir;
+		if (!QFileInfo::exists(source)) continue;
+		if (!run_process(QStringLiteral("rsync"),
+				 { QStringLiteral("-a"),
+				   QStringLiteral("--delete"),
+				   QStringLiteral("--exclude=.git"),
+				   source % QChar('/'),
+				   data_dir % QChar('/') % dir % QChar('/') },
+				 QString(), &log)) {
+			progress.close();
+			QMessageBox::warning(
+				this,
+				tr("Mise à jour des collections",
+				   "message box title"),
+				tr("La mise à jour a échoué :\n%1")
+					.arg(log.right(1500)));
+			return;
+		}
+		updated << dir;
+	}
+	progress.close();
+
+	QMessageBox::information(
+		this,
+		tr("Mise à jour des collections", "message box title"),
+		tr("Collections mises à jour :\n%1\n\nSauvegarde du contenu"
+		   " précédent : %2")
+			.arg(updated.join(QStringLiteral(", ")), backup_name));
+
+	reload();
+	if (QETDiagramEditor *editor = QETApp::diagramEditorAncestorOf(this)) {
+		editor->reloadOldElementPanel();
+	}
+}
+
 /**
 	Hide every element row of the tree : elements are browsed in the
 	grid view below, the tree only shows the directory structure.
@@ -454,6 +610,9 @@ void ElementsCollectionWidget::setUpAction()
 					 tr("Afficher tous les dossiers"), this);
 	m_dir_propertie = new QAction(QET::Icons::FolderProperties,
 					  tr("Propriété du dossier"), this);
+	m_update_library = new QAction(QET::Icons::QETDownload,
+				       tr("Mettre à jour les collections depuis GitHub..."),
+				       this);
 }
 
 /**
@@ -593,6 +752,8 @@ void ElementsCollectionWidget::setUpConnection()
 		this, &ElementsCollectionWidget::resetShowThisDir);
 	connect(m_dir_propertie, &QAction::triggered,
 		this, &ElementsCollectionWidget::dirProperties);
+	connect(m_update_library, &QAction::triggered,
+		this, &ElementsCollectionWidget::updateLibraryFromGit);
 
 	connect(m_tree_view, &QTreeView::doubleClicked,
 			[this](const QModelIndex &index)
@@ -702,6 +863,7 @@ void ElementsCollectionWidget::customContextMenu(const QPoint &point)
 	if (add_open_dir)
 		m_context_menu->addAction(m_open_dir);
 	m_context_menu->addAction(m_reload);
+	m_context_menu->addAction(m_update_library);
 
 	m_context_menu->popup(mapToGlobal(clicked_tree->mapToParent(point)));
 }

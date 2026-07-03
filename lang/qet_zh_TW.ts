@@ -2541,6 +2541,46 @@ Note: These options DO NOT allow or block Auto Numberings, only their Update Pol
 <context>
     <name>ElementsCollectionWidget</name>
     <message>
+        <source>Mettre à jour les collections depuis GitHub...</source>
+        <translation>從 GitHub 更新元件庫...</translation>
+    </message>
+    <message>
+        <source>Mettre à jour les collections</source>
+        <comment>dialog title</comment>
+        <translation>更新元件庫</translation>
+    </message>
+    <message>
+        <source>Adresse du dépôt Git des collections (GitHub) :</source>
+        <translation>元件庫 Git 倉庫連結（GitHub）：</translation>
+    </message>
+    <message>
+        <source>Téléchargement des collections depuis
+%1</source>
+        <translation>正在從下列位址下載元件庫
+%1</translation>
+    </message>
+    <message>
+        <source>Mise à jour des collections</source>
+        <comment>message box title</comment>
+        <translation>更新元件庫</translation>
+    </message>
+    <message>
+        <source>La mise à jour a échoué :
+%1</source>
+        <translation>更新失敗：
+%1</translation>
+    </message>
+    <message>
+        <source>Collections mises à jour :
+%1
+
+Sauvegarde du contenu précédent : %2</source>
+        <translation>已更新：
+%1
+
+原內容備份：%2</translation>
+    </message>
+    <message>
         <location filename="../sources/ElementsCollection/elementscollectionwidget.cpp" line="146"/>
         <source>Ouvrir le dossier correspondant</source>
         <translation>開啟對應資料夾</translation>
