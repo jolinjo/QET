@@ -87,25 +87,30 @@ class GridElementDelegate : public QStyledItemDelegate
 		const QRect cell = option.rect.adjusted(2, 2, -2, -2);
 		painter->setClipRect(cell);
 
-		/* le cadre n'entoure que l'icone ; le libelle est dessine
-		 * sous le cadre pour ne jamais chevaucher le dessin */
+		/* le cadre n'entoure que l'icone, le libelle est dessine
+		 * sous le cadre ; la geometrie part de la case reellement
+		 * disponible pour rester coherente quelle que soit la
+		 * combinaison taille d'icone / largeur de case configuree */
 		const bool selected = option.state & QStyle::State_Selected;
+		const int text_h = option.fontMetrics.height() * 2 + 4;
 		const QRect box(cell.left(), cell.top(), cell.width(),
-				m_icon_size + 6);
+				qMax(16, cell.height() - text_h));
+
 		painter->fillRect(box, selected
 			? option.palette.highlight()
 			: option.palette.base());
 		painter->setPen(QColor(0xc8, 0xc8, 0xc8));
 		painter->drawRect(box.adjusted(0, 0, -1, -1));
 
-		const QRect icon_rect(box.left(), box.top() + 3,
-				      box.width(), m_icon_size);
+		const int icon_target = qMax(8, qMin(m_icon_size,
+			qMin(box.width() - 6, box.height() - 6)));
 		const QString path = m_path_for_index(index);
 		QPixmap pixmap;
 		if (!path.isEmpty()
 		    && path.endsWith(QLatin1String(".elmt"))) {
 			pixmap = elementPixmap(
-				path, option.widget
+				path, icon_target,
+				option.widget
 					? option.widget->devicePixelRatioF()
 					: 1.0);
 		}
@@ -113,13 +118,15 @@ class GridElementDelegate : public QStyledItemDelegate
 			const QSizeF logical =
 				pixmap.deviceIndependentSize();
 			painter->drawPixmap(
-				icon_rect.center()
+				box.center()
 					- QPoint(logical.width() / 2,
 						 logical.height() / 2),
 				pixmap);
 		} else {
 			index.data(Qt::DecorationRole).value<QIcon>().paint(
-				painter, icon_rect, Qt::AlignCenter);
+				painter,
+				box.adjusted(3, 3, -3, -3),
+				Qt::AlignCenter);
 		}
 
 		const QRect text_rect(cell.left() + 2, box.bottom() + 2,
@@ -134,11 +141,19 @@ class GridElementDelegate : public QStyledItemDelegate
 		painter->restore();
 	}
 
+	QSize sizeHint(const QStyleOptionViewItem &option,
+		       const QModelIndex &) const override
+	{
+		return QSize(m_icon_size + 28,
+			     m_icon_size
+				     + option.fontMetrics.height() * 2 + 20);
+	}
+
 	private:
-	QPixmap elementPixmap(const QString &path, qreal dpr) const
+	QPixmap elementPixmap(const QString &path, int size, qreal dpr) const
 	{
 		const QString key = path + QChar('@')
-				    + QString::number(m_icon_size)
+				    + QString::number(size)
 				    + QChar('x') + QString::number(dpr);
 		const auto it = m_pixmap_cache.constFind(key);
 		if (it != m_pixmap_cache.constEnd()) {
@@ -154,14 +169,14 @@ class GridElementDelegate : public QStyledItemDelegate
 		if (!bounding.isEmpty()) {
 			const qreal margin = 4;
 			const qreal scale = qMin(
-				(m_icon_size - margin) / qreal(bounding.width()),
-				(m_icon_size - margin) / qreal(bounding.height()));
-			pixmap = QPixmap(QSize(m_icon_size, m_icon_size) * dpr);
+				(size - margin) / qreal(bounding.width()),
+				(size - margin) / qreal(bounding.height()));
+			pixmap = QPixmap(QSize(size, size) * dpr);
 			pixmap.setDevicePixelRatio(dpr);
 			pixmap.fill(Qt::transparent);
 			QPainter p(&pixmap);
 			p.setRenderHint(QPainter::Antialiasing);
-			p.translate(QPointF(m_icon_size / 2.0, m_icon_size / 2.0)
+			p.translate(QPointF(size / 2.0, size / 2.0)
 				    - QPointF(bounding.center()) * scale);
 			p.scale(scale, scale);
 			p.drawPicture(0, 0, picture);
