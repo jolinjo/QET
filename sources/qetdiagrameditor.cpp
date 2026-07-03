@@ -947,6 +947,10 @@ bool QETDiagramEditor::event(QEvent *e)
 	{
 		m_first_show = false;
 		QTimer::singleShot(250, m_element_collection_widget, SLOT(reload()));
+		//au demarrage, montrer le dock projets plutot que l'onglet
+		//restaure par restoreState (souvent les proprietes, vides)
+		if (qdw_pa->isVisible() && !tabifiedDockWidgets(qdw_pa).isEmpty())
+			qdw_pa->raise();
 	}
 	return(QETMainWindow::event(e));
 }
