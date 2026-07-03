@@ -18,6 +18,7 @@
 #include "projectprintwindow.h"
 
 #include "../diagram.h"
+#include "../diagramcontext.h"
 #include "../qeticons.h"
 #include "../qetproject.h"
 #include "../qetversion.h"
@@ -36,6 +37,7 @@
 #include <QMarginsF>
 #include <QPageSetupDialog>
 #include <QPainter>
+#include <QRegularExpression>
 #include <QStandardPaths>
 #include <QPrintDialog>
 #include <QPrintPreviewWidget>
@@ -696,19 +698,28 @@ QList<Diagram *> ProjectPrintWindow::selectedDiagram() const
 void ProjectPrintWindow::exportToPDF()
 {
 	/* proposition par defaut : dossier Téléchargements,
-	 * nom = <nom du fichier projet>_<indice de revision>.pdf */
-	QString base = QFileInfo(m_project->filePath()).completeBaseName();
-	if (base.isEmpty()) base = m_project->title();
-	if (base.isEmpty()) base = QStringLiteral("projet");
-
-	QString indexrev;
+	 * nom = <numero de document>_<titre du folio>_<indice de revision>.pdf
+	 * (champs du cartouche du premier folio) */
+	QStringList parts;
 	if (!m_project->diagrams().isEmpty()) {
-		indexrev = m_project->diagrams().first()
-				->border_and_titleblock.indexrev();
+		auto &btb = m_project->diagrams().first()->border_and_titleblock;
+		DiagramContext info = btb.titleblockInformation();
+		const QString doc_id = info.value(QStringLiteral("doc-id")).toString();
+		const QString title = info.value(QStringLiteral("title")).toString();
+		const QString indexrev = info.value(QStringLiteral("indexrev")).toString();
+		if (!doc_id.isEmpty())   parts << doc_id;
+		if (!title.isEmpty())    parts << title;
+		if (!indexrev.isEmpty()) parts << indexrev;
 	}
-	QString default_name = indexrev.isEmpty()
-		? base + QStringLiteral(".pdf")
-		: base + QStringLiteral("_") + indexrev + QStringLiteral(".pdf");
+	if (parts.isEmpty()) {
+		parts << (m_project->title().isEmpty()
+			  ? QStringLiteral("projet") : m_project->title());
+	}
+	QString default_name = parts.join(QStringLiteral("_"))
+		+ QStringLiteral(".pdf");
+	// caracteres interdits dans un nom de fichier
+	default_name.replace(QRegularExpression(
+		QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("-"));
 
 	QString default_dir = QStandardPaths::writableLocation(
 				QStandardPaths::DownloadLocation);
