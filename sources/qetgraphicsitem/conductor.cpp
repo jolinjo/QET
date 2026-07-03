@@ -531,8 +531,12 @@ void Conductor::paint(QPainter *painter, const QStyleOptionGraphicsItem *options
 	final_conductor_pen.setStyle(m_properties.style);
 	final_conductor_pen.setJoinStyle(Qt::SvgMiterJoin); // better rendering with dot
 
-		//Use a cosmetic line, below a certain zoom
-	if (options && options->levelOfDetailFromTransform(painter->worldTransform()) < 0.5)
+		//Use a cosmetic line, below a certain zoom (screen only:
+		//when printing, the fit-to-page scale must not thicken lines)
+	if (options
+	    && options->levelOfDetailFromTransform(painter->worldTransform()) < 0.5
+	    && painter->device()
+	    && painter->device()->devType() != QInternal::Printer)
 	{
 		final_conductor_pen.setCosmetic(true);
 	}

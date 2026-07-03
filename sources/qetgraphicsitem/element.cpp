@@ -227,7 +227,14 @@ void Element::paint(
 	QBrush brush;
 	painter->setPen(pen);
 	painter->setBrush(brush);
-	if (options && options->levelOfDetailFromTransform(painter->worldTransform()) < 0.5)
+	/* the low-zoom picture uses cosmetic (fixed device width) pens meant for
+	 * on-screen readability; when printing/exporting, the reduced fit-to-page
+	 * scale must not trigger it, otherwise lines come out oversized */
+	bool printing = painter->device()
+			&& painter->device()->devType() == QInternal::Printer;
+	if (!printing
+	    && options
+	    && options->levelOfDetailFromTransform(painter->worldTransform()) < 0.5)
 	{
 		painter->drawPicture(0, 0, m_low_zoom_picture);
 	} else {

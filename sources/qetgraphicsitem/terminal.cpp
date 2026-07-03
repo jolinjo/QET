@@ -173,7 +173,12 @@ void Terminal::paint(
 {
 	// en dessous d'un certain zoom, les bornes ne sont plus dessinees
 	// below a certain zoom level, the terminals are no longer drawn
-	if (options && options->levelOfDetailFromTransform(painter->worldTransform()) < 0.5)
+	// (screen only: printing uses the "draw terminals" export option)
+	bool printing = painter->device()
+			&& painter->device()->devType() == QInternal::Printer;
+	if (!printing
+	    && options
+	    && options->levelOfDetailFromTransform(painter->worldTransform()) < 0.5)
 		return;
 	painter -> save();
 
@@ -191,7 +196,9 @@ void Terminal::paint(
 	QPen t;
 	t.setWidthF(1.0);
 
-	if (options && options->levelOfDetailFromTransform(painter->worldTransform()) < 1.0)
+	if (!printing
+	    && options
+	    && options->levelOfDetailFromTransform(painter->worldTransform()) < 1.0)
 	{
 		t.setCosmetic(true);
 	}

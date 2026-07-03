@@ -510,11 +510,6 @@ void BorderTitleBlock::draw(QPainter *painter)
 	//Set the QPainter
 	painter -> save();
 	QPen pen(Qt::black);
-	/* cosmétique : largeur constante en unités du périphérique, comme les
-	 * éléments (voir elementpicturefactory) — sinon l'export PDF « adapter
-	 * à la page » amincit le cadre par le facteur d'échelle */
-	pen.setWidthF(1.0);
-	pen.setCosmetic(true);
 	painter -> setPen(pen);
 	painter -> setBrush(Qt::NoBrush);
 
