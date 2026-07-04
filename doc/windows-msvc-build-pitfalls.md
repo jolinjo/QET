@@ -11,7 +11,7 @@
 4. `find_package(SQLite3 REQUIRED)` 在 Windows 無系統 SQLite → 需自備 `sqlite3.h` + lib 並用 `-DSQLite3_INCLUDE_DIR` / `-DSQLite3_LIBRARY` 指定。
 5. **免安裝打包**：`windeployqt` 不帶 `pugixml.dll` 與 VC++ runtime → 缺了會「找不到 DLL」開不了（坑 5）。
 6. **全零殘留**：QSettings 預設寫**登錄檔**；本 fork 在 `main.cpp` 加了 `--config-dir` 時改用本機 INI 的 patch（坑 6）。`overrideDataDir/ConfigDir` 要求目標夾**先存在**才生效。
-7. **.bat 只用 ASCII 註解**：中文（UTF-8）註解會被 cmd 解成亂碼並觸發 Windows 安全封鎖框（坑 7）。
+7. **Windows 腳本編碼**：`.bat` 要「無 BOM 且註解純 ASCII」（否則 cmd 亂碼＋安全封鎖框）；`.ps1`（PS 5.1）剛好相反，要「有 BOM 或純 ASCII」（否則中文字面值亂碼）。方向相反（坑 7）。
 
 ---
 
@@ -179,6 +179,14 @@ Windows `cmd` 用 OEM codepage（繁中系統 = Big5/950）解讀 .bat。若 .ba
 
 **解法：所有 .bat 註解只用 ASCII（英文）**，且存檔**不要有 UTF-8 BOM**（BOM 會讓第一行出錯）。
 使用者會雙擊的啟動器尤其要注意。
+
+**反向坑 —— PowerShell 5.1 剛好相反**：Windows PowerShell 5.1（`powershell.exe`）讀 `.ps1` 時，
+**沒有 BOM 的 UTF-8 會被當成 ANSI/Big5**，腳本裡的中文字面值會變亂碼（例：`啟動` → `鍟熷嫊`），
+導致產生錯誤檔名、字串比對失敗。兩個解法擇一：
+（a）`.ps1` 存成 **UTF-8 with BOM**（PS 5.1 認 BOM）；或
+（b）**腳本保持純 ASCII**，需要的中文用字元碼組出（如 `[char]0x555F + [char]0x52D5`）。
+本專案的 `make_portable.ps1` 走 (b)，故打包腳本完全不含中文字面值。
+> 一句話：**.bat 要「無 BOM」，.ps1（PS 5.1）要「有 BOM」或純 ASCII** —— 方向相反，別搞混。
 
 ## 坑 8：官方元件庫不是內嵌，是 exe 旁的 `elements\` 資料夾
 
