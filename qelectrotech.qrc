@@ -770,6 +770,16 @@
 	<file>licenses/osifont.NOTICE</file>
 	<file>licenses/osifont.LICENSE</file>
 
+	<!-- Custom bundled fonts.
+	     UI = WenQuanYi Micro Hei (Apache-2.0 / GPLv3, committed; TrueType-hinted,
+	     crisp at small UI sizes).
+	     Diagram = YaHei Consolas Hybrid: proprietary (MS YaHei + Consolas), NOT
+	     committed / git-ignored. Supply fonts/YaHei.Consolas.1.11b.ttf locally
+	     before building, or remove this <file> line and the matching loader in
+	     QETApp::initFonts() to build without it. -->
+	<file>fonts/wqy-microhei.ttc</file>
+	<file>fonts/YaHei.Consolas.1.11b.ttf</file>
+
 	<file>licenses/QElectroTech.NOTICE</file>
 	<file>licenses/QElectroTech.LICENSE</file>
 	<file>licenses/QET-Elements.NOTICE</file>

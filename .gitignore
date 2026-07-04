@@ -7,3 +7,22 @@ doc/*
 !doc/QElectroTech.qch
 QElectroTech.tag
 !doc/doc-utils
+
+# Local-only fonts: proprietary (YaHei/PingFang/LiHei/Monaco) or unused
+# experiments. Kept out of the public repo. The committed custom fonts are
+# wqy-microhei.ttc (UI) and the existing Liberation/osifont set.
+fonts/YaHei.Consolas.1.11b.ttf
+fonts/PingFang Heavy.ttf
+fonts/LiHei ProPC.ttf
+fonts/MONACO.TTF
+fonts/蘋方-繁中黑體.otf
+fonts/PTMono-Regular.ttf
+fonts/NotoSansCJKtc-Black.otf
+fonts/NotoSansCJKtc-Bold.otf
+fonts/NotoSansCJKtc-DemiLight.otf
+fonts/NotoSansCJKtc-Light.otf
+fonts/NotoSansCJKtc-Medium.otf
+fonts/NotoSansCJKtc-Regular.otf
+fonts/NotoSansCJKtc-Thin.otf
+fonts/NotoSansMonoCJKtc-Bold.otf
+fonts/NotoSansMonoCJKtc-Regular.otf

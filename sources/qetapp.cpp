@@ -2204,6 +2204,32 @@ void QETApp::initFonts()
 			qWarning() << "Failed to load font:" << font;
 		}
 	}
+
+	// Custom bundled fonts: apply "WenQuanYi Micro Hei" to the whole UI (crisp at
+	// small sizes) and make "YaHei Consolas Hybrid" the default diagram-text font.
+	// Families are read back from the loaded files (not hard-coded) to stay accurate.
+	const int ui_font_id = QFontDatabase::addApplicationFont(
+				":/fonts/wqy-microhei.ttc");
+	if (ui_font_id != -1) {
+		const QStringList fams = QFontDatabase::applicationFontFamilies(ui_font_id);
+		if (!fams.isEmpty()) {
+			QFont ui_font = qApp->font();
+			ui_font.setFamily(fams.first());
+			qApp->setFont(ui_font);
+		}
+	}
+
+	const int diagram_font_id = QFontDatabase::addApplicationFont(
+				":/fonts/YaHei.Consolas.1.11b.ttf");
+	if (diagram_font_id != -1) {
+		const QStringList fams = QFontDatabase::applicationFontFamilies(diagram_font_id);
+		if (!fams.isEmpty()) {
+			QSettings settings;
+			if (!settings.contains("diagramitemfont")) {
+				settings.setValue("diagramitemfont", fams.first());
+			}
+		}
+	}
 }
 
 /**
