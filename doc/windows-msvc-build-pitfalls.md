@@ -9,6 +9,9 @@
 2. clone 時 `doc/QElectroTech.qch`（Git LFS）可能在 server 上 **404** → 用 `GIT_LFS_SKIP_SMUDGE=1` 略過。
 3. KF6 / pugixml / SingleApplication 由 CMake **FetchContent 從外部 git 自動抓編**；`-DBUILD_KF6=ON` 前提是先裝好 **ECM ≥ 6.22.0**。
 4. `find_package(SQLite3 REQUIRED)` 在 Windows 無系統 SQLite → 需自備 `sqlite3.h` + lib 並用 `-DSQLite3_INCLUDE_DIR` / `-DSQLite3_LIBRARY` 指定。
+5. **免安裝打包**：`windeployqt` 不帶 `pugixml.dll` 與 VC++ runtime → 缺了會「找不到 DLL」開不了（坑 5）。
+6. **全零殘留**：QSettings 預設寫**登錄檔**；本 fork 在 `main.cpp` 加了 `--config-dir` 時改用本機 INI 的 patch（坑 6）。`overrideDataDir/ConfigDir` 要求目標夾**先存在**才生效。
+7. **.bat 只用 ASCII 註解**：中文（UTF-8）註解會被 cmd 解成亂碼並觸發 Windows 安全封鎖框（坑 7）。
 
 ---
 
@@ -112,3 +115,81 @@ windeployqt --release build\qelectrotech.exe
 ## 驗證
 
 啟動後**須確認真的開出視窗**（主視窗標題 `QElectroTech`），不要只看行程存在。
+若跳出「找不到 XXX.dll」的系統錯誤框，它自己也是一個視窗，`MainWindowTitle` 會顯示成
+exe 路徑而非 `QElectroTech`——別把錯誤框誤判成 app 成功啟動（見坑 5）。
+
+---
+
+## 免安裝（portable）打包
+
+`build\qelectrotech.exe` + 同夾 DLL 即可執行、不需安裝。元件庫/標題欄已內嵌在 exe（qrc），
+但要做成可散布的免安裝夾，還有幾個坑。
+
+## 坑 5：windeployqt 不處理第三方 DLL（pugixml.dll / VC++ runtime）
+
+`windeployqt` 只複製 **Qt 自己的 DLL**。QET 額外相依：
+
+- **`pugixml.dll`** —— 以 shared library 編出（`-DBUILD_PUGIXML=ON`）。從 `build\` 跑沒事是因為它就在那；
+  複製 exe 到別的夾卻漏了它 → 啟動時「**找不到 pugixml.dll，無法繼續執行代碼**」。
+  （KF6 / SingleApplication 是靜態連結，不需另外帶。）
+- **VC++ runtime**（`msvcp140*.dll` / `vcruntime140*.dll` / `concrt140.dll`）—— MSVC `/MD` 動態連結 CRT。
+  本機有裝 VS 所以能跑，但**乾淨機器會缺**。windeployqt 只附 `vc_redist.x64.exe`（安裝器）；
+  要真正免安裝就把這幾個 DLL 直接複製進夾（來源：
+  `…\VC\Redist\MSVC\<ver>\x64\Microsoft.VC143.CRT\`），並刪掉 `vc_redist.x64.exe`。
+
+## 坑 6：全零殘留 —— QSettings 在 Windows 預設寫「登錄檔」
+
+QET 全程用 `QSettings settings;`（預設建構子）。**Windows 上預設後端是登錄檔**
+`HKEY_CURRENT_USER\Software\QElectroTech`，不是檔案。所以即使帶 `--config-dir`，主偏好設定
+（視窗版面、dock 狀態…）仍寫登錄檔 → **不是零殘留**。
+
+> ⚠️ `machine_info.cpp` 那行 `App-Config: see Registry "HKCU/..."` 是**寫死的字串**，
+> 不反映實際格式，不能拿來判斷。要確認就直接看 **有沒有生成 `.ini`** 與 **登錄檔鍵是否被建立**。
+
+**本 fork 的解法**（`sources/main.cpp`，最小改動、只在有 `--config-dir` 時生效，安裝版行為不變）：
+在 `setApplicationName` 之後、第一次讀 QSettings 之前，把 QSettings 切成該資料夾的本機 INI：
+
+```cpp
+for (int i = 1; i < argc; ++i) {
+    const QString option = QString::fromLocal8Bit(argv[i]);
+    const QString cd_arg = QStringLiteral("--config-dir=");
+    if (option.startsWith(cd_arg)) {
+        const QString dir = option.mid(cd_arg.length());
+        if (!dir.isEmpty()) {
+            QSettings::setDefaultFormat(QSettings::IniFormat);
+            QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, dir);
+        }
+        break;
+    }
+}
+```
+
+設定改寫到 `<config-dir>\QElectroTech\QElectroTech.ini`，登錄檔完全乾淨。
+
+**另一個關聯坑**：`QETApp::overrideDataDir()` / `overrideConfigDir()` 內有
+`if (QFileInfo(new_dd).isDir())` 判斷 —— **目標資料夾必須先存在**，否則 override 被靜默略過
+（症狀：路徑沒改、資料還是跑去 AppData）。所以啟動器必須先 `mkdir config data` 再啟動。
+
+## 坑 7：.bat 用中文（UTF-8）註解 → cmd 亂碼 + Windows 安全對話框
+
+Windows `cmd` 用 OEM codepage（繁中系統 = Big5/950）解讀 .bat。若 .bat 存成 **UTF-8 含中文註解**，
+中文 `REM` 會被解成亂碼，其中片段被當指令執行（`'-release' 不是內部或外部命令`…），
+甚至觸發 Windows 附件管理員跳「**無法打開這些文件…你的 Internet 安全設置阻止…**」封鎖框
+（常指向 `…\Git\mingw64\bin\nul`，因 `>nul` 在被污染的環境下被誤解析成檔案）。
+
+**解法：所有 .bat 註解只用 ASCII（英文）**，且存檔**不要有 UTF-8 BOM**（BOM 會讓第一行出錯）。
+使用者會雙擊的啟動器尤其要注意。
+
+## 免安裝夾組成（實測可攜、零殘留）
+
+```text
+QElectroTech-portable\
+  qelectrotech.exe                 (--config-dir 時走本機 INI 的 patch 版)
+  Qt6*.dll  platforms\ styles\ sqldrivers\ tls\ imageformats\ ...   (windeployqt)
+  pugixml.dll                       (坑 5)
+  msvcp140*.dll vcruntime140*.dll concrt140.dll                     (坑 5)
+  QElectroTech (portable).bat       (先 mkdir config/data，再帶 --config-dir/--data-dir 啟動)
+```
+
+啟動後狀態全落在夾內 `config\QElectroTech\QElectroTech.ini`（設定）與 `data\`（元件庫/cache/log），
+`HKCU\Software\QElectroTech` 不被建立。

@@ -25,6 +25,8 @@
 
 #include <QStyleFactory>
 #include <QtConcurrentRun>
+#include <QSettings>
+#include <QFileInfo>
 
 /**
 	@brief myMessageOutput
@@ -177,6 +179,26 @@ int main(int argc, char **argv)
 	QCoreApplication::setOrganizationName("QElectroTech");
 	QCoreApplication::setOrganizationDomain("qelectrotech.org");
 	QCoreApplication::setApplicationName("QElectroTech");
+
+	// Portable / zero-trace mode: when --config-dir=DIR is given, store the
+	// application settings in an INI file inside DIR instead of the native
+	// backend (Windows registry / macOS plist). Combined with --data-dir this
+	// leaves no trace outside the application folder. Installed builds (no
+	// --config-dir) keep their default native-settings behaviour unchanged.
+	// Must run before the first QSettings access (e.g. QetSettings below).
+	for (int i = 1; i < argc; ++i) {
+		const QString option = QString::fromLocal8Bit(argv[i]);
+		const QString cd_arg = QStringLiteral("--config-dir=");
+		if (option.startsWith(cd_arg)) {
+			const QString dir = option.mid(cd_arg.length());
+			if (!dir.isEmpty()) {
+				QSettings::setDefaultFormat(QSettings::IniFormat);
+				QSettings::setPath(
+					QSettings::IniFormat, QSettings::UserScope, dir);
+			}
+			break;
+		}
+	}
 	//Creation and execution of the application
 	//HighDPI
 
