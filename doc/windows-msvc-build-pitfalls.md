@@ -180,7 +180,21 @@ Windows `cmd` 用 OEM codepage（繁中系統 = Big5/950）解讀 .bat。若 .ba
 **解法：所有 .bat 註解只用 ASCII（英文）**，且存檔**不要有 UTF-8 BOM**（BOM 會讓第一行出錯）。
 使用者會雙擊的啟動器尤其要注意。
 
-## 免安裝夾組成（實測可攜、零殘留）
+## 坑 8：官方元件庫不是內嵌，是 exe 旁的 `elements\` 資料夾
+
+QET 的共用元件庫（8000+ 個元件）與標題欄範本是**磁碟上的 `elements\` / `titleblocks\` 資料夾**，
+**不是**編進 qrc。只複製 exe + DLL 的免安裝夾，元件庫面板會是空的（只剩空的「公司/用戶元件庫」）。
+
+路徑邏輯（`QETApp::commonElementsDir()`）：`QET_COMMON_COLLECTION_PATH="elements/"`，而
+`QET_COMMON_COLLECTION_PATH_RELATIVE_TO_BINARY_PATH` **只在 `if(APPLE)` 定義**，Windows 沒有 →
+QET 用的是**相對 CWD** 的 `./elements/`，不是 exe 目錄。
+
+**解法**：把 repo 的 `elements\`（約 103 MB，本身是 git submodule，需先 `git submodule update --init`）
+與 `titleblocks\` 複製進夾，並在啟動器用絕對路徑明確指定（最穩、不依賴 CWD）：
+`--common-elements-dir="%HERE%elements" --common-tbt-dir="%HERE%titleblocks"`。
+確認方式：啟動 log 應出現 `Common Elements count: 8643 Elements`（非 0）。
+
+## 免安裝夾組成（實測可攜、零殘留、含完整元件庫）
 
 ```text
 QElectroTech-portable\
@@ -188,8 +202,9 @@ QElectroTech-portable\
   Qt6*.dll  platforms\ styles\ sqldrivers\ tls\ imageformats\ ...   (windeployqt)
   pugixml.dll                       (坑 5)
   msvcp140*.dll vcruntime140*.dll concrt140.dll                     (坑 5)
-  QElectroTech (portable).bat       (先 mkdir config/data，再帶 --config-dir/--data-dir 啟動)
+  elements\  titleblocks\           (坑 8：官方元件庫/標題欄，~105 MB)
+  QElectroTech (portable).bat       (先 mkdir config/data，帶 config/data/elements/tbt dir 啟動)
 ```
 
-啟動後狀態全落在夾內 `config\QElectroTech\QElectroTech.ini`（設定）與 `data\`（元件庫/cache/log），
-`HKCU\Software\QElectroTech` 不被建立。
+啟動後狀態全落在夾內 `config\QElectroTech\QElectroTech.ini`（設定）與 `data\`（使用者集合/cache/log），
+`HKCU\Software\QElectroTech` 不被建立。整夾約 145 MB。
