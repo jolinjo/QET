@@ -254,7 +254,8 @@ QString QETApp::langFromSetting()
 	if (!lang_is_set)
 	{
 		QSettings settings;
-		system_language = settings.value("lang", "system").toString();
+		// This fork defaults to Traditional Chinese when nothing is configured.
+		system_language = settings.value("lang", "zh_TW").toString();
 		if(system_language == "system") {
 			system_language = QLocale::system().name().left(2);
 		}
@@ -2213,8 +2214,11 @@ void QETApp::initFonts()
 	if (ui_font_id != -1) {
 		const QStringList fams = QFontDatabase::applicationFontFamilies(ui_font_id);
 		if (!fams.isEmpty()) {
+			QSettings settings;
 			QFont ui_font = qApp->font();
 			ui_font.setFamily(fams.first());
+			const int base = ui_font.pointSize() > 0 ? ui_font.pointSize() : 9;
+			ui_font.setPointSize(settings.value("uifontsize", base).toInt());
 			qApp->setFont(ui_font);
 		}
 	}
@@ -2228,6 +2232,15 @@ void QETApp::initFonts()
 			if (!settings.contains("diagramitemfont")) {
 				settings.setValue("diagramitemfont", fams.first());
 			}
+		}
+	}
+
+	// Persist the Traditional-Chinese default on first run so the preferences
+	// language selector reflects it (the actual default is set in langFromSetting).
+	{
+		QSettings settings;
+		if (!settings.contains("lang")) {
+			settings.setValue("lang", "zh_TW");
 		}
 	}
 }

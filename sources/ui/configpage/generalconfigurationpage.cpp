@@ -185,6 +185,10 @@ GeneralConfigurationPage::GeneralConfigurationPage(QWidget *parent) :
 		ui->m_user_macros_path_cb->blockSignals(false);
 	}
 
+		//UI interface font size
+	const int ui_font_base = qApp->font().pointSize() > 0 ? qApp->font().pointSize() : 9;
+	ui->m_uifontsize_sb->setValue(settings.value("uifontsize", ui_font_base).toInt());
+
 	fillLang();	
 }
 
@@ -210,6 +214,12 @@ void GeneralConfigurationPage::applyConf()
 	}
 	settings.setValue("border-columns_0",ui->m_border_0->isChecked());
 	settings.setValue("lang", ui->m_lang_cb->itemData(ui->m_lang_cb->currentIndex()).toString());
+
+		//UI interface font size (applied immediately, fully after restart)
+	settings.setValue("uifontsize", ui->m_uifontsize_sb->value());
+	QFont app_font = qApp->font();
+	app_font.setPointSize(ui->m_uifontsize_sb->value());
+	qApp->setFont(app_font);
 
 		//hdpi
 	QetSettings::setHdpiScaleFactorRoundingPolicy(ui->m_hdpi_round_policy_cb->currentData().toString());
