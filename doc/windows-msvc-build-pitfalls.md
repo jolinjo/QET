@@ -203,8 +203,12 @@ QElectroTech-portable\
   pugixml.dll                       (坑 5)
   msvcp140*.dll vcruntime140*.dll concrt140.dll                     (坑 5)
   elements\  titleblocks\           (坑 8：官方元件庫/標題欄，~105 MB)
-  QElectroTech (portable).bat       (先 mkdir config/data，帶 config/data/elements/tbt dir 啟動)
+  啟動 QElectroTech.bat             (先 mkdir config/data，帶 config/data/elements/tbt dir 啟動)
+  QElectroTech.lnk                  (帶 QET 圖示的捷徑，最小化執行上面的 .bat；建議雙擊這個)
 ```
+
+> 使用者應雙擊 `QElectroTech.lnk`（或那個 .bat），**不要**直接點 `qelectrotech.exe`——
+> 直接點 exe 少了那些 `--xxx-dir` 參數，會退回原生行為（寫登錄檔/AppData、元件庫載不到）。
 
 啟動後狀態全落在夾內 `config\QElectroTech\QElectroTech.ini`（設定）與 `data\`（使用者集合/cache/log），
 `HKCU\Software\QElectroTech` 不被建立。整夾約 145 MB。
