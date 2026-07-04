@@ -654,8 +654,11 @@ void ElementsCollectionWidget::setUpWidget()
 	m_grid_view->setDragDropMode(QAbstractItemView::DragOnly);
 	m_grid_view->setSelectionMode(QAbstractItemView::SingleSelection);
 	m_grid_view->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+	QSettings grid_settings;
+	const int grid_base = m_grid_view->font().pointSize() > 0
+			? m_grid_view->font().pointSize() : 9;
 	QFont grid_font = m_grid_view->font();
-	grid_font.setPointSizeF(grid_font.pointSizeF() * 0.8);
+	grid_font.setPointSize(grid_settings.value("fontsize_library", grid_base).toInt());
 	m_grid_view->setFont(grid_font);
 	m_grid_delegate = new GridElementDelegate(
 		[this](const QModelIndex &index) -> QString {

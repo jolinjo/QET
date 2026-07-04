@@ -495,25 +495,77 @@ Vous pouvez spécifier ici la valeur par défaut de ce champ pour les éléments
        </item>
        <item row="1" column="0">
         <widget class="QSpinBox" name="m_uifontsize_sb">
-         <property name="minimum">
-          <number>6</number>
-         </property>
-         <property name="maximum">
-          <number>24</number>
-         </property>
-         <property name="suffix">
-          <string> pt</string>
-         </property>
+         <property name="minimum"><number>6</number></property>
+         <property name="maximum"><number>24</number></property>
+         <property name="suffix"><string> pt</string></property>
         </widget>
        </item>
        <item row="1" column="1">
         <widget class="QLabel" name="m_uifontsize_label">
-         <property name="text">
-          <string>介面字體大小</string>
-         </property>
+         <property name="text"><string>介面字體大小 - 一般（對話框等）</string></property>
         </widget>
        </item>
        <item row="2" column="0">
+        <widget class="QSpinBox" name="m_fs_menu_sb">
+         <property name="minimum"><number>6</number></property>
+         <property name="maximum"><number>24</number></property>
+         <property name="suffix"><string> pt</string></property>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QLabel" name="m_fs_menu_label">
+         <property name="text"><string>選單列</string></property>
+        </widget>
+       </item>
+       <item row="3" column="0">
+        <widget class="QSpinBox" name="m_fs_toolbar_sb">
+         <property name="minimum"><number>6</number></property>
+         <property name="maximum"><number>24</number></property>
+         <property name="suffix"><string> pt</string></property>
+        </widget>
+       </item>
+       <item row="3" column="1">
+        <widget class="QLabel" name="m_fs_toolbar_label">
+         <property name="text"><string>工具列</string></property>
+        </widget>
+       </item>
+       <item row="4" column="0">
+        <widget class="QSpinBox" name="m_fs_project_sb">
+         <property name="minimum"><number>6</number></property>
+         <property name="maximum"><number>24</number></property>
+         <property name="suffix"><string> pt</string></property>
+        </widget>
+       </item>
+       <item row="4" column="1">
+        <widget class="QLabel" name="m_fs_project_label">
+         <property name="text"><string>專案面板</string></property>
+        </widget>
+       </item>
+       <item row="5" column="0">
+        <widget class="QSpinBox" name="m_fs_library_sb">
+         <property name="minimum"><number>6</number></property>
+         <property name="maximum"><number>24</number></property>
+         <property name="suffix"><string> pt</string></property>
+        </widget>
+       </item>
+       <item row="5" column="1">
+        <widget class="QLabel" name="m_fs_library_label">
+         <property name="text"><string>元件庫面板</string></property>
+        </widget>
+       </item>
+       <item row="6" column="0">
+        <widget class="QSpinBox" name="m_fs_props_sb">
+         <property name="minimum"><number>6</number></property>
+         <property name="maximum"><number>24</number></property>
+         <property name="suffix"><string> pt</string></property>
+        </widget>
+       </item>
+       <item row="6" column="1">
+        <widget class="QLabel" name="m_fs_props_label">
+         <property name="text"><string>屬性面板</string></property>
+        </widget>
+       </item>
+       <item row="7" column="0">
         <spacer name="verticalSpacer_3">
          <property name="orientation">
           <enum>Qt::Vertical</enum>

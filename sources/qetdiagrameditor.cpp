@@ -19,6 +19,9 @@
 
 #include <QListWidget>
 #include <QStyledItemDelegate>
+#include <QSettings>
+#include <QToolBar>
+#include <QMenuBar>
 #include "qetversion.h"
 #include <QCoreApplication>
 #include "ElementsCollection/elementscollectionwidget.h"
@@ -118,6 +121,8 @@ QETDiagramEditor::QETDiagramEditor(const QStringList &files, QWidget *parent) :
 	setUpActions();
 	setUpToolBar();
 	setUpMenu();
+
+	applyInterfaceFonts();
 
 	tabifyDockWidget(qdw_undo, qdw_pa);
 
@@ -528,6 +533,43 @@ void QETDiagramEditor::setUpAutonumberingWidget()
 				|QDockWidget::DockWidgetMovable
 				|QDockWidget::DockWidgetFloatable);
 	addDockWidget(Qt::RightDockWidgetArea, m_autonumbering_dock);
+}
+
+/**
+	@brief QETDiagramEditor::applyInterfaceFonts
+	Apply the per-region interface font sizes from the settings to the menu bar,
+	tool bars and dock panels. Each region falls back to the global UI font size
+	when its own key is unset. Call after the menus/toolbars/docks are built.
+*/
+void QETDiagramEditor::applyInterfaceFonts()
+{
+	QSettings settings;
+	const int base = qApp->font().pointSize() > 0 ? qApp->font().pointSize() : 9;
+	auto regionFont = [&](const QString &key) {
+		QFont f = qApp->font();
+		f.setPointSize(settings.value(key, base).toInt());
+		return f;
+	};
+
+	if (menuBar()) {
+		menuBar()->setFont(regionFont("fontsize_menu"));
+	}
+	const QList<QToolBar *> toolbars = findChildren<QToolBar *>();
+	for (QToolBar *tb : toolbars) {
+		tb->setFont(regionFont("fontsize_toolbar"));
+	}
+	if (qdw_pa) {
+		qdw_pa->setFont(regionFont("fontsize_projectpanel"));
+	}
+	if (m_qdw_elmt_collection) {
+		m_qdw_elmt_collection->setFont(regionFont("fontsize_library"));
+	}
+	if (m_selection_properties_editor) {
+		m_selection_properties_editor->setFont(regionFont("fontsize_properties"));
+	}
+	if (m_autonumbering_dock) {
+		m_autonumbering_dock->setFont(regionFont("fontsize_properties"));
+	}
 }
 
 /**

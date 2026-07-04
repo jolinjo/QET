@@ -73,6 +73,7 @@ class QETDiagramEditor : public QETMainWindow
 		ProjectView *currentProjectView() const;
 		QETProject *currentProject() const;
 		bool drawGrid() const;
+		void applyInterfaceFonts();
 #ifdef BUILD_WITHOUT_KF5
 #else
 		void openBackupFiles (QList<KAutoSaveFile *> backup_files);
@@ -93,7 +94,7 @@ class QETDiagramEditor : public QETMainWindow
 		void setUpActions       ();
 		void setUpToolBar       ();
 		void setUpMenu          ();
-		
+
 		bool addProject(QETProject *, bool = true);
 		DiagramView *currentDiagramView() const;
 		Element *currentElement() const;

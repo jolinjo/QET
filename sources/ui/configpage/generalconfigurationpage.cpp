@@ -18,6 +18,7 @@
 #include "generalconfigurationpage.h"
 
 #include "../../qetapp.h"
+#include "../../qetdiagrameditor.h"
 #include "../../qeticons.h"
 #include "ui_generalconfigurationpage.h"
 #include "../../utils/qetsettings.h"
@@ -185,9 +186,14 @@ GeneralConfigurationPage::GeneralConfigurationPage(QWidget *parent) :
 		ui->m_user_macros_path_cb->blockSignals(false);
 	}
 
-		//UI interface font size
+		//UI interface font sizes (general + per region; each falls back to general)
 	const int ui_font_base = qApp->font().pointSize() > 0 ? qApp->font().pointSize() : 9;
 	ui->m_uifontsize_sb->setValue(settings.value("uifontsize", ui_font_base).toInt());
+	ui->m_fs_menu_sb->setValue(settings.value("fontsize_menu", ui_font_base).toInt());
+	ui->m_fs_toolbar_sb->setValue(settings.value("fontsize_toolbar", ui_font_base).toInt());
+	ui->m_fs_project_sb->setValue(settings.value("fontsize_projectpanel", ui_font_base).toInt());
+	ui->m_fs_library_sb->setValue(settings.value("fontsize_library", ui_font_base).toInt());
+	ui->m_fs_props_sb->setValue(settings.value("fontsize_properties", ui_font_base).toInt());
 
 	fillLang();	
 }
@@ -215,11 +221,20 @@ void GeneralConfigurationPage::applyConf()
 	settings.setValue("border-columns_0",ui->m_border_0->isChecked());
 	settings.setValue("lang", ui->m_lang_cb->itemData(ui->m_lang_cb->currentIndex()).toString());
 
-		//UI interface font size (applied immediately, fully after restart)
+		//UI interface font sizes (general applied to qApp; per-region applied to open editors)
 	settings.setValue("uifontsize", ui->m_uifontsize_sb->value());
+	settings.setValue("fontsize_menu", ui->m_fs_menu_sb->value());
+	settings.setValue("fontsize_toolbar", ui->m_fs_toolbar_sb->value());
+	settings.setValue("fontsize_projectpanel", ui->m_fs_project_sb->value());
+	settings.setValue("fontsize_library", ui->m_fs_library_sb->value());
+	settings.setValue("fontsize_properties", ui->m_fs_props_sb->value());
 	QFont app_font = qApp->font();
 	app_font.setPointSize(ui->m_uifontsize_sb->value());
 	qApp->setFont(app_font);
+	const QList<QETDiagramEditor *> editors = QETApp::diagramEditors();
+	for (QETDiagramEditor *editor : editors) {
+		editor->applyInterfaceFonts();
+	}
 
 		//hdpi
 	QetSettings::setHdpiScaleFactorRoundingPolicy(ui->m_hdpi_round_policy_cb->currentData().toString());
