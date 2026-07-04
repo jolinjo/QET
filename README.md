@@ -38,6 +38,14 @@ cmake --build build -j
 KF6(kcoreaddons / kwidgetsaddons)與 pugixml、SingleApplication 由 CMake
 FetchContent 自動抓取,毋須另外安裝。
 
+## Windows 建置(MSVC)
+
+> **⚠️ 給 AI / 自動化的提示**:上游官方 Windows 流程是 **MinGW**。若改用
+> **MSVC(Visual Studio 2022)+ Qt6** 建置,CMake 有數個坑一定會踩到
+> (`if(NOT MINGW)` 區塊的空路徑變數、SQLite3 找不到、Git LFS 404、
+> FetchContent 外部 repo 授權)。**動手前請先讀**
+> [`doc/windows-msvc-build-pitfalls.md`](doc/windows-msvc-build-pitfalls.md)。
+
 ## 本 fork 相對上游的修正(macOS/Qt6)
 
 | 版本 | 修正 |
