@@ -504,7 +504,10 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 			tr("讀取線上倉庫失敗：\n%1").arg(log.right(1500)));
 		return;
 	}
-	fetch_progress.close();
+	// keep the dialog up : the version comparison below fetches a few blobs on
+	// demand over the network, which would otherwise look like a frozen UI.
+	fetch_progress.setLabelText(tr("比對線上與本機版本…"));
+	QCoreApplication::processEvents();
 
 		//2) enumerate libraries + online/local versions from the git tree
 	struct LibItem {
@@ -527,6 +530,7 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 		  QStringLiteral("elements-company/") }, cache_dir, &elem_tree);
 	const QStringList elem_paths = elem_tree.split(QChar('\n'), Qt::SkipEmptyParts);
 	for (const QString &path : elem_paths) {
+		QCoreApplication::processEvents();
 		const QString sub = path.section(QChar('/'), -1).trimmed();
 		if (sub.isEmpty()) continue;
 		QString qd_xml;
@@ -575,6 +579,8 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 			data_dir % QStringLiteral("/titleblocks-company"));
 		items << it;
 	}
+
+	fetch_progress.close();
 
 	if (items.isEmpty()) {
 		QMessageBox::information(this, tr("更新公司庫"),
@@ -646,35 +652,12 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 	}
 	if (selected.isEmpty()) return;
 
-		//4) backup the affected top-level dirs, then mirror the selection
+		//4) download the selection, then mirror it into the data dir
 	QProgressDialog work_progress(tr("更新中…"), QString(), 0, 0, this);
 	work_progress.setWindowModality(Qt::ApplicationModal);
 	work_progress.setMinimumDuration(0);
 	work_progress.show();
 	QCoreApplication::processEvents();
-
-	QSet<QString> top_dirs;
-	for (const LibItem &it : selected)
-		top_dirs << it.target_sub.section(QChar('/'), 0, 0);
-	QStringList to_backup;
-	for (const QString &d : top_dirs) {
-		if (QFileInfo::exists(data_dir % QChar('/') % d))
-			to_backup << d;
-	}
-	const QString backup_name = QStringLiteral("library-backup-")
-		% QDateTime::currentDateTime().toString(
-			QStringLiteral("yyyyMMdd-HHmmss"))
-		% QStringLiteral(".tar.gz");
-	if (!to_backup.isEmpty()
-	    && !run_process(QStringLiteral("tar"),
-			    QStringList { QStringLiteral("czf"), backup_name }
-				    + to_backup,
-			    data_dir, &log)) {
-		work_progress.close();
-		QMessageBox::warning(this, tr("更新公司庫"),
-			tr("備份失敗：\n%1").arg(log.right(1500)));
-		return;
-	}
 
 	// download (checkout) only the selected paths from the metadata-only clone
 	QStringList checkout_paths;
@@ -710,11 +693,13 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 			? it.display
 			: it.display % QChar(' ') % it.online_ver);
 	}
+	// remove the metadata cache : it is only needed during this operation and
+	// leaving a nested git repo under the data dir just pollutes it.
+	QDir(cache_dir).removeRecursively();
 	work_progress.close();
 
 	QMessageBox::information(this, tr("更新公司庫"),
-		tr("已更新：\n%1\n\n先前內容已備份：%2")
-			.arg(updated.join(QChar('\n')), backup_name));
+		tr("已更新：\n%1").arg(updated.join(QChar('\n'))));
 
 	reload();
 	if (QETDiagramEditor *editor = QETApp::diagramEditorAncestorOf(this)) {
