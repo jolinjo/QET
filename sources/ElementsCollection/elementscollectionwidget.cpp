@@ -59,6 +59,17 @@
 #include <functional>
 #include <QSettings>
 #include <QSplitter>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QTreeWidget>
+#include <QHeaderView>
+#include <QPushButton>
+#include <QRegularExpression>
+#include <QXmlStreamReader>
+#include <QFile>
+#include <QHash>
+#include <QSet>
+#include <QLabel>
 
 /**
 	Delegate of the grid view : renders the element picture vectorially
@@ -375,111 +386,278 @@ namespace
 	mirror its collections into the QET data directory, with a tar.gz
 	backup of the current content beforehand.
 */
+namespace {
+	/// Extract a "vX[.Y[.Z]]" version token from a string, or empty.
+	QString qetlib_version(const QString &s) {
+		static const QRegularExpression re(
+			QStringLiteral("v\\d+(?:\\.\\d+)*"));
+		const QRegularExpressionMatch m = re.match(s);
+		return m.hasMatch() ? m.captured(0) : QString();
+	}
+
+	/// Preferred display name (zh_TW > zh > en > any) from a qet_directory file.
+	QString qetlib_dir_name(const QString &qet_directory_path) {
+		QFile f(qet_directory_path);
+		if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return QString();
+		QXmlStreamReader xml(&f);
+		QHash<QString, QString> names;
+		while (!xml.atEnd()) {
+			if (xml.readNext() == QXmlStreamReader::StartElement
+			    && xml.name() == QLatin1String("name")) {
+				const QString lang = xml.attributes()
+					.value(QLatin1String("lang")).toString();
+				names.insert(lang, xml.readElementText());
+			}
+		}
+		for (const QString &l : { QStringLiteral("zh_TW"),
+					  QStringLiteral("zh"),
+					  QStringLiteral("en") }) {
+			if (names.contains(l)) return names.value(l);
+		}
+		return names.isEmpty() ? QString() : *names.constBegin();
+	}
+
+	/// Highest version token among the *.titleblock files of a directory.
+	QString qetlib_titleblocks_version(const QString &dir) {
+		QString best;
+		const QFileInfoList list = QDir(dir).entryInfoList(
+			QStringList { QStringLiteral("*.titleblock") }, QDir::Files);
+		for (const QFileInfo &fi : list) {
+			const QString v = qetlib_version(fi.fileName());
+			if (v > best) best = v;
+		}
+		return best;
+	}
+
+	/// Recursive copy of a directory content, skipping .git.
+	bool qetlib_copy_recursive(const QString &src, const QString &dst) {
+		QDir sdir(src);
+		if (!sdir.exists()) return false;
+		if (!QDir().mkpath(dst)) return false;
+		const QFileInfoList entries = sdir.entryInfoList(
+			QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot | QDir::Hidden);
+		for (const QFileInfo &fi : entries) {
+			if (fi.fileName() == QLatin1String(".git")) continue;
+			const QString target = dst % QChar('/') % fi.fileName();
+			if (fi.isDir()) {
+				if (!qetlib_copy_recursive(fi.absoluteFilePath(), target))
+					return false;
+			} else if (!QFile::copy(fi.absoluteFilePath(), target)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/// Full mirror: replace dst with the content of src (cross-platform, no rsync).
+	bool qetlib_mirror(const QString &src, const QString &dst) {
+		QDir(dst).removeRecursively();
+		return qetlib_copy_recursive(src, dst);
+	}
+}
+
+/**
+	Fetch the company-library repository (configured in the preferences),
+	list each library (element collections + title blocks) with its online
+	and local version, and let the user pick which ones to mirror into the
+	QET data directory. The current content is backed up (tar.gz) beforehand.
+*/
 void ElementsCollectionWidget::updateLibraryFromGit()
 {
 	QSettings settings;
-	// The repository URL is configured in the preferences (General > Collections).
 	const QString url = settings.value(
 		QStringLiteral("elementspanel/library-git-url"),
 		QStringLiteral("https://github.com/jolinjo/QET-Lib"))
 		.toString().trimmed();
 	if (url.isEmpty()) return;
-	// Destructive (mirror --delete) operation: confirm before proceeding.
-	if (QMessageBox::question(
-		this,
-		tr("Mettre à jour les collections", "dialog title"),
-		tr("Mettre à jour les collections company depuis :\n%1 ?").arg(url))
-		!= QMessageBox::Yes) {
-		return;
-	}
 
 	const QString data_dir = QETApp::dataDir();
 	const QString cache_dir =
 		data_dir % QStringLiteral("/library-git-cache");
 
-	QProgressDialog progress(
-		tr("Téléchargement des collections depuis\n%1").arg(url),
-		QString(), 0, 0, this);
-	progress.setWindowModality(Qt::ApplicationModal);
-	progress.setMinimumDuration(0);
-	progress.show();
+		//1) fetch the online repository (fresh shallow clone)
+	QProgressDialog fetch_progress(
+		tr("讀取線上公司庫…"), QString(), 0, 0, this);
+	fetch_progress.setWindowModality(Qt::ApplicationModal);
+	fetch_progress.setMinimumDuration(0);
+	fetch_progress.show();
 	QCoreApplication::processEvents();
-
-	//clone frais et superficiel a chaque fois : simple et robuste
 	QDir(cache_dir).removeRecursively();
 	QString log;
 	if (!run_process(QStringLiteral("git"),
 			 { QStringLiteral("clone"), QStringLiteral("--depth"),
-			   QStringLiteral("1"), url, cache_dir },
-			 QString(), &log)) {
-		progress.close();
-		QMessageBox::warning(
-			this,
-			tr("Mise à jour des collections", "message box title"),
-			tr("La mise à jour a échoué :\n%1").arg(log.right(1500)));
+			   QStringLiteral("1"), url, cache_dir }, QString(), &log)) {
+		fetch_progress.close();
+		QMessageBox::warning(this, tr("更新公司庫"),
+			tr("讀取線上倉庫失敗：\n%1").arg(log.right(1500)));
+		return;
+	}
+	fetch_progress.close();
+
+		//2) enumerate libraries + online/local versions
+	struct LibItem {
+		QString kind;       // "elements" | "titleblocks"
+		QString repo_sub;
+		QString target_sub;
+		QString display;
+		QString online_ver;
+		QString local_ver;
+	};
+	QList<LibItem> items;
+
+	const QString elem_root = cache_dir % QStringLiteral("/elements-company");
+	const QStringList elem_subs = QDir(elem_root).entryList(
+		QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+	for (const QString &sub : elem_subs) {
+		const QString qd = elem_root % QChar('/') % sub
+			% QStringLiteral("/qet_directory");
+		if (!QFileInfo::exists(qd)) continue;
+		LibItem it;
+		it.kind = QStringLiteral("elements");
+		it.repo_sub = QStringLiteral("elements-company/") % sub;
+		it.target_sub = it.repo_sub;
+		it.display = qetlib_dir_name(qd);
+		if (it.display.isEmpty()) it.display = sub;
+		it.online_ver = qetlib_version(it.display);
+		const QString local_qd = data_dir % QChar('/') % it.target_sub
+			% QStringLiteral("/qet_directory");
+		it.local_ver = QFileInfo::exists(local_qd)
+			? qetlib_version(qetlib_dir_name(local_qd)) : QString();
+		items << it;
+	}
+	if (QFileInfo::exists(cache_dir % QStringLiteral("/titleblocks-company"))) {
+		LibItem it;
+		it.kind = QStringLiteral("titleblocks");
+		it.repo_sub = QStringLiteral("titleblocks-company");
+		it.target_sub = it.repo_sub;
+		it.display = tr("公司圖框");
+		it.online_ver = qetlib_titleblocks_version(
+			cache_dir % QStringLiteral("/titleblocks-company"));
+		it.local_ver = qetlib_titleblocks_version(
+			data_dir % QStringLiteral("/titleblocks-company"));
+		items << it;
+	}
+
+	if (items.isEmpty()) {
+		QMessageBox::information(this, tr("更新公司庫"),
+			tr("線上倉庫沒有可更新的公司庫。"));
 		return;
 	}
 
-	//repertoires du depot refletes dans le dossier de donnees QET
-	const QStringList mirrored_dirs {
-		QStringLiteral("elements-company"),
-		QStringLiteral("titleblocks-company") };
+		//3) selection dialog
+	QDialog dlg(this);
+	dlg.setWindowTitle(tr("線上更新公司庫"));
+	dlg.resize(560, 420);
+	auto *vl = new QVBoxLayout(&dlg);
+	vl->addWidget(new QLabel(
+		tr("勾選要更新的項目（以線上版本完全覆蓋本機）："), &dlg));
+	auto *tree = new QTreeWidget(&dlg);
+	tree->setColumnCount(4);
+	tree->setHeaderLabels({ tr("庫"), tr("線上版本"),
+				tr("本機版本"), tr("狀態") });
+	tree->setRootIsDecorated(false);
+	tree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+	vl->addWidget(tree);
 
-	//sauvegarde du contenu actuel avant remplacement
-	QStringList to_backup;
-	for (const QString &dir : mirrored_dirs) {
-		if (QFileInfo::exists(data_dir % QChar('/') % dir)) {
-			to_backup << dir;
+	QList<QPair<QTreeWidgetItem *, LibItem>> rows;
+	const QString up_to_date = tr("最新");
+	auto add_group = [&](const QString &title, const QString &kind) {
+		auto *head = new QTreeWidgetItem(tree, { title });
+		QFont bf = head->font(0);
+		bf.setBold(true);
+		head->setFont(0, bf);
+		head->setFlags(Qt::ItemIsEnabled);
+		bool any = false;
+		for (const LibItem &it : items) {
+			if (it.kind != kind) continue;
+			any = true;
+			const QString status = it.local_ver.isEmpty()
+				? tr("未安裝")
+				: (it.online_ver != it.local_ver ? tr("可更新")
+								 : up_to_date);
+			auto *row = new QTreeWidgetItem(head, {
+				it.display,
+				it.online_ver.isEmpty() ? QStringLiteral("—") : it.online_ver,
+				it.local_ver.isEmpty() ? QStringLiteral("—") : it.local_ver,
+				status });
+			row->setFlags(Qt::ItemIsUserCheckable | Qt::ItemIsEnabled);
+			row->setCheckState(0, status == up_to_date
+				? Qt::Unchecked : Qt::Checked);
+			rows.append({ row, it });
 		}
+		if (!any) delete head;
+	};
+	add_group(tr("元件庫"), QStringLiteral("elements"));
+	add_group(tr("圖框"), QStringLiteral("titleblocks"));
+	tree->expandAll();
+	for (int c = 1 ; c < 4 ; ++c) tree->resizeColumnToContents(c);
+
+	auto *bb = new QDialogButtonBox(&dlg);
+	bb->addButton(tr("更新選取"), QDialogButtonBox::AcceptRole);
+	bb->addButton(QDialogButtonBox::Cancel);
+	connect(bb, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+	connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+	vl->addWidget(bb);
+
+	if (dlg.exec() != QDialog::Accepted) return;
+
+	QList<LibItem> selected;
+	for (const auto &pair : rows) {
+		if (pair.first->checkState(0) == Qt::Checked)
+			selected << pair.second;
 	}
-	const QString backup_name =
-		QStringLiteral("library-backup-")
+	if (selected.isEmpty()) return;
+
+		//4) backup the affected top-level dirs, then mirror the selection
+	QProgressDialog work_progress(tr("更新中…"), QString(), 0, 0, this);
+	work_progress.setWindowModality(Qt::ApplicationModal);
+	work_progress.setMinimumDuration(0);
+	work_progress.show();
+	QCoreApplication::processEvents();
+
+	QSet<QString> top_dirs;
+	for (const LibItem &it : selected)
+		top_dirs << it.target_sub.section(QChar('/'), 0, 0);
+	QStringList to_backup;
+	for (const QString &d : top_dirs) {
+		if (QFileInfo::exists(data_dir % QChar('/') % d))
+			to_backup << d;
+	}
+	const QString backup_name = QStringLiteral("library-backup-")
 		% QDateTime::currentDateTime().toString(
-			  QStringLiteral("yyyyMMdd-HHmmss"))
+			QStringLiteral("yyyyMMdd-HHmmss"))
 		% QStringLiteral(".tar.gz");
 	if (!to_backup.isEmpty()
 	    && !run_process(QStringLiteral("tar"),
 			    QStringList { QStringLiteral("czf"), backup_name }
 				    + to_backup,
 			    data_dir, &log)) {
-		progress.close();
-		QMessageBox::warning(
-			this,
-			tr("Mise à jour des collections", "message box title"),
-			tr("La mise à jour a échoué :\n%1").arg(log.right(1500)));
+		work_progress.close();
+		QMessageBox::warning(this, tr("更新公司庫"),
+			tr("備份失敗：\n%1").arg(log.right(1500)));
 		return;
 	}
 
 	QStringList updated;
-	for (const QString &dir : mirrored_dirs) {
-		const QString source = cache_dir % QChar('/') % dir;
+	for (const LibItem &it : selected) {
+		const QString source = cache_dir % QChar('/') % it.repo_sub;
+		const QString target = data_dir % QChar('/') % it.target_sub;
 		if (!QFileInfo::exists(source)) continue;
-		if (!run_process(QStringLiteral("rsync"),
-				 { QStringLiteral("-a"),
-				   QStringLiteral("--delete"),
-				   QStringLiteral("--exclude=.git"),
-				   source % QChar('/'),
-				   data_dir % QChar('/') % dir % QChar('/') },
-				 QString(), &log)) {
-			progress.close();
-			QMessageBox::warning(
-				this,
-				tr("Mise à jour des collections",
-				   "message box title"),
-				tr("La mise à jour a échoué :\n%1")
-					.arg(log.right(1500)));
+		if (!qetlib_mirror(source, target)) {
+			work_progress.close();
+			QMessageBox::warning(this, tr("更新公司庫"),
+				tr("更新「%1」失敗。").arg(it.display));
 			return;
 		}
-		updated << dir;
+		updated << (it.online_ver.isEmpty()
+			? it.display
+			: it.display % QChar(' ') % it.online_ver);
 	}
-	progress.close();
+	work_progress.close();
 
-	QMessageBox::information(
-		this,
-		tr("Mise à jour des collections", "message box title"),
-		tr("Collections mises à jour :\n%1\n\nSauvegarde du contenu"
-		   " précédent : %2")
-			.arg(updated.join(QStringLiteral(", ")), backup_name));
+	QMessageBox::information(this, tr("更新公司庫"),
+		tr("已更新：\n%1\n\n先前內容已備份：%2")
+			.arg(updated.join(QChar('\n')), backup_name));
 
 	reload();
 	if (QETDiagramEditor *editor = QETApp::diagramEditorAncestorOf(this)) {
@@ -690,6 +868,11 @@ void ElementsCollectionWidget::setUpWidget()
 	m_tab_widget->addTab(collections_splitter, tr("Collections"));
 	m_tab_widget->addTab(m_macros_tree_view, tr("Modèles"));
 
+	auto *update_lib_btn = new QPushButton(tr("更新公司庫…", "button"), this);
+	update_lib_btn->setToolTip(tr("從線上倉庫更新公司元件庫與圖框"));
+	connect(update_lib_btn, &QPushButton::clicked,
+		this, &ElementsCollectionWidget::updateLibraryFromGit);
+	m_main_vlayout->addWidget(update_lib_btn);
 	m_main_vlayout->addWidget(m_search_field);
 	m_main_vlayout->addWidget(m_tab_widget);
 

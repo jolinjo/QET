@@ -131,7 +131,10 @@ exe 路徑而非 `QElectroTech`——別把錯誤框誤判成 app 成功啟動�
 
 - **`pugixml.dll`** —— 以 shared library 編出（`-DBUILD_PUGIXML=ON`）。從 `build\` 跑沒事是因為它就在那；
   複製 exe 到別的夾卻漏了它 → 啟動時「**找不到 pugixml.dll，無法繼續執行代碼**」。
-  （KF6 / SingleApplication 是靜態連結，不需另外帶。）
+  （SingleApplication 與 KF6WidgetsAddons 是靜態連結。**但注意**：從**全新 build/**
+  （砍掉重建）時 **KF6CoreAddons 可能被編成 shared**，產生 `build\bin\KF6CoreAddons.dll`
+  ——此時直接跑 `build\qelectrotech.exe` 會「找不到 KF6CoreAddons.dll」。解法：把
+  `build\bin\*.dll` 一併複製到 exe 旁（make_portable 已自動處理）。增量重建時多半是靜態、不會有此 DLL。）
 - **VC++ runtime**（`msvcp140*.dll` / `vcruntime140*.dll` / `concrt140.dll`）—— MSVC `/MD` 動態連結 CRT。
   本機有裝 VS 所以能跑，但**乾淨機器會缺**。windeployqt 只附 `vc_redist.x64.exe`（安裝器）；
   要真正免安裝就把這幾個 DLL 直接複製進夾（來源：
