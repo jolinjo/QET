@@ -82,6 +82,7 @@ GeneralConfigurationPage::GeneralConfigurationPage(QWidget *parent) :
 	ui->m_grid_icon_size_sb->setValue(settings.value("elementspanel/grid-icon-size", 60).toInt());
 	ui->m_grid_columns_sb->setValue(settings.value("elementspanel/grid-columns", 0).toInt());
 	ui->m_grid_cell_width_sb->setValue(settings.value("elementspanel/grid-cell-width", 0).toInt());
+	ui->m_library_git_url_le->setText(settings.value("elementspanel/library-git-url", "https://github.com/jolinjo/QET-Lib").toString());
 	ui->m_save_label_paste->setChecked(settings.value("diagramcommands/erase-label-on-copy", true).toBool());
 	ui->m_use_folio_label->setChecked(settings.value("genericpanel/folio", true).toBool());
 	ui->m_border_0->setChecked(settings.value("border-columns_0", false).toBool());
@@ -253,6 +254,11 @@ void GeneralConfigurationPage::applyConf()
 	settings.setValue("elementspanel/grid-icon-size", ui->m_grid_icon_size_sb->value());
 	settings.setValue("elementspanel/grid-columns", ui->m_grid_columns_sb->value());
 	settings.setValue("elementspanel/grid-cell-width", ui->m_grid_cell_width_sb->value());
+	{
+		const QString git_url = ui->m_library_git_url_le->text().trimmed();
+		settings.setValue("elementspanel/library-git-url",
+			git_url.isEmpty() ? QStringLiteral("https://github.com/jolinjo/QET-Lib") : git_url);
+	}
 	QETApp::instance()->notifySettingsChanged();
 
 		//DIAGRAM COMMAND

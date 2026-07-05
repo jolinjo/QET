@@ -378,20 +378,20 @@ namespace
 void ElementsCollectionWidget::updateLibraryFromGit()
 {
 	QSettings settings;
-	const QString settings_key =
-		QStringLiteral("elementspanel/library-git-url");
-	bool ok = false;
-	const QString url = QInputDialog::getText(
+	// The repository URL is configured in the preferences (General > Collections).
+	const QString url = settings.value(
+		QStringLiteral("elementspanel/library-git-url"),
+		QStringLiteral("https://github.com/jolinjo/QET-Lib"))
+		.toString().trimmed();
+	if (url.isEmpty()) return;
+	// Destructive (mirror --delete) operation: confirm before proceeding.
+	if (QMessageBox::question(
 		this,
 		tr("Mettre à jour les collections", "dialog title"),
-		tr("Adresse du dépôt Git des collections (GitHub) :"),
-		QLineEdit::Normal,
-		settings.value(settings_key,
-			       QStringLiteral("https://github.com/jolinjo/QET-Lib"))
-			.toString(),
-		&ok).trimmed();
-	if (!ok || url.isEmpty()) return;
-	settings.setValue(settings_key, url);
+		tr("Mettre à jour les collections company depuis :\n%1 ?").arg(url))
+		!= QMessageBox::Yes) {
+		return;
+	}
 
 	const QString data_dir = QETApp::dataDir();
 	const QString cache_dir =
