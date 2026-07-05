@@ -38,22 +38,29 @@ GeneralConfigurationPage::GeneralConfigurationPage(QWidget *parent) :
 {
 	ui->setupUi(this);
 
-	// 公司版精簡：隱藏不需使用者調整的設定（保留預設值，只是不顯示出來）
-	const QList<QWidget *> hidden_settings {
-		// 視窗 / 分頁 模式
+	// 公司版精簡：不需使用者調整的設定不顯示（設定值仍保留預設）。
+	// 存取元件庫的各目錄在 QGridLayout 裡：用 removeWidget 從版面移除，讓
+	// grid 收合、不留空白列（純 setVisible(false) 會留下空列間距）。
+	if (ui->gridLayout) {
+		const QList<QWidget *> grid_removed {
+			ui->label_7,  ui->m_common_elmt_path_cb,
+			ui->label_16, ui->m_company_elmt_path_cb,
+			ui->label_17, ui->m_company_tbt_path_cb,
+			ui->label_8,  ui->m_custom_elmt_path_cb,
+			ui->label_10, ui->m_custom_tbt_path_cb,
+			ui->label_9,
+			ui->label_11, ui->m_user_macros_path_cb,
+		};
+		for (QWidget *w : grid_removed) {
+			if (w) { ui->gridLayout->removeWidget(w); w->hide(); }
+		}
+	}
+	// 這些在垂直版面裡，隱藏即可正常收合：視窗/分頁模式、元件管理整段
+	const QList<QWidget *> vbox_hidden {
 		ui->m_use_windows_mode_rb, ui->m_use_tab_mode_rb, ui->line_4,
-		// 存取元件庫：各集合 / 圖框 / 模組 目錄（皆用預設，不需手動指定）
-		ui->label_7,  ui->m_common_elmt_path_cb,
-		ui->label_16, ui->m_company_elmt_path_cb,
-		ui->label_17, ui->m_company_tbt_path_cb,
-		ui->label_8,  ui->m_custom_elmt_path_cb,
-		ui->label_10, ui->m_custom_tbt_path_cb,
-		ui->label_9,
-		ui->label_11, ui->m_user_macros_path_cb,
-		// 元件管理整段（醒目標示新元件、作者/授權預設值）
 		ui->groupBox_3,
 	};
-	for (QWidget *w : hidden_settings) {
+	for (QWidget *w : vbox_hidden) {
 		if (w) w->setVisible(false);
 	}
 

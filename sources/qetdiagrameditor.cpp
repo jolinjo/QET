@@ -21,6 +21,10 @@
 #include <QStyledItemDelegate>
 #include <QSettings>
 #include <QToolBar>
+#include <QToolButton>
+#include <QPainter>
+#include <QPixmap>
+#include <QIcon>
 #include <QMenuBar>
 #include <QMenu>
 #include "qetversion.h"
@@ -1187,8 +1191,6 @@ void QETDiagramEditor::setUpToolBar()
 		m_add_item_tool_bar, m_depth_tool_bar };
 	for (QToolBar *tool_bar : top_toolbars) {
 		tool_bar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
-		// 統一圖示尺寸：QET 圖示原生高度不一，text-under-icon 會把矮圖示的
-		// 文字往上擠而對不齊；固定成同高度框讓所有文字基線一致。
 		tool_bar->setIconSize(QSize(24, 24));
 	}
 
@@ -1197,6 +1199,31 @@ void QETDiagramEditor::setUpToolBar()
 	addToolBar(Qt::TopToolBarArea, diagram_tool_bar);
 	addToolBar(Qt::TopToolBarArea, m_add_item_tool_bar);
 	addToolBar(Qt::TopToolBarArea, m_depth_tool_bar);
+
+	// 讓 text-under-icon 的文字底部對齊：QET 工具列圖示是 16/22px PNG，
+	// 高度不一，QToolButton 把「圖示+文字」整塊置中後，矮圖示的文字會偏上。
+	// 把每個按鈕圖示補成統一 24px 高、圖示靠下貼齊，文字就落在同一底線。
+	const int icon_h = 24;
+	for (QToolBar *tool_bar : top_toolbars) {
+		const QList<QToolButton *> buttons = tool_bar->findChildren<QToolButton *>();
+		for (QToolButton *btn : buttons) {
+			const QIcon ic = btn->icon();
+			if (ic.isNull()) continue;
+			const QPixmap src = ic.pixmap(QSize(icon_h, icon_h));
+			if (src.isNull()) continue;
+			const qreal dpr = src.devicePixelRatio();
+			const int log_w = qRound(src.width()  / dpr);
+			const int log_h = qRound(src.height() / dpr);
+			if (log_h >= icon_h) continue; // 已達滿高，不需補
+			QPixmap dst(QSize(icon_h, icon_h) * dpr);
+			dst.setDevicePixelRatio(dpr);
+			dst.fill(Qt::transparent);
+			QPainter p(&dst);
+			p.drawPixmap((icon_h - log_w) / 2, icon_h - log_h, src); // 水平置中、垂直靠下
+			p.end();
+			btn->setIcon(QIcon(dst));
+		}
+	}
 }
 
 /**
