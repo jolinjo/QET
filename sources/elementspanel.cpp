@@ -23,6 +23,7 @@
 #include "qetproject.h"
 #include "titleblock/templatescollection.h"
 #include <QApplication>
+#include <QSettings>
 
 /*
 	Lorsque le flag ENABLE_PANEL_DND_CHECKS est defini, le panel d'elements
@@ -268,7 +269,10 @@ void ElementsPanel::reload()
 	common_tbt_collection_item_ -> setStatusTip(0, tr("Double-cliquez pour réduire ou développer la collection de cartouches QElectroTech", "Status tip"));
 	common_tbt_collection_item_ -> setWhatsThis(0, tr("Ceci est la collection de cartouches fournie avec QElectroTech. Installée en tant que composant système, vous ne pouvez normalement pas la personnaliser.", "\"What's this\" tip"));
 	if (first_reload_) common_tbt_collection_item_ -> setExpanded(true);
-	
+	// hide the QET built-in title block collection when the user asked to
+	common_tbt_collection_item_ -> setHidden(QSettings().value(
+		QStringLiteral("collections/hide-common-titleblocks"), false).toBool());
+
 	// load the company title block templates collection
 	TitleBlockTemplatesCollection *company_tbt_collection = QETApp::companyTitleBlockTemplatesCollection();
 	company_tbt_collection_item_ = addTemplatesCollection(company_tbt_collection, invisibleRootItem());

@@ -444,6 +444,20 @@
             </property>
            </widget>
           </item>
+          <item row="12" column="0" colspan="2">
+           <widget class="QCheckBox" name="m_hide_common_elements_cb">
+            <property name="text">
+             <string>隱藏 QET 內建元件庫（只顯示公司/使用者元件庫，需重新啟動）</string>
+            </property>
+           </widget>
+          </item>
+          <item row="13" column="0" colspan="2">
+           <widget class="QCheckBox" name="m_hide_common_titleblocks_cb">
+            <property name="text">
+             <string>隱藏 QET 內建圖框（只顯示公司/使用者圖框，需重新啟動）</string>
+            </property>
+           </widget>
+          </item>
          </layout>
         </widget>
        </item>
