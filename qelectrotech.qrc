@@ -784,5 +784,6 @@
 	<file>licenses/QElectroTech.LICENSE</file>
 	<file>licenses/QET-Elements.NOTICE</file>
 	<file>licenses/QET-Elements.LICENSE</file>
+	<file>lang/qtbase_zh_TW.qm</file>
     </qresource>
 </RCC>

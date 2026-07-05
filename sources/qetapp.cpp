@@ -217,6 +217,17 @@ void QETApp::setLanguage(const QString &desired_language) {
 	}
 	qApp->installTranslator(&qtTranslator);
 
+	// Qt6 : les libellés des boutons standard (Save/Discard/Cancel…) sont dans
+	// qtbase_<lang>.qm, pas dans le qt_<lang>.qm (souvent vide). On le charge
+	// aussi ; qtbase_zh_TW.qm est embarqué en ressource pour la version portable.
+	// static : conservé pour toute la durée de vie de l'application (le
+	// traducteur installé doit rester valide) sans toucher au .h.
+	static QTranslator qtBaseTranslator;
+	if (!qtBaseTranslator.load("qtbase_" + desired_language, qt_l10n_path)) {
+		qtBaseTranslator.load("qtbase_" + desired_language, languages_path);
+	}
+	qApp->installTranslator(&qtBaseTranslator);
+
 	// load translations for the QET application
 	// charge les traductions pour l'application QET
 	if (!qetTranslator.load("qet_" + desired_language, languages_path)) {
