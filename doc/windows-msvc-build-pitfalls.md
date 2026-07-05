@@ -112,11 +112,23 @@ cmake --build build --parallel
 windeployqt --release build\qelectrotech.exe
 ```
 
+## 建置加速：避免「改版號就全量重編」
+
+每次改 `CMakeLists.txt`（例如 bump 版號）都會 reconfigure，預設會**把 KF6 整包重編**（438 目標、~4 分）。兩個原因＋解法：
+
+1. **PCH 重生**：reconfigure 會重生 KF6 的 precompiled header（`cmake_pch.cxx`），使 KF6 全部物件失效重編。
+   → configure 時加 **`-DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON`**（見 `_deps/configure_qet.bat`），reconfigure 後 `ninja: no work to do`。
+2. **版號 define 綁在整個 target**：`target_compile_definitions(... QET_PROJECT_VERSION=...)` 讓每個 QET 檔的編譯命令都含版號 → 改版號重編全部 ~400 個 QET 檔。
+   → 改成只綁 `qetversion.cpp`（`set_source_files_properties(sources/qetversion.cpp PROPERTIES COMPILE_DEFINITIONS ...)`；QET_PROJECT_VERSION 只有它用）。
+
+兩者合併後，**改版號只重編 `qetversion.cpp` + relink，約 6 秒**。純程式碼改動（不動 CMakeLists）本就走增量、不碰 KF6。
+
 ## 驗證
 
 啟動後**須確認真的開出視窗**（主視窗標題 `QElectroTech`），不要只看行程存在。
 若跳出「找不到 XXX.dll」的系統錯誤框，它自己也是一個視窗，`MainWindowTitle` 會顯示成
 exe 路徑而非 `QElectroTech`——別把錯誤框誤判成 app 成功啟動（見坑 5）。
+**另注意螢幕保護**：自動化截圖時久等會被純色螢保蓋住（誤以為 app 卡住/藍屏）；截圖前送真實鍵鼠輸入（如 keybd_event 按 Shift）關掉螢保。
 
 ---
 

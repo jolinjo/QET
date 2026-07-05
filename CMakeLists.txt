@@ -17,7 +17,7 @@
 cmake_minimum_required(VERSION 3.5...4.2)
 
 project(qelectrotech
-  VERSION 0.100.73
+  VERSION 0.100.75
   DESCRIPTION "QET is a CAD/CAE editor focusing on schematics drawing features."
   HOMEPAGE_URL "https://qelectrotech.org/"
   LANGUAGES CXX)
@@ -65,7 +65,10 @@ qt_add_executable(
   ${QET_DIR}/qelectrotech.qrc
   )
 
-target_compile_definitions(${PROJECT_NAME} PRIVATE QET_PROJECT_VERSION="${PROJECT_VERSION}")
+# Scope the version define to qetversion.cpp only, so bumping the project version
+# recompiles just that one file (+ relink) instead of the whole target.
+set_source_files_properties(${QET_DIR}/sources/qetversion.cpp PROPERTIES
+  COMPILE_DEFINITIONS QET_PROJECT_VERSION="${PROJECT_VERSION}")
 
 if(APPLE)
   set_target_properties(${PROJECT_NAME} PROPERTIES
