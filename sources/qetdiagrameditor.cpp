@@ -1187,6 +1187,9 @@ void QETDiagramEditor::setUpToolBar()
 		m_add_item_tool_bar, m_depth_tool_bar };
 	for (QToolBar *tool_bar : top_toolbars) {
 		tool_bar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+		// 統一圖示尺寸：QET 圖示原生高度不一，text-under-icon 會把矮圖示的
+		// 文字往上擠而對不齊；固定成同高度框讓所有文字基線一致。
+		tool_bar->setIconSize(QSize(24, 24));
 	}
 
 	addToolBar(Qt::TopToolBarArea, main_tool_bar);
