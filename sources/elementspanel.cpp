@@ -279,7 +279,7 @@ void ElementsPanel::reload()
 	company_tbt_collection_item_ -> setIcon(0, company_icon);
 	company_tbt_collection_item_ -> setStatusTip(0, tr("Double-cliquez pour réduire ou développer la collection company de cartouches", "Status tip"));
 	company_tbt_collection_item_ -> setWhatsThis(0, tr("Ceci est la collection company de cartouches -- utilisez-la pour créer, stocker et éditer vos propres cartouches.", "\"What's this\" tip"));
-	if (first_reload_) company_tbt_collection_item_ -> setExpanded(true);
+	// 公司圖框預設收合，不自動展開
 
 	// load the custom title block templates collection
 	TitleBlockTemplatesCollection *custom_tbt_collection = QETApp::customTitleBlockTemplatesCollection();

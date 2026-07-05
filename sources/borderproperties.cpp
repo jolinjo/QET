@@ -29,16 +29,16 @@
 
 	\~French Initialise un objet BorderProperties avec les proprietes par
 	defaut suivantes :
-	- 17 colonnes affichees de 60.0 px de large pour 20.0px de haut
-	- 8    lignes affichees de 80.0 px de haut pour 20.0px de large
+	- 16 colonnes affichees de 100.0 px de large pour 20.0px de haut
+	- 10   lignes affichees de 101.0 px de haut pour 20.0px de large
 */
 BorderProperties::BorderProperties() :
-	columns_count(17),
-	columns_width(60.0),
+	columns_count(16),
+	columns_width(100.0),
 	columns_header_height(20.0),
 	display_columns(true),
-	rows_count(8),
-	rows_height(80.0),
+	rows_count(10),
+	rows_height(101.0),
 	rows_header_width(20.0),
 	display_rows(true)
 {

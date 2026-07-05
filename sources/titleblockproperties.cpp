@@ -189,6 +189,12 @@ TitleBlockProperties TitleBlockProperties::defaultProperties()
 	TitleBlockProperties def;
 	def.fromSettings(settings, "diagrameditor/default");
 
+	// 全新安裝（設定檔尚無預設範本）時，預設使用公司圖框範本
+	if (def.template_name.isEmpty()) {
+		def.template_name = QStringLiteral("虎氶科技-A3-橫式 v0.0.1");
+		def.collection = QET::Company;
+	}
+
 	return(def);
 }
 
