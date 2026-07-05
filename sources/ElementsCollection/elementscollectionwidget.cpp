@@ -484,8 +484,11 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 	QCoreApplication::processEvents();
 	QDir(cache_dir).removeRecursively();
 	QString log;
+	// core.longpaths=true : the company repo has very deep paths that exceed the
+	// Windows 260-char MAX_PATH; without it git checkout fails ("Filename too long").
 	if (!run_process(QStringLiteral("git"),
-			 { QStringLiteral("clone"), QStringLiteral("--depth"),
+			 { QStringLiteral("-c"), QStringLiteral("core.longpaths=true"),
+			   QStringLiteral("clone"), QStringLiteral("--depth"),
 			   QStringLiteral("1"), url, cache_dir }, QString(), &log)) {
 		fetch_progress.close();
 		QMessageBox::warning(this, tr("更新公司庫"),
