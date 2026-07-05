@@ -2748,7 +2748,7 @@ Tout les éléments et les dossier contenus dans ce dossier seront supprimés.</
     <message>
         <location filename="../sources/elementspanel.cpp" line="216"/>
         <source>Cartouches embarqués</source>
-        <translation>內建圖框</translation>
+        <translation>使用圖框</translation>
     </message>
     <message>
         <location filename="../sources/elementspanel.cpp" line="217"/>
@@ -5871,7 +5871,7 @@ Voulez-vous enregistrer les modifications ?</source>
         <location filename="../sources/qetapp.cpp" line="465"/>
         <source>Cartouches company</source>
         <comment>title of the company&apos;s 					title block templates collection</comment>
-        <translation>公司圖框</translation>
+        <translation>公司圖框範本</translation>
     </message>
     <message>
         <location filename="../sources/qetapp.cpp" line="485"/>
