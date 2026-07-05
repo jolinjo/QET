@@ -22,6 +22,7 @@
 #include <QSettings>
 #include <QToolBar>
 #include <QMenuBar>
+#include <QMenu>
 #include "qetversion.h"
 #include <QCoreApplication>
 #include "ElementsCollection/elementscollectionwidget.h"
@@ -551,8 +552,15 @@ void QETDiagramEditor::applyInterfaceFonts()
 		return f;
 	};
 
+	const QFont menu_font = regionFont("fontsize_menu");
 	if (menuBar()) {
-		menuBar()->setFont(regionFont("fontsize_menu"));
+		menuBar()->setFont(menu_font);
+	}
+	// The drop-down QMenus are top-level popups parented to the window, not to
+	// the menu bar, so they don't inherit the menu-bar font — set them directly.
+	const QList<QMenu *> menus = findChildren<QMenu *>();
+	for (QMenu *m : menus) {
+		m->setFont(menu_font);
 	}
 	const QList<QToolBar *> toolbars = findChildren<QToolBar *>();
 	for (QToolBar *tb : toolbars) {
@@ -563,6 +571,11 @@ void QETDiagramEditor::applyInterfaceFonts()
 	}
 	if (m_qdw_elmt_collection) {
 		m_qdw_elmt_collection->setFont(regionFont("fontsize_library"));
+	}
+	// The collection tree/grid views hold explicit fonts that don't inherit from
+	// the dock, so push the size into them directly.
+	if (m_element_collection_widget) {
+		m_element_collection_widget->applyLibraryFont(regionFont("fontsize_library"));
 	}
 	if (m_selection_properties_editor) {
 		m_selection_properties_editor->setFont(regionFont("fontsize_properties"));

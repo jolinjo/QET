@@ -654,12 +654,6 @@ void ElementsCollectionWidget::setUpWidget()
 	m_grid_view->setDragDropMode(QAbstractItemView::DragOnly);
 	m_grid_view->setSelectionMode(QAbstractItemView::SingleSelection);
 	m_grid_view->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
-	QSettings grid_settings;
-	const int grid_base = m_grid_view->font().pointSize() > 0
-			? m_grid_view->font().pointSize() : 9;
-	QFont grid_font = m_grid_view->font();
-	grid_font.setPointSize(grid_settings.value("fontsize_library", grid_base).toInt());
-	m_grid_view->setFont(grid_font);
 	m_grid_delegate = new GridElementDelegate(
 		[this](const QModelIndex &index) -> QString {
 			ElementCollectionItem *eci =
@@ -705,6 +699,26 @@ void ElementsCollectionWidget::setUpWidget()
 	m_progress_bar->hide();
 
 	m_context_menu = new QMenu(this);
+
+		//Apply the configured library font size to every view
+	QSettings lib_settings;
+	const int lib_base = m_tree_view->font().pointSize() > 0
+			? m_tree_view->font().pointSize() : 9;
+	QFont lib_font = m_tree_view->font();
+	lib_font.setPointSize(lib_settings.value("fontsize_library", lib_base).toInt());
+	applyLibraryFont(lib_font);
+}
+
+/**
+	@brief ElementsCollectionWidget::applyLibraryFont
+	Apply a font (size) to all element/macros views of the collection panel.
+*/
+void ElementsCollectionWidget::applyLibraryFont(const QFont &font)
+{
+	if (m_tree_view) m_tree_view->setFont(font);
+	if (m_grid_view) m_grid_view->setFont(font);
+	if (m_macros_tree_view) m_macros_tree_view->setFont(font);
+	if (m_grid_view) updateGridGeometry();
 }
 
 /**

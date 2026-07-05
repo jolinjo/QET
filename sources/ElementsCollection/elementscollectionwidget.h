@@ -57,6 +57,7 @@ class ElementsCollectionWidget : public QWidget
 		void removeProject (QETProject *project);
 		void highlightUnusedElement();
 		void setCurrentLocation(const ElementsLocation &location);
+		void applyLibraryFont(const QFont &font);
 
 	protected:
 		void leaveEvent(QEvent *event) override;
