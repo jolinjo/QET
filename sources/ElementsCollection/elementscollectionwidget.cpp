@@ -529,7 +529,10 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 		  QStringLiteral("--name-only"), QStringLiteral("HEAD"),
 		  QStringLiteral("elements-company/") }, cache_dir, &elem_tree);
 	const QStringList elem_paths = elem_tree.split(QChar('\n'), Qt::SkipEmptyParts);
+	fetch_progress.setRange(0, elem_paths.count() + 1);
+	int fetch_done = 0;
 	for (const QString &path : elem_paths) {
+		fetch_progress.setValue(fetch_done++);
 		QCoreApplication::processEvents();
 		const QString sub = path.section(QChar('/'), -1).trimmed();
 		if (sub.isEmpty()) continue;
@@ -580,6 +583,7 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 		items << it;
 	}
 
+	fetch_progress.setValue(fetch_progress.maximum());
 	fetch_progress.close();
 
 	if (items.isEmpty()) {
@@ -653,9 +657,11 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 	if (selected.isEmpty()) return;
 
 		//4) download the selection, then mirror it into the data dir
-	QProgressDialog work_progress(tr("更新中…"), QString(), 0, 0, this);
+	QProgressDialog work_progress(
+		tr("下載選取的庫…"), QString(), 0, selected.count() + 1, this);
 	work_progress.setWindowModality(Qt::ApplicationModal);
 	work_progress.setMinimumDuration(0);
+	work_progress.setValue(0);
 	work_progress.show();
 	QCoreApplication::processEvents();
 
@@ -678,7 +684,12 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 		return;
 	}
 
+	work_progress.setValue(1);
+	work_progress.setLabelText(tr("套用更新…"));
+	QCoreApplication::processEvents();
+
 	QStringList updated;
+	int mirror_done = 1;
 	for (const LibItem &it : selected) {
 		const QString source = cache_dir % QChar('/') % it.repo_sub;
 		const QString target = data_dir % QChar('/') % it.target_sub;
@@ -692,6 +703,8 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 		updated << (it.online_ver.isEmpty()
 			? it.display
 			: it.display % QChar(' ') % it.online_ver);
+		work_progress.setValue(++mirror_done);
+		QCoreApplication::processEvents();
 	}
 	// remove the metadata cache : it is only needed during this operation and
 	// leaving a nested git repo under the data dir just pollutes it.
