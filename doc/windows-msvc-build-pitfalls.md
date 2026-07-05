@@ -112,16 +112,54 @@ cmake --build build --parallel
 windeployqt --release build\qelectrotech.exe
 ```
 
-## 建置加速：避免「改版號就全量重編」
+## 建置加速（給 AI：先讀完，別再重新摸索一次）
 
-每次改 `CMakeLists.txt`（例如 bump 版號）都會 reconfigure，預設會**把 KF6 整包重編**（438 目標、~4 分）。兩個原因＋解法：
+> 這段記錄了「編譯到底多久」「哪些是誤判」「怎麼一路改善到現在」。2026-07-05 大改：導入 **sccache**、**重新啟用 PCH**。
 
-1. **PCH 重生**：reconfigure 會重生 KF6 的 precompiled header（`cmake_pch.cxx`），使 KF6 全部物件失效重編。
-   → configure 時加 **`-DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON`**（見 `_deps/configure_qet.bat`），reconfigure 後 `ninja: no work to do`。
-2. **版號 define 綁在整個 target**：`target_compile_definitions(... QET_PROJECT_VERSION=...)` 讓每個 QET 檔的編譯命令都含版號 → 改版號重編全部 ~400 個 QET 檔。
-   → 改成只綁 `qetversion.cpp`（`set_source_files_properties(sources/qetversion.cpp PROPERTIES COMPILE_DEFINITIONS ...)`；QET_PROJECT_VERSION 只有它用）。
+### 現行方案（結論先講）
 
-兩者合併後，**改版號只重編 `qetversion.cpp` + relink，約 6 秒**。純程式碼改動（不動 CMakeLists）本就走增量、不碰 KF6。
+1. **sccache 編譯器快取**（最大功臣）：`C:\tools\sccache\sccache.exe`（v0.8.2 可攜）。
+   - `winenv.bat`：把 `C:\tools\sccache` 加進 PATH，設 `SCCACHE_DIR=C:\tools\sccache\cache`、`SCCACHE_CACHE_SIZE=15G`。
+   - `configure_qet.bat`：加 `-DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache`。
+   - build 是 **Release（無 `/Zi`）** → sccache **不需要** `/Z7`（Debug 才需 `CMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded`）。
+   - 以「前處理後內容」為 key 快取 `.obj`：reconfigure/切分支/清 build 後，內容沒變的檔直接命中、不重編。
+   - 指令：`sccache --show-stats`（看命中率）、`--zero-stats`（歸零）、`--start-server`。
+2. **PCH 已重新啟用**（移除了 `-DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON`）。加速那 ~400 個都 include Qt 標頭的小檔。
+3. **版號 define 只綁 `qetversion.cpp`**（`set_source_files_properties(... COMPILE_DEFINITIONS QET_PROJECT_VERSION=...)`）——保留，讓 bump 版號只重編這一個檔，不波及其他。
+
+**實測（2026-07-05）**：
+
+| 情境 | 耗時 |
+|---|---|
+| 版號 / 小改 1 檔（ninja 自動 reconfigure） | **~21s**（編 1–2 檔 + relink） |
+| 乾淨狀態下手動全 `configure_qet.bat` 後 ninja | ~6s（判定 0 檔需編） |
+| `ninja -t clean` 後全量重編（sccache **98.6% 命中**） | **~143s**（原 ~14 分，約 6 倍） |
+| 冷快取第一次全量（灌快取，一次性） | ~854s（比一般全量還慢，因 sccache 要雜湊+存每個 obj） |
+
+**PCH + sccache 相容嗎？** 相容。clean 全量重編仍 **98.6% 命中**，PCH 沒拖垮快取。當初關 PCH 只是為了躲「reconfigure 全重編」，有 sccache 後那理由消失。
+
+### 重要誤判與真相（別再犯）
+
+1. **「改 CMakeLists / 版號會觸發 KF6 全量重編」——半真半假。**
+   真相：**乾淨狀態**下 reconfigure 後 ninja 常判定「0 檔需編」。之前看到的「全量重編（連 SingleApplication/KF6 都重建）」，實際是**我自己砍斷（taskkill）進行中的 build，留下不一致狀態**造成的，不是 reconfigure 本身。
+   → 版號/小改動**直接 `ninja`**（走 `build_timed.sh`），讓 ninja 自動做最小 reconfigure；**不要手動跑 `configure_qet.bat` 全配置**（那才會重新產生 autogen/qrc 等）。只有改了 CMake 結構、加解相依時才需手動全 configure。
+
+2. **看到多個 `cl.exe` 就以為「並發 build 互卡」而 taskkill ——錯。**
+   單一 ninja build 本來就會開多個 `cl.exe`（= CPU 核心數）平行編譯，那是正常的。曾把一個編到 434/437 快好的 build 誤砍掉，白費一輪。**確認真的有兩個獨立 build 在跑**（例如自己背景重複開了）才清。
+
+3. **用「絕對時間 ×3」當卡死上限 ——會誤砍慢但正常的 build。**
+   曾把預期設 150s、硬上限 450s，結果一個正在 299/437 前進中的 build 在 452s 被砍。
+   → `build_timed.sh` 已改用**進度停滯偵測**：ninja 的 `[N/M]` 進度行有在變就不砍，只有**連續 180s 沒任何進度且沒有 `cl.exe`** 才判卡死。
+
+4. **正在執行的 shell 腳本，不要編輯。**
+   bash 是邊執行邊按 byte offset 讀檔；一個 build 還在跑時去改 `build_timed.sh`，把後段位移改掉 → 該實例 `unexpected EOF` 死掉（ninja 子行程雖仍自行跑完）。要改腳本，等它跑完再改。
+
+5. **全螢幕純色 ≠ app 卡住，是螢幕保護。** 見「驗證」段（截圖前送 Shift 關螢保）。
+
+### 自我監控建置腳本 `_deps/build_timed.sh`
+
+用法：`bash _deps/build_timed.sh <預期秒數> "<說明>"`（建議 `run_in_background`）。它會：
+先 taskkill 清殘留確保單一 build → 記時間戳 → 到預期時間仍沒完成就自我診斷（`cl.exe` 數量、是否在重編 KF6、最新進度）→ 進度停滯 180s 判卡死中止 → 結束後自動判定 ✅正常/⚠比預期慢2倍/❌編譯錯誤，並印實際秒數與版本。**每次編譯前先跟使用者報預期秒數，能量就實際 `date` 計時。**
 
 ## 驗證
 
