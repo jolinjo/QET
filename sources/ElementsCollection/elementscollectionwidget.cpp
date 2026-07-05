@@ -395,11 +395,9 @@ namespace {
 		return m.hasMatch() ? m.captured(0) : QString();
 	}
 
-	/// Preferred display name (zh_TW > zh > en > any) from a qet_directory file.
-	QString qetlib_dir_name(const QString &qet_directory_path) {
-		QFile f(qet_directory_path);
-		if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return QString();
-		QXmlStreamReader xml(&f);
+	/// Preferred display name (zh_TW > zh > en > any) from qet_directory XML text.
+	QString qetlib_name_from_xml(const QString &xml_text) {
+		QXmlStreamReader xml(xml_text);
 		QHash<QString, QString> names;
 		while (!xml.atEnd()) {
 			if (xml.readNext() == QXmlStreamReader::StartElement
@@ -415,6 +413,13 @@ namespace {
 			if (names.contains(l)) return names.value(l);
 		}
 		return names.isEmpty() ? QString() : *names.constBegin();
+	}
+
+	/// Preferred display name from a qet_directory file on disk.
+	QString qetlib_dir_name(const QString &qet_directory_path) {
+		QFile f(qet_directory_path);
+		if (!f.open(QIODevice::ReadOnly | QIODevice::Text)) return QString();
+		return qetlib_name_from_xml(QString::fromUtf8(f.readAll()));
 	}
 
 	/// Highest version token among the *.titleblock files of a directory.
@@ -475,7 +480,9 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 	const QString cache_dir =
 		data_dir % QStringLiteral("/library-git-cache");
 
-		//1) fetch the online repository (fresh shallow clone)
+		//1) fetch only the repository metadata (blobless, no working files) so
+		//   listing is fast : file contents are downloaded later, on demand, only
+		//   for the libraries the user actually updates.
 	QProgressDialog fetch_progress(
 		tr("讀取線上公司庫…"), QString(), 0, 0, this);
 	fetch_progress.setWindowModality(Qt::ApplicationModal);
@@ -485,11 +492,13 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 	QDir(cache_dir).removeRecursively();
 	QString log;
 	// core.longpaths=true : the company repo has very deep paths that exceed the
-	// Windows 260-char MAX_PATH; without it git checkout fails ("Filename too long").
+	// Windows 260-char MAX_PATH; blob:none + no-checkout : metadata-only clone.
 	if (!run_process(QStringLiteral("git"),
 			 { QStringLiteral("-c"), QStringLiteral("core.longpaths=true"),
 			   QStringLiteral("clone"), QStringLiteral("--depth"),
-			   QStringLiteral("1"), url, cache_dir }, QString(), &log)) {
+			   QStringLiteral("1"), QStringLiteral("--filter=blob:none"),
+			   QStringLiteral("--no-checkout"), QStringLiteral("--single-branch"),
+			   url, cache_dir }, QString(), &log)) {
 		fetch_progress.close();
 		QMessageBox::warning(this, tr("更新公司庫"),
 			tr("讀取線上倉庫失敗：\n%1").arg(log.right(1500)));
@@ -497,7 +506,7 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 	}
 	fetch_progress.close();
 
-		//2) enumerate libraries + online/local versions
+		//2) enumerate libraries + online/local versions from the git tree
 	struct LibItem {
 		QString kind;       // "elements" | "titleblocks"
 		QString repo_sub;
@@ -508,18 +517,31 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 	};
 	QList<LibItem> items;
 
-	const QString elem_root = cache_dir % QStringLiteral("/elements-company");
-	const QStringList elem_subs = QDir(elem_root).entryList(
-		QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
-	for (const QString &sub : elem_subs) {
-		const QString qd = elem_root % QChar('/') % sub
-			% QStringLiteral("/qet_directory");
-		if (!QFileInfo::exists(qd)) continue;
+	// element collections : each direct subdir of elements-company that has a
+	// qet_directory. ls-tree lists the tree entries; git show reads the file.
+	QString elem_tree;
+	run_process(QStringLiteral("git"),
+		{ QStringLiteral("-c"), QStringLiteral("core.quotepath=false"),
+		  QStringLiteral("ls-tree"), QStringLiteral("-d"),
+		  QStringLiteral("--name-only"), QStringLiteral("HEAD"),
+		  QStringLiteral("elements-company/") }, cache_dir, &elem_tree);
+	const QStringList elem_paths = elem_tree.split(QChar('\n'), Qt::SkipEmptyParts);
+	for (const QString &path : elem_paths) {
+		const QString sub = path.section(QChar('/'), -1).trimmed();
+		if (sub.isEmpty()) continue;
+		QString qd_xml;
+		if (!run_process(QStringLiteral("git"),
+			{ QStringLiteral("show"),
+			  QStringLiteral("HEAD:elements-company/") % sub
+				  % QStringLiteral("/qet_directory") },
+			cache_dir, &qd_xml)) {
+			continue; // no qet_directory in this subdir : not a library
+		}
 		LibItem it;
 		it.kind = QStringLiteral("elements");
 		it.repo_sub = QStringLiteral("elements-company/") % sub;
 		it.target_sub = it.repo_sub;
-		it.display = qetlib_dir_name(qd);
+		it.display = qetlib_name_from_xml(qd_xml);
 		if (it.display.isEmpty()) it.display = sub;
 		it.online_ver = qetlib_version(it.display);
 		const QString local_qd = data_dir % QChar('/') % it.target_sub
@@ -528,14 +550,27 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 			? qetlib_version(qetlib_dir_name(local_qd)) : QString();
 		items << it;
 	}
-	if (QFileInfo::exists(cache_dir % QStringLiteral("/titleblocks-company"))) {
+
+	// company title blocks : the whole titleblocks-company, versioned by filename
+	QString tb_tree;
+	if (run_process(QStringLiteral("git"),
+		{ QStringLiteral("-c"), QStringLiteral("core.quotepath=false"),
+		  QStringLiteral("ls-tree"), QStringLiteral("--name-only"),
+		  QStringLiteral("HEAD"), QStringLiteral("titleblocks-company/") },
+		cache_dir, &tb_tree)
+	    && !tb_tree.trimmed().isEmpty()) {
+		QString online_ver;
+		const QStringList tb_files = tb_tree.split(QChar('\n'), Qt::SkipEmptyParts);
+		for (const QString &f : tb_files) {
+			const QString v = qetlib_version(f.section(QChar('/'), -1));
+			if (v > online_ver) online_ver = v;
+		}
 		LibItem it;
 		it.kind = QStringLiteral("titleblocks");
 		it.repo_sub = QStringLiteral("titleblocks-company");
 		it.target_sub = it.repo_sub;
 		it.display = tr("公司圖框");
-		it.online_ver = qetlib_titleblocks_version(
-			cache_dir % QStringLiteral("/titleblocks-company"));
+		it.online_ver = online_ver;
 		it.local_ver = qetlib_titleblocks_version(
 			data_dir % QStringLiteral("/titleblocks-company"));
 		items << it;
@@ -638,6 +673,25 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 		work_progress.close();
 		QMessageBox::warning(this, tr("更新公司庫"),
 			tr("備份失敗：\n%1").arg(log.right(1500)));
+		return;
+	}
+
+	// download (checkout) only the selected paths from the metadata-only clone
+	QStringList checkout_paths;
+	for (const LibItem &it : selected) checkout_paths << it.repo_sub;
+	run_process(QStringLiteral("git"),
+		{ QStringLiteral("sparse-checkout"), QStringLiteral("init"),
+		  QStringLiteral("--no-cone") }, cache_dir, &log);
+	if (!run_process(QStringLiteral("git"),
+		QStringList { QStringLiteral("-c"), QStringLiteral("core.longpaths=true"),
+		  QStringLiteral("sparse-checkout"), QStringLiteral("set"),
+		  QStringLiteral("--no-cone") } + checkout_paths, cache_dir, &log)
+	    || !run_process(QStringLiteral("git"),
+		{ QStringLiteral("-c"), QStringLiteral("core.longpaths=true"),
+		  QStringLiteral("checkout") }, cache_dir, &log)) {
+		work_progress.close();
+		QMessageBox::warning(this, tr("更新公司庫"),
+			tr("下載選取的庫失敗：\n%1").arg(log.right(1500)));
 		return;
 	}
 
