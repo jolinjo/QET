@@ -566,22 +566,34 @@ void QETDiagramEditor::applyInterfaceFonts()
 	for (QToolBar *tb : toolbars) {
 		tb->setFont(regionFont("fontsize_toolbar"));
 	}
-	if (qdw_pa) {
-		qdw_pa->setFont(regionFont("fontsize_projectpanel"));
-	}
+
+	// A QDockWidget::setFont only restyles its own title bar; the content widgets
+	// (tree views, filter fields, …) do NOT inherit it, so apply the font to the
+	// dock, its content widget and every descendant explicitly.
+	auto applyToDock = [&](QDockWidget *dock, const QString &key) {
+		if (!dock) return;
+		const QFont f = regionFont(key);
+		dock->setFont(f);
+		if (QWidget *content = dock->widget()) {
+			content->setFont(f);
+			const QList<QWidget *> kids = content->findChildren<QWidget *>();
+			for (QWidget *k : kids) {
+				k->setFont(f);
+			}
+		}
+	};
+
+	applyToDock(qdw_pa, "fontsize_projectpanel");
+	applyToDock(m_selection_properties_editor, "fontsize_properties");
+	applyToDock(m_autonumbering_dock, "fontsize_properties");
+
+	// The collection panel needs its grid geometry recomputed after a font change,
+	// so it exposes a dedicated method rather than the generic descendant sweep.
 	if (m_qdw_elmt_collection) {
 		m_qdw_elmt_collection->setFont(regionFont("fontsize_library"));
 	}
-	// The collection tree/grid views hold explicit fonts that don't inherit from
-	// the dock, so push the size into them directly.
 	if (m_element_collection_widget) {
 		m_element_collection_widget->applyLibraryFont(regionFont("fontsize_library"));
-	}
-	if (m_selection_properties_editor) {
-		m_selection_properties_editor->setFont(regionFont("fontsize_properties"));
-	}
-	if (m_autonumbering_dock) {
-		m_autonumbering_dock->setFont(regionFont("fontsize_properties"));
 	}
 }
 

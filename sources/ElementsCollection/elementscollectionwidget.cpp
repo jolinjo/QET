@@ -715,9 +715,13 @@ void ElementsCollectionWidget::setUpWidget()
 */
 void ElementsCollectionWidget::applyLibraryFont(const QFont &font)
 {
-	if (m_tree_view) m_tree_view->setFont(font);
-	if (m_grid_view) m_grid_view->setFont(font);
-	if (m_macros_tree_view) m_macros_tree_view->setFont(font);
+	// Apply to the widget and every descendant (tree/grid/macros views, search
+	// field, tabs) — none of them reliably inherit the dock font.
+	setFont(font);
+	const QList<QWidget *> kids = findChildren<QWidget *>();
+	for (QWidget *k : kids) {
+		k->setFont(font);
+	}
 	if (m_grid_view) updateGridGeometry();
 }
 
