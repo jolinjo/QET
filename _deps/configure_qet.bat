@@ -5,7 +5,8 @@ set "SQ=C:\Users\JasonLin\Documents\ClaudeCode\QET\_deps\sqlite\sqlite-amalgamat
 cmake -G Ninja -S . -B build ^
   -DCMAKE_BUILD_TYPE=Release ^
   -DFETCHCONTENT_UPDATES_DISCONNECTED=ON ^
-  -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON ^
+  -DCMAKE_C_COMPILER_LAUNCHER=sccache ^
+  -DCMAKE_CXX_COMPILER_LAUNCHER=sccache ^
   -DBUILD_KF6=ON ^
   -DBUILD_PUGIXML=ON ^
   -DQET_EXAMPLES_PATH=examples/ ^

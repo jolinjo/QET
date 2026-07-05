@@ -21,24 +21,37 @@ echo "[$(date +%H:%M:%S)] 開始「$DESC」，預期 ~${EXP}s，硬上限 $((EXP
 cmd //c "call $QWIN\\winenv.bat && cd /d $QWIN && ninja -C build" > "$LOG" 2>&1 &
 NPID=$!
 
-DEADLINE=$((START+EXP)); HARDKILL=$((START+EXP*3)); WARNED=0
+# 卡死判定改用「進度停滯」而非絕對時間：有在前進(ninja [N/M] 有變)就不砍，
+# 只有連續 STALL_LIMIT 秒沒任何進度、且沒有 cl.exe 在跑，才判定卡死。
+DEADLINE=$((START+EXP)); WARNED=0
+STALL_LIMIT=180                 # 連續無進度超過這麼久才算卡死
+BACKSTOP=$((START+EXP*6+600))   # 極端保險上限，避免無限等待
+LAST_PROG=""; LAST_CHANGE=$START
 while kill -0 "$NPID" 2>/dev/null; do
   sleep 5
   NOW=$(date +%s); EL=$((NOW-START))
-  # 到預期時間仍沒完成 -> 自我診斷一次
+  CUR=$(tail -1 "$LOG" | tr -d '\0')
+  if [ "$CUR" != "$LAST_PROG" ]; then LAST_PROG="$CUR"; LAST_CHANGE=$NOW; fi
+  STALL=$((NOW-LAST_CHANGE))
+  NCL=$(tasklist //FI "IMAGENAME eq cl.exe" 2>/dev/null | grep -ci "cl.exe")
+  # 到預期時間仍沒完成 -> 診斷一次（僅提示，不中止；慢≠卡死）
   if [ "$NOW" -ge "$DEADLINE" ] && [ "$WARNED" -eq 0 ]; then
     WARNED=1
-    echo "[${EL}s] ⚠ 已達預期(${EXP}s)仍未完成，自我診斷："
-    NCL=$(tasklist //FI "IMAGENAME eq cl.exe" 2>/dev/null | grep -ci "cl.exe")
+    echo "[${EL}s] ⚠ 已達預期(${EXP}s)仍未完成（仍在前進，不中止）："
     echo "   cl.exe 數量: $NCL"
     if grep -qiE "kwidgetsaddons|kcoreaddons|KF6[A-Za-z]" "$LOG"; then
-      echo "   ‼ 偵測到 KF6 在重編（純程式/版號改動不該發生，可能 reconfigure 觸發全量重編）"
+      echo "   ‼ 偵測到 KF6 在重編（純程式/版號改動不該發生，可能被 reconfigure 觸發全量重編）"
     fi
-    echo "   最新進度: $(tail -1 "$LOG" | tr -d '\0')"
+    echo "   最新進度: $CUR"
   fi
-  # 硬上限 -> 判定卡死並中止
-  if [ "$NOW" -ge "$HARDKILL" ]; then
-    echo "[${EL}s] ⛔ 超過硬上限($((EXP*3))s)，判定卡死，中止建置"
+  # 真正卡死：長時間無進度且無編譯行程
+  if [ "$STALL" -ge "$STALL_LIMIT" ] && [ "$NCL" -eq 0 ]; then
+    echo "[${EL}s] ⛔ 連續 ${STALL}s 無進度且無 cl.exe，判定卡死，中止。停在: $CUR"
+    taskkill //F //IM ninja.exe //IM cl.exe >/dev/null 2>&1
+    break
+  fi
+  if [ "$NOW" -ge "$BACKSTOP" ]; then
+    echo "[${EL}s] ⛔ 觸及極端保險上限，中止。停在: $CUR"
     taskkill //F //IM ninja.exe //IM cl.exe >/dev/null 2>&1
     break
   fi
