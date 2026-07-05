@@ -714,6 +714,9 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 	QMessageBox::information(this, tr("更新公司庫"),
 		tr("已更新：\n%1").arg(updated.join(QChar('\n'))));
 
+	// drop the cached element pictures so updated elements are re-rendered
+	// (they are keyed by UUID, so a file change alone would keep the old image).
+	ElementPictureFactory::dropInstance();
 	reload();
 	if (QETDiagramEditor *editor = QETApp::diagramEditorAncestorOf(this)) {
 		editor->reloadOldElementPanel();
