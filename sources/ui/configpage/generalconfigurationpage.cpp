@@ -64,9 +64,12 @@ GeneralConfigurationPage::GeneralConfigurationPage(QWidget *parent) :
 			new QSpacerItem(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding),
 			20, 0, 1, 2);
 	}
-	// 這些在垂直版面裡，隱藏即可正常收合：視窗/分頁模式、元件管理整段
+	// 這些在垂直版面裡，隱藏即可正常收合：視窗/分頁模式、HDPI 捨入策略
+	// （實驗性、易誤解，公司版移除）、以及元件管理整段
 	const QList<QWidget *> vbox_hidden {
+		ui->line_2,
 		ui->m_use_windows_mode_rb, ui->m_use_tab_mode_rb, ui->line_4,
+		ui->m_hdpi_round_policy_widget,
 		ui->groupBox_3,
 	};
 	for (QWidget *w : vbox_hidden) {
