@@ -53,7 +53,6 @@
 #include <QMessageBox>
 #include <QPainter>
 #include <QProcess>
-#include <QProgressDialog>
 #include <QPicture>
 #include <QStyledItemDelegate>
 #include <functional>
@@ -480,15 +479,32 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 	const QString cache_dir =
 		data_dir % QStringLiteral("/library-git-cache");
 
+		//inline progress shown right under the「更新公司庫」button (no popup dialog)
+	auto sync_begin = [this](const QString &text) {
+		m_sync_status->setText(text);
+		m_sync_progress->setRange(0, 0);   // indeterminate (busy)
+		m_sync_status->show();
+		m_sync_progress->show();
+		QCoreApplication::processEvents();
+	};
+	auto sync_text  = [this](const QString &text) {
+		m_sync_status->setText(text);
+		QCoreApplication::processEvents();
+	};
+	auto sync_range = [this](int mn, int mx) { m_sync_progress->setRange(mn, mx); };
+	auto sync_value = [this](int v) {
+		m_sync_progress->setValue(v);
+		QCoreApplication::processEvents();
+	};
+	auto sync_end   = [this]() {
+		m_sync_status->hide();
+		m_sync_progress->hide();
+	};
+
 		//1) fetch only the repository metadata (blobless, no working files) so
 		//   listing is fast : file contents are downloaded later, on demand, only
 		//   for the libraries the user actually updates.
-	QProgressDialog fetch_progress(
-		tr("讀取線上公司庫…"), QString(), 0, 0, this);
-	fetch_progress.setWindowModality(Qt::ApplicationModal);
-	fetch_progress.setMinimumDuration(0);
-	fetch_progress.show();
-	QCoreApplication::processEvents();
+	sync_begin(tr("讀取線上公司庫…"));
 	QDir(cache_dir).removeRecursively();
 	QString log;
 	// core.longpaths=true : the company repo has very deep paths that exceed the
@@ -499,14 +515,14 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 			   QStringLiteral("1"), QStringLiteral("--filter=blob:none"),
 			   QStringLiteral("--no-checkout"), QStringLiteral("--single-branch"),
 			   url, cache_dir }, QString(), &log)) {
-		fetch_progress.close();
+		sync_end();
 		QMessageBox::warning(this, tr("更新公司庫"),
 			tr("讀取線上倉庫失敗：\n%1").arg(log.right(1500)));
 		return;
 	}
 	// keep the dialog up : the version comparison below fetches a few blobs on
 	// demand over the network, which would otherwise look like a frozen UI.
-	fetch_progress.setLabelText(tr("比對線上與本機版本…"));
+	sync_text(tr("比對線上與本機版本…"));
 	QCoreApplication::processEvents();
 
 		//2) enumerate libraries + online/local versions from the git tree
@@ -529,10 +545,10 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 		  QStringLiteral("--name-only"), QStringLiteral("HEAD"),
 		  QStringLiteral("elements-company/") }, cache_dir, &elem_tree);
 	const QStringList elem_paths = elem_tree.split(QChar('\n'), Qt::SkipEmptyParts);
-	fetch_progress.setRange(0, elem_paths.count() + 1);
+	sync_range(0, elem_paths.count() + 1);
 	int fetch_done = 0;
 	for (const QString &path : elem_paths) {
-		fetch_progress.setValue(fetch_done++);
+		sync_value(fetch_done++);
 		QCoreApplication::processEvents();
 		const QString sub = path.section(QChar('/'), -1).trimmed();
 		if (sub.isEmpty()) continue;
@@ -583,8 +599,8 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 		items << it;
 	}
 
-	fetch_progress.setValue(fetch_progress.maximum());
-	fetch_progress.close();
+	sync_value(m_sync_progress->maximum());
+	sync_end();
 
 	if (items.isEmpty()) {
 		QMessageBox::information(this, tr("更新公司庫"),
@@ -657,13 +673,9 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 	if (selected.isEmpty()) return;
 
 		//4) download the selection, then mirror it into the data dir
-	QProgressDialog work_progress(
-		tr("下載選取的庫…"), QString(), 0, selected.count() + 1, this);
-	work_progress.setWindowModality(Qt::ApplicationModal);
-	work_progress.setMinimumDuration(0);
-	work_progress.setValue(0);
-	work_progress.show();
-	QCoreApplication::processEvents();
+	sync_begin(tr("下載選取的庫…"));
+	sync_range(0, selected.count() + 1);
+	sync_value(0);
 
 	// download (checkout) only the selected paths from the metadata-only clone
 	QStringList checkout_paths;
@@ -678,14 +690,14 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 	    || !run_process(QStringLiteral("git"),
 		{ QStringLiteral("-c"), QStringLiteral("core.longpaths=true"),
 		  QStringLiteral("checkout") }, cache_dir, &log)) {
-		work_progress.close();
+		sync_end();
 		QMessageBox::warning(this, tr("更新公司庫"),
 			tr("下載選取的庫失敗：\n%1").arg(log.right(1500)));
 		return;
 	}
 
-	work_progress.setValue(1);
-	work_progress.setLabelText(tr("套用更新…"));
+	sync_value(1);
+	sync_text(tr("套用更新…"));
 	QCoreApplication::processEvents();
 
 	QStringList updated;
@@ -695,7 +707,7 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 		const QString target = data_dir % QChar('/') % it.target_sub;
 		if (!QFileInfo::exists(source)) continue;
 		if (!qetlib_mirror(source, target)) {
-			work_progress.close();
+			sync_end();
 			QMessageBox::warning(this, tr("更新公司庫"),
 				tr("更新「%1」失敗。").arg(it.display));
 			return;
@@ -703,13 +715,13 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 		updated << (it.online_ver.isEmpty()
 			? it.display
 			: it.display % QChar(' ') % it.online_ver);
-		work_progress.setValue(++mirror_done);
+		sync_value(++mirror_done);
 		QCoreApplication::processEvents();
 	}
 	// remove the metadata cache : it is only needed during this operation and
 	// leaving a nested git repo under the data dir just pollutes it.
 	QDir(cache_dir).removeRecursively();
-	work_progress.close();
+	sync_end();
 
 	QMessageBox::information(this, tr("更新公司庫"),
 		tr("已更新：\n%1").arg(updated.join(QChar('\n'))));
@@ -931,6 +943,16 @@ void ElementsCollectionWidget::setUpWidget()
 	connect(update_lib_btn, &QPushButton::clicked,
 		this, &ElementsCollectionWidget::updateLibraryFromGit);
 	m_main_vlayout->addWidget(update_lib_btn);
+
+		//更新公司庫的進度：直接內嵌在更新按鈕下方（狀態文字 + 進度條），不另跳對話框
+	m_sync_status = new QLabel(this);
+	m_sync_status->setWordWrap(true);
+	m_sync_status->hide();
+	m_main_vlayout->addWidget(m_sync_status);
+	m_sync_progress = new QProgressBar(this);
+	m_sync_progress->hide();
+	m_main_vlayout->addWidget(m_sync_progress);
+
 	m_main_vlayout->addWidget(m_search_field);
 	m_main_vlayout->addWidget(m_tab_widget);
 
@@ -1605,8 +1627,13 @@ void ElementsCollectionWidget::search()
 		return;
 	}
 
-		//start the search when text have at least 3 letters.
-	if (text.count() < 3) {
+		//start the search when text have at least 3 letters (latin).
+		//CJK 詞彙很短（常 1-2 字），含 CJK 字元時放寬到 1 字即可搜尋。
+	bool has_cjk = false;
+	for (const QChar &c : text) {
+		if (c.unicode() >= 0x2E80) { has_cjk = true; break; }
+	}
+	if (!has_cjk && text.count() < 3) {
 		return;
 	}
 

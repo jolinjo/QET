@@ -35,6 +35,7 @@ class QLineEdit;
 class QListView;
 class ElementCollectionItem;
 class QProgressBar;
+class QLabel;
 class QETProject;
 class ElementsTreeView;
 
@@ -116,6 +117,8 @@ class ElementsCollectionWidget : public QWidget
 		QModelIndex m_index_at_context_menu;
 		QModelIndex m_showed_index;
 		QProgressBar *m_progress_bar;
+		QLabel *m_sync_status = nullptr;       // 更新公司庫：按鈕下方內嵌狀態文字
+		QProgressBar *m_sync_progress = nullptr; // 更新公司庫：按鈕下方內嵌進度條
 
 		QAction *m_open_dir,
 				*m_edit_element,
