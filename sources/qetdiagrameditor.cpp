@@ -25,6 +25,61 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QIcon>
+#include <QProxyStyle>
+#include <QStyleOptionToolButton>
+
+namespace {
+// 讓「圖示在上、文字在下」的工具列按鈕，文字固定貼在按鈕底部、圖示置中於上方，
+// 使所有標籤落在同一底線——不受各圖示原生高度不一影響。
+class ToolBarBottomTextStyle : public QProxyStyle
+{
+public:
+	explicit ToolBarBottomTextStyle(QObject *parent = nullptr) : QProxyStyle()
+	{ setParent(parent); }
+
+	void drawControl(ControlElement ce, const QStyleOption *opt,
+					 QPainter *p, const QWidget *w) const override
+	{
+		const auto *tb = qstyleoption_cast<const QStyleOptionToolButton *>(opt);
+		if (ce != CE_ToolButtonLabel || !tb
+			|| tb->toolButtonStyle != Qt::ToolButtonTextUnderIcon
+			|| tb->icon.isNull() || tb->text.isEmpty()) {
+			QProxyStyle::drawControl(ce, opt, p, w);
+			return;
+		}
+
+		QRect rect = tb->rect;
+		if (tb->state & (State_Sunken | State_On)) {
+			rect.translate(proxy()->pixelMetric(PM_ButtonShiftHorizontal, tb, w),
+						   proxy()->pixelMetric(PM_ButtonShiftVertical, tb, w));
+		}
+
+		const int text_h = tb->fontMetrics.height();
+		const QRect text_rect(rect.left(), rect.bottom() - text_h + 1,
+							  rect.width(), text_h);
+
+		QIcon::Mode mode = (tb->state & State_Enabled) ? QIcon::Normal
+													   : QIcon::Disabled;
+		if (mode == QIcon::Normal && (tb->state & State_MouseOver)
+			&& (tb->activeSubControls & SC_ToolButton))
+			mode = QIcon::Active;
+		const QIcon::State st = (tb->state & State_On) ? QIcon::On : QIcon::Off;
+		const QPixmap pm = tb->icon.pixmap(tb->iconSize, mode, st);
+
+		// 圖示置中於「文字上方」的區域
+		const QRect icon_area(rect.left(), rect.top(),
+							  rect.width(), rect.height() - text_h);
+		const qreal dpr = pm.devicePixelRatio();
+		QRect ir(0, 0, qRound(pm.width() / dpr), qRound(pm.height() / dpr));
+		ir.moveCenter(icon_area.center());
+		p->drawPixmap(ir, pm);
+
+		proxy()->drawItemText(p, text_rect, Qt::AlignHCenter | Qt::AlignBottom,
+							  tb->palette, tb->state & State_Enabled, tb->text,
+							  QPalette::ButtonText);
+	}
+};
+}
 #include <QMenuBar>
 #include <QMenu>
 #include "qetversion.h"
@@ -1194,36 +1249,19 @@ void QETDiagramEditor::setUpToolBar()
 		tool_bar->setIconSize(QSize(24, 24));
 	}
 
+	// 讓 text-under-icon 的文字在按鈕底部對齊：QET 圖示是 16/22px 混合 PNG，
+	// 高度不一，QToolButton 預設把「圖示+文字」整塊置中，矮圖示的文字就偏上。
+	// 用自訂樣式改成「圖示置中、文字固定貼底」，文字一律落在同一底線。
+	QStyle *bottom_text_style = new ToolBarBottomTextStyle(this);
+	for (QToolBar *tool_bar : top_toolbars) {
+		tool_bar->setStyle(bottom_text_style);
+	}
+
 	addToolBar(Qt::TopToolBarArea, main_tool_bar);
 	addToolBar(Qt::TopToolBarArea, view_tool_bar);
 	addToolBar(Qt::TopToolBarArea, diagram_tool_bar);
 	addToolBar(Qt::TopToolBarArea, m_add_item_tool_bar);
 	addToolBar(Qt::TopToolBarArea, m_depth_tool_bar);
-
-	// 讓 text-under-icon 的文字底部對齊：QET 工具列圖示是 16/22px PNG，
-	// 高度不一，QToolButton 把「圖示+文字」整塊置中後，矮圖示的文字會偏上。
-	// 把每個按鈕圖示補成統一 24px 高、圖示靠下貼齊，文字就落在同一底線。
-	const int icon_h = 24;
-	for (QToolBar *tool_bar : top_toolbars) {
-		const QList<QToolButton *> buttons = tool_bar->findChildren<QToolButton *>();
-		for (QToolButton *btn : buttons) {
-			const QIcon ic = btn->icon();
-			if (ic.isNull()) continue;
-			const QPixmap src = ic.pixmap(QSize(icon_h, icon_h));
-			if (src.isNull()) continue;
-			const qreal dpr = src.devicePixelRatio();
-			const int log_w = qRound(src.width()  / dpr);
-			const int log_h = qRound(src.height() / dpr);
-			if (log_h >= icon_h) continue; // 已達滿高，不需補
-			QPixmap dst(QSize(icon_h, icon_h) * dpr);
-			dst.setDevicePixelRatio(dpr);
-			dst.fill(Qt::transparent);
-			QPainter p(&dst);
-			p.drawPixmap((icon_h - log_w) / 2, icon_h - log_h, src); // 水平置中、垂直靠下
-			p.end();
-			btn->setIcon(QIcon(dst));
-		}
-	}
 }
 
 /**

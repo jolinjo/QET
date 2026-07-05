@@ -17,6 +17,9 @@
 */
 #include "generalconfigurationpage.h"
 
+#include <QSpacerItem>
+#include <QSizePolicy>
+
 #include "../../qetapp.h"
 #include "../../qetdiagrameditor.h"
 #include "../../qeticons.h"
@@ -54,6 +57,12 @@ GeneralConfigurationPage::GeneralConfigurationPage(QWidget *parent) :
 		for (QWidget *w : grid_removed) {
 			if (w) { ui->gridLayout->removeWidget(w); w->hide(); }
 		}
+		// groupBox 很高，grid 會把多餘垂直空間平均攤到各列（移除目錄列後剩下的
+		// 列反而攤更開、頂端也留空白）。在底部塞一個可伸展的空白列吸收多餘空間，
+		// 讓內容往上緊靠、列距回到正常。
+		ui->gridLayout->addItem(
+			new QSpacerItem(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding),
+			20, 0, 1, 2);
 	}
 	// 這些在垂直版面裡，隱藏即可正常收合：視窗/分頁模式、元件管理整段
 	const QList<QWidget *> vbox_hidden {
