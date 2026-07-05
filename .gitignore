@@ -26,3 +26,12 @@ fonts/NotoSansCJKtc-Regular.otf
 fonts/NotoSansCJKtc-Thin.otf
 fonts/NotoSansMonoCJKtc-Bold.otf
 fonts/NotoSansMonoCJKtc-Regular.otf
+# --- Windows MSVC 本地建置產物（不進公開 repo）---
+/build/
+/dist/
+/_deps/*.log
+/_deps/*.png
+/_deps/ecm-src/
+/_deps/sqlite/
+/*.log
+aqtinstall.log
