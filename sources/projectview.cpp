@@ -26,6 +26,8 @@
 #include "qetapp.h"
 #include "qeticons.h"
 #include "qetmessagebox.h"
+
+#include <QAbstractButton>
 #include "qetproject.h"
 #include "titleblock/qettemplateeditor.h"
 #include "ui/borderpropertieswidget.h"
@@ -310,14 +312,19 @@ int ProjectView::tryClosingDiagrams()
 	QString title = project()->title();
 	if (title.isEmpty()) title = "QElectroTech ";
 
-	int close_dialog = QMessageBox::question(this, title,
-								   tr("Le projet à été modifié.\n"
-									  "Voulez-vous enregistrer les modifications ?"),
-								   QMessageBox::Save | QMessageBox::Discard
-								   | QMessageBox::Cancel,
-								   QMessageBox::Save);
+	QMessageBox box(QMessageBox::Question, title,
+					tr("Le projet à été modifié.\n"
+					   "Voulez-vous enregistrer les modifications ?"),
+					QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+					this);
+	box.setDefaultButton(QMessageBox::Save);
+	// 「丟棄」在此情境是「不儲存直接關閉」，顯示成「直接關閉」較直觀
+	if (QAbstractButton *discard = box.button(QMessageBox::Discard)) {
+		discard->setText(tr("直接關閉"));
+	}
+	box.exec();
 
-	return(close_dialog);
+	return(box.standardButton(box.clickedButton()));
 }
 
 /**
