@@ -97,6 +97,10 @@ void PasteDiagramCommand::redo()
 				for (Conductor *c : conductors_list)
 				{
 					ConductorProperties cp = c -> properties();
+					/* ne rien « effacer » sur un texte deja
+					 * vide : on collait sinon le texte par
+					 * defaut « _ » sur des conducteurs muets */
+					if (cp.text.isEmpty()) continue;
 					cp.text = c->diagram() ? c -> diagram() -> defaultConductorProperties.text : "_";
 					c -> setProperties(cp);
 				}
