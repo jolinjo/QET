@@ -84,6 +84,15 @@ void QETMainWindow::initCommonActions()
 		}
 	});
 
+	/* double du menu application : sur macOS l'entree « Preferences »
+	 * fusionnee reste parfois grisee apres un dialogue modal ; celle-ci
+	 * (NoRole) reste dans le menu Configuration et marche toujours */
+	configure_menu_action_ = new QAction(QET::Icons::Configure,
+		tr("&Configurer QElectroTech"), this);
+	configure_menu_action_->setMenuRole(QAction::NoRole);
+	connect(configure_menu_action_, &QAction::triggered,
+		configure_action_, &QAction::trigger);
+
 	fullscreen_action_ = new QAction(this);
 	updateFullScreenAction();
 	connect(fullscreen_action_, SIGNAL(triggered()), this, SLOT(toggleFullScreen()));
@@ -149,6 +158,7 @@ void QETMainWindow::initCommonMenus()
 	settings_menu_ = new QMenu(tr("&Configuration", "window menu"), this);
 	settings_menu_ -> addAction(fullscreen_action_);
 	settings_menu_ -> addAction(configure_action_);
+	settings_menu_ -> addAction(configure_menu_action_);
 	connect(settings_menu_, SIGNAL(aboutToShow()), this, SLOT(checkToolbarsmenu()));
 
 	help_menu_ = new QMenu(tr("&Aide", "window menu"), this);

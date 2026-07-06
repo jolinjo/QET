@@ -1282,6 +1282,10 @@ Diagram *QETProject::addNewDiagram(int pos)
 		tbp.context.addValue(QStringLiteral("doc-status"),
 				     QStringLiteral("草案 Draft"));
 	}
+	// numerotation de page automatique si le projet n'en definit pas
+	if (tbp.folio.isEmpty()) {
+		tbp.folio = QStringLiteral("%id / %total");
+	}
 	diagram->border_and_titleblock.importTitleBlock(tbp);
 	diagram->defaultConductorProperties = defaultConductorProperties();
 
