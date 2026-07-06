@@ -26,6 +26,7 @@ class Diagram;
 class QComboBox;
 class QDateEdit;
 class QLineEdit;
+class QTabWidget;
 class QTableWidget;
 
 /**
@@ -48,15 +49,27 @@ class FolioRevisionsDialog : public QDialog
 	private:
 	FolioRevisionsDialog(Diagram *diagram, QWidget *parent = nullptr);
 	TitleBlockProperties editedProperties() const;
+	void applyToAllFolios();
 
 	static const int ROW_COUNT = 6;
 
 	Diagram *m_diagram;
 	TitleBlockProperties m_original;
+	QTabWidget *m_tabs;
 	QLineEdit *m_indexrev;
 	QComboBox *m_doc_status;
 	QDateEdit *m_issue_date;
 	QTableWidget *m_table;
+	/// onglet « tous les folios »
+	QLineEdit *m_all_indexrev;
+	QComboBox *m_all_doc_status;
+	QDateEdit *m_all_issue_date;
+	QLineEdit *m_all_rev_idx;
+	QDateEdit *m_all_rev_date;
+	QLineEdit *m_all_rev_zone;
+	QLineEdit *m_all_rev_desc;
+	QLineEdit *m_all_rev_by;
+	QLineEdit *m_all_rev_appd;
 };
 
 #endif // FOLIOREVISIONSDIALOG_H

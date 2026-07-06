@@ -18,12 +18,17 @@
 #include "foliorevisionsdialog.h"
 
 #include "../diagram.h"
+#include "../qetproject.h"
 #include "../undocommand/changetitleblockcommand.h"
 
 #include <QComboBox>
 #include <QDateEdit>
 #include <QDialogButtonBox>
+#include <QGroupBox>
+#include <QLabel>
+#include <QMessageBox>
 #include <QStyledItemDelegate>
+#include <QTabWidget>
 #include <QFormLayout>
 #include <QHeaderView>
 #include <QKeyEvent>
@@ -86,6 +91,12 @@ void FolioRevisionsDialog::edit(Diagram *diagram, QWidget *parent)
 
 	FolioRevisionsDialog dialog(diagram, parent);
 	if (dialog.exec() != QDialog::Accepted || diagram->isReadOnly()) {
+		return;
+	}
+
+	//onglet « tous les folios » actif : application groupee
+	if (dialog.m_tabs->currentIndex() == 1) {
+		dialog.applyToAllFolios();
 		return;
 	}
 
@@ -197,10 +208,92 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 	connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
+	//page « ce folio »
+	auto *current_page = new QWidget(this);
+	auto *current_layout = new QVBoxLayout(current_page);
+	current_layout->addLayout(form);
+	current_layout->addWidget(m_table);
+	current_layout->addLayout(table_button_row);
+
+	//page « tous les folios » : reglage groupe
+	auto *all_page = new QWidget(this);
+	auto *all_form = new QFormLayout();
+	auto *hint = new QLabel(
+		tr("Laisser un champ vide pour ne pas le modifier."),
+		all_page);
+	hint->setWordWrap(true);
+
+	m_all_indexrev = new QLineEdit(all_page);
+	all_form->addRow(tr("Indice de révision :"), m_all_indexrev);
+
+	m_all_doc_status = new QComboBox(all_page);
+	m_all_doc_status->setEditable(true);
+	m_all_doc_status->addItems({
+		QString(),
+		QStringLiteral("草案 Draft"),
+		QStringLiteral("審核中 Under review"),
+		QStringLiteral("正式發行 Released"),
+		QStringLiteral("作廢 Obsolete"),
+	});
+	m_all_doc_status->setEditText(QString());
+	all_form->addRow(tr("État du document :"), m_all_doc_status);
+
+	m_all_issue_date = new QDateEdit(all_page);
+	m_all_issue_date->setCalendarPopup(true);
+	m_all_issue_date->setMinimumDate(QDate(1900, 1, 1));
+	m_all_issue_date->setSpecialValueText(QStringLiteral(" "));
+	m_all_issue_date->setDate(m_all_issue_date->minimumDate());
+	auto *all_today = new QPushButton(tr("Aujourd'hui"), all_page);
+	auto *all_clear = new QPushButton(tr("Effacer"), all_page);
+	connect(all_today, &QPushButton::clicked, this, [this]() {
+		m_all_issue_date->setDate(QDate::currentDate());
+	});
+	connect(all_clear, &QPushButton::clicked, this, [this]() {
+		m_all_issue_date->setDate(m_all_issue_date->minimumDate());
+	});
+	auto *all_date_row = new QHBoxLayout();
+	all_date_row->addWidget(m_all_issue_date, 1);
+	all_date_row->addWidget(all_today);
+	all_date_row->addWidget(all_clear);
+	all_form->addRow(tr("Date de publication :"), all_date_row);
+
+	auto *rev_group = new QGroupBox(
+		tr("Ajouter une ligne de révision (première ligne vide de"
+		   " chaque folio)"),
+		all_page);
+	auto *rev_form = new QFormLayout(rev_group);
+	m_all_rev_idx = new QLineEdit(rev_group);
+	rev_form->addRow(tr("Indice"), m_all_rev_idx);
+	m_all_rev_date = new QDateEdit(rev_group);
+	m_all_rev_date->setCalendarPopup(true);
+	m_all_rev_date->setMinimumDate(QDate(1900, 1, 1));
+	m_all_rev_date->setSpecialValueText(QStringLiteral(" "));
+	m_all_rev_date->setDate(QDate::currentDate());
+	rev_form->addRow(tr("Date"), m_all_rev_date);
+	m_all_rev_zone = new QLineEdit(rev_group);
+	rev_form->addRow(tr("Zone"), m_all_rev_zone);
+	m_all_rev_desc = new QLineEdit(rev_group);
+	rev_form->addRow(tr("Description de la révision"), m_all_rev_desc);
+	m_all_rev_by = new QLineEdit(rev_group);
+	rev_form->addRow(tr("Par"), m_all_rev_by);
+	m_all_rev_appd = new QLineEdit(rev_group);
+	rev_form->addRow(tr("Approuvé"), m_all_rev_appd);
+
+	auto *all_layout = new QVBoxLayout(all_page);
+	all_layout->addWidget(hint);
+	all_layout->addLayout(all_form);
+	all_layout->addWidget(rev_group);
+	all_layout->addStretch();
+
+	m_tabs = new QTabWidget(this);
+	m_tabs->addTab(current_page, tr("Ce folio"));
+	m_tabs->addTab(all_page, tr("Tous les folios"));
+	if (m_diagram->isReadOnly()) {
+		all_page->setEnabled(false);
+	}
+
 	auto *layout = new QVBoxLayout(this);
-	layout->addLayout(form);
-	layout->addWidget(m_table);
-	layout->addLayout(table_button_row);
+	layout->addWidget(m_tabs);
 	layout->addWidget(buttons);
 
 	if (m_diagram->isReadOnly()) {
@@ -233,6 +326,111 @@ bool FolioRevisionsDialog::eventFilter(QObject *watched, QEvent *event)
 		}
 	}
 	return QDialog::eventFilter(watched, event);
+}
+
+/**
+	Apply the batch tab to every folio of the project : revision index /
+	document status / issue date (empty fields left untouched), and
+	optionally one revision line written into the FIRST EMPTY rev slot of
+	each folio -- never overwriting an existing revision entry.
+*/
+void FolioRevisionsDialog::applyToAllFolios()
+{
+	QETProject *project = m_diagram->project();
+	if (!project) return;
+
+	const QString batch_index = m_all_indexrev->text().trimmed();
+	const QString batch_status = m_all_doc_status->currentText().trimmed();
+	const QDate batch_date =
+		(m_all_issue_date->date() == m_all_issue_date->minimumDate())
+			? QDate()
+			: m_all_issue_date->date();
+
+	const QString rev_date_text =
+		(m_all_rev_date->date() == m_all_rev_date->minimumDate())
+			? QString()
+			: m_all_rev_date->date().toString(
+				  QStringLiteral("yyyy/M/d"));
+	const QStringList rev_values {
+		m_all_rev_idx->text().trimmed(),
+		rev_date_text,
+		m_all_rev_zone->text().trimmed(),
+		m_all_rev_desc->text().trimmed(),
+		m_all_rev_by->text().trimmed(),
+		m_all_rev_appd->text().trimmed() };
+	bool rev_wanted = false;
+	for (const QString &value : rev_values) {
+		if (!value.isEmpty()) rev_wanted = true;
+	}
+
+	int applied = 0;
+	int full = 0;
+	const QList<Diagram *> diagrams = project->diagrams();
+	for (Diagram *diagram : diagrams)
+	{
+		TitleBlockProperties old_properties =
+			diagram->border_and_titleblock.exportTitleBlock();
+		TitleBlockProperties new_properties = old_properties;
+		bool changed = false;
+
+		if (!batch_index.isEmpty()) {
+			new_properties.indexrev = batch_index;
+			changed = true;
+		}
+		if (!batch_status.isEmpty()) {
+			new_properties.context.addValue(
+				QStringLiteral("doc-status"), batch_status);
+			changed = true;
+		}
+		if (batch_date.isValid()) {
+			new_properties.date = batch_date;
+			new_properties.useDate =
+				TitleBlockProperties::UseDateValue;
+			changed = true;
+		}
+
+		if (rev_wanted)
+		{
+			//premiere ligne de revision entierement vide
+			int free_row = -1;
+			for (int row = 0 ; row < ROW_COUNT ; ++row) {
+				bool empty = true;
+				for (int column = 0 ;
+				     column < REV_FIELD_COUNT ; ++column) {
+					if (!new_properties.context
+						     .value(revKey(row, column))
+						     .toString().isEmpty()) {
+						empty = false;
+						break;
+					}
+				}
+				if (empty) { free_row = row; break; }
+			}
+			if (free_row == -1) {
+				++full;
+			} else {
+				for (int column = 0 ;
+				     column < REV_FIELD_COUNT ; ++column) {
+					new_properties.context.addValue(
+						revKey(free_row, column),
+						rev_values.at(column));
+				}
+				changed = true;
+			}
+		}
+
+		if (changed && new_properties != old_properties) {
+			diagram->undoStack().push(new ChangeTitleBlockCommand(
+				diagram, old_properties, new_properties));
+			++applied;
+		}
+	}
+
+	QMessageBox::information(
+		this->parentWidget() ? this->parentWidget() : nullptr,
+		tr("Révisions du folio", "window title"),
+		tr("Appliqué à %1 folios. %2 folios sans ligne de révision"
+		   " libre (non modifiés).").arg(applied).arg(full));
 }
 
 /**

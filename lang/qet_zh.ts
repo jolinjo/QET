@@ -6112,6 +6112,26 @@ Options disponibles :
 <context>
     <name>FolioRevisionsDialog</name>
     <message>
+        <source>Ce folio</source>
+        <translation>本页</translation>
+    </message>
+    <message>
+        <source>Tous les folios</source>
+        <translation>全部页面</translation>
+    </message>
+    <message>
+        <source>Laisser un champ vide pour ne pas le modifier.</source>
+        <translation>字段留空表示不变更。</translation>
+    </message>
+    <message>
+        <source>Ajouter une ligne de révision (première ligne vide de chaque folio)</source>
+        <translation>新增一笔修订（自动填入各页第一个空白列）</translation>
+    </message>
+    <message>
+        <source>Appliqué à %1 folios. %2 folios sans ligne de révision libre (non modifiés).</source>
+        <translation>已套用 %1 页；%2 页修订列已满、未变更。</translation>
+    </message>
+    <message>
         <source>Aujourd'hui</source>
         <translation>今天</translation>
     </message>
