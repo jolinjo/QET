@@ -18,6 +18,9 @@
 
 #include "qetproject.h"
 
+#include <QRegularExpression>
+#include <QVersionNumber>
+
 #include "ElementsCollection/xmlelementcollection.h"
 #include "autoNum/assignvariables.h"
 #include "autoNum/numerotationcontext.h"
@@ -495,6 +498,44 @@ TitleBlockProperties QETProject::defaultTitleBlockProperties() const
 }
 
 /**
+	Resolve a title block template name against a collection, ignoring the
+	" vX.Y.Z" version suffix : the newest version of the same base name is
+	returned. The company collection renames its template file at every
+	revision, so a stored name quickly becomes stale.
+*/
+static QString latest_template_name(TitleBlockTemplatesCollection *collection,
+				    const QString &requested)
+{
+	if (!collection) return requested;
+
+	static const QRegularExpression version_suffix(
+		QStringLiteral("\\s*v[0-9][0-9.]*$"));
+	QString base = requested;
+	base.remove(version_suffix);
+
+	QString best;
+	QVersionNumber best_version;
+	const QStringList existing = collection->templates();
+	for (const QString &name : existing) {
+		QVersionNumber version;
+		if (name == base) {
+			version = QVersionNumber(0);
+		} else if (name.startsWith(base % QStringLiteral(" v"))) {
+			version = QVersionNumber::fromString(
+				name.mid(base.length() + 2));
+			if (version.isNull()) continue;
+		} else {
+			continue;
+		}
+		if (best.isEmpty() || version > best_version) {
+			best = name;
+			best_version = version;
+		}
+	}
+	return best.isEmpty() ? requested : best;
+}
+
+/**
 	@brief QETProject::setDefaultTitleBlockProperties
 	Specify the title block to be used at the creation of a new diagram for this project
 	@param titleblock
@@ -521,8 +562,16 @@ void QETProject::setDefaultTitleBlockProperties(const TitleBlockProperties &titl
 				return;
 		}
 
+		//version la plus recente du meme modele (nom stocke sans ou
+		//avec un suffixe de version perime)
+		const QString resolved = latest_template_name(
+			collection, titleblock.template_name);
+		if (resolved != titleblock.template_name) {
+			default_titleblock_properties_.template_name = resolved;
+		}
+
 		IntegrationMoveTitleBlockTemplatesHandler m_;
-		integrateTitleBlockTemplate(collection -> location(titleblock.template_name), &m_);
+		integrateTitleBlockTemplate(collection -> location(resolved), &m_);
 	}
 	emit defaultTitleBlockPropertiesChanged();
 }
