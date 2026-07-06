@@ -424,7 +424,18 @@ bool ElementCollectionHandler::importFromProject(QETProject *project,
 	//Go back until to find an existing directory in destination
 	while (!destination.exist()) {
 		names.append(source.fileName());
-		source = source.parent();
+		ElementsLocation upper = source.parent();
+		/* parent() renvoie l'emplacement inchange quand il n'y a plus
+		 * d'ancetre : sans cette garde la boucle ne terminait jamais
+		 * pour un chemin hors norme (collage depuis certains projets) */
+		if (upper.collectionPath() == source.collectionPath()) {
+			qWarning() << "importFromProject : aucun ancetre"
+				      " existant pour"
+				   << location.collectionPath()
+				   << "- element ignore";
+			return false;
+		}
+		source = upper;
 		destination = ElementsLocation(source.collectionPath(),
 					       project);
 	}
