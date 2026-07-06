@@ -43,6 +43,8 @@
 #include <iostream>
 #define QUOTE(x) STRINGIFY(x)
 #define STRINGIFY(x) #x
+#include <QCoreApplication>
+#include <QFileInfo>
 #include <QFontDatabase>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
@@ -2243,8 +2245,21 @@ void QETApp::initFonts()
 
 	/* charge la police hybride pour qu'elle reste disponible dans le
 	 * selecteur, mais sans l'imposer : la police de schema par defaut
-	 * reste Liberation Sans 9 (voir QETApp::diagramTextsFont) */
-	QFontDatabase::addApplicationFont(":/fonts/YaHei.Consolas.1.11b.ttf");
+	 * reste Liberation Sans 9 (voir QETApp::diagramTextsFont).
+	 * Police proprietaire non embarquee dans les ressources (absente du
+	 * depot public, la CI ne peut pas la compiler) : chargee au demarrage
+	 * depuis le dossier fonts/ livre a cote de l'application quand il est
+	 * present (dossier portable sous Windows, Resources sous macOS). */
+#ifdef Q_OS_MACOS
+	const QString hybrid_font = QCoreApplication::applicationDirPath()
+		+ "/../Resources/fonts/YaHei.Consolas.1.11b.ttf";
+#else
+	const QString hybrid_font = QCoreApplication::applicationDirPath()
+		+ "/../fonts/YaHei.Consolas.1.11b.ttf";
+#endif
+	if (QFileInfo::exists(hybrid_font)) {
+		QFontDatabase::addApplicationFont(hybrid_font);
+	}
 
 	// Persist the Traditional-Chinese default on first run so the preferences
 	// language selector reflects it (the actual default is set in langFromSetting).

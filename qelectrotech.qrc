@@ -774,11 +774,10 @@
 	     UI = WenQuanYi Micro Hei (Apache-2.0 / GPLv3, committed; TrueType-hinted,
 	     crisp at small UI sizes).
 	     Diagram = YaHei Consolas Hybrid: proprietary (MS YaHei + Consolas), NOT
-	     committed / git-ignored. Supply fonts/YaHei.Consolas.1.11b.ttf locally
-	     before building, or remove this <file> line and the matching loader in
-	     QETApp::initFonts() to build without it. -->
+	     committed / git-ignored, so NOT embedded here (CI cannot access it).
+	     It is loaded at runtime from the fonts/ directory shipped next to the
+	     application when present - see QETApp::initFonts(). -->
 	<file>fonts/wqy-microhei.ttc</file>
-	<file>fonts/YaHei.Consolas.1.11b.ttf</file>
 
 	<file>licenses/QElectroTech.NOTICE</file>
 	<file>licenses/QElectroTech.LICENSE</file>

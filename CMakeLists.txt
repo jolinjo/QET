@@ -99,6 +99,14 @@ if(APPLE)
             ${QET_DIR}/elements $<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/
     COMMAND rsync -a --delete
             ${QET_DIR}/titleblocks $<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/)
+  # 私有混合字型不進公開 repo/qrc（CI 編不了），改為執行時從
+  # Resources/fonts 載入；本地有檔案才複製進 bundle。
+  if(EXISTS ${QET_DIR}/fonts/YaHei.Consolas.1.11b.ttf)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+      COMMAND mkdir -p $<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/fonts
+      COMMAND cp -f ${QET_DIR}/fonts/YaHei.Consolas.1.11b.ttf
+              $<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/fonts/)
+  endif()
 endif()
 
 if(QMFILES_AS_RESOURCE)

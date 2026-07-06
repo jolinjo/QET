@@ -69,6 +69,18 @@ PORTABLE=$(cd "$PORTABLE" && pwd)
 [ -f "$PORTABLE/bin/QElectroTech.exe" ] || { echo "!! $PORTABLE 內找不到 bin/QElectroTech.exe"; exit 1; }
 echo "== 免安裝版來源:$PORTABLE"
 
+# 私有混合字型不在公開 repo/CI:發佈時由本機注入(app 執行時從
+# fonts/ 載入)。本機沒有就略過並提醒。
+HYBRID_FONT="$ROOT/fonts/YaHei.Consolas.1.11b.ttf"
+if [ -f "$HYBRID_FONT" ]; then
+	mkdir -p "$PORTABLE/fonts"
+	cp -f "$HYBRID_FONT" "$PORTABLE/fonts/"
+	echo "== 已注入混合字型 YaHei.Consolas.1.11b.ttf"
+else
+	echo "!! 提醒:$HYBRID_FONT 不存在,本版不含混合字型"
+	echo "   (從 mac 機的 QET/fonts/ 複製過來即可,檔案已被 gitignore)"
+fi
+
 # 2. 推進 release repo -------------------------------------------------------
 if [ ! -d "$CACHE/.git" ]; then
 	git clone "$REPO_URL" "$CACHE"
