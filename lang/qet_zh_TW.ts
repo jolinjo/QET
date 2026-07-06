@@ -6314,12 +6314,12 @@ Options disponibles :
     <message>
         <source>Sélection</source>
         <comment>toolbar icon text</comment>
-        <translation>選取</translation>
+        <translation>編輯模式</translation>
     </message>
     <message>
         <source>Visualisation</source>
         <comment>toolbar icon text</comment>
-        <translation>瀏覽</translation>
+        <translation>瀏覽模式</translation>
     </message>
     <message>
         <source>Grille</source>

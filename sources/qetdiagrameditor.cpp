@@ -1161,8 +1161,6 @@ void QETDiagramEditor::setUpToolBar()
 	view_tool_bar -> addAction(m_mode_selection);
 	view_tool_bar -> addAction(m_mode_visualise);
 	view_tool_bar -> addSeparator();
-	view_tool_bar -> addWidget(new DiagramEditorHandlerSizeWidget(this));
-	view_tool_bar -> addSeparator();
 	view_tool_bar -> addAction(m_draw_grid);
 	view_tool_bar -> addSeparator();
 	view_tool_bar -> addActions(m_zoom_action_toolBar);

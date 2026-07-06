@@ -6315,12 +6315,12 @@ Options disponibles :
     <message>
         <source>Sélection</source>
         <comment>toolbar icon text</comment>
-        <translation>选择</translation>
+        <translation>编辑模式</translation>
     </message>
     <message>
         <source>Visualisation</source>
         <comment>toolbar icon text</comment>
-        <translation>浏览</translation>
+        <translation>浏览模式</translation>
     </message>
     <message>
         <source>Grille</source>
