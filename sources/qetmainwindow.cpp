@@ -23,6 +23,7 @@
 #include <QDesktopServices>
 
 #include "qetmainwindow.h"
+#include "ui/appupdatedialog.h"
 #include "qeticons.h"
 #include "qetapp.h"
 #include "qetdiagrameditor.h"
@@ -137,6 +138,14 @@ void QETMainWindow::initCommonActions()
 	QDesktopServices::openUrl(QUrl(link));
 	});
 
+	m_ota_update = new QAction(QET::Icons::QETDownload,
+		tr("Vérifier les mises à jour (intranet)..."), this);
+	m_ota_update->setMenuRole(QAction::NoRole);
+	connect(m_ota_update, &QAction::triggered, this, [this]() {
+		AppUpdateDialog dialog(this);
+		dialog.exec();
+	});
+
 	donate_ = new QAction(QET::Icons::QETDonate, tr("Soutenir le projet par un don"), this);
 	donate_ -> setStatusTip(tr("Soutenir le projet QElectroTech par un don", "status bar tip"));
 
@@ -168,6 +177,7 @@ void QETMainWindow::initCommonMenus()
 	help_menu_ -> addAction(youtube_);
 	help_menu_ -> addAction(upgrade_);
 	help_menu_ -> addAction(upgrade_M);
+	help_menu_ -> addAction(m_ota_update);
 	help_menu_ -> addAction(donate_);
 	help_menu_ -> addAction(about_qt_);
 	help_menu_ -> addAction(about_qet_);
@@ -180,8 +190,10 @@ upgrade_ -> setVisible(false);
 
 #ifdef Q_OS_MACOS
 upgrade_M -> setVisible(true);
+m_ota_update -> setVisible(true);
 #else
 upgrade_M -> setVisible(false);
+m_ota_update -> setVisible(false);
 #endif
 
 	insertMenu(nullptr, settings_menu_);

@@ -630,6 +630,8 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/ui/diagrameditorhandlersizewidget.h
   ${QET_DIR}/sources/ui/diagrampropertiesdialog.cpp
   ${QET_DIR}/sources/ui/diagrampropertiesdialog.h
+  ${QET_DIR}/sources/ui/appupdatedialog.cpp
+  ${QET_DIR}/sources/ui/appupdatedialog.h
   ${QET_DIR}/sources/ui/foliorevisionsdialog.cpp
   ${QET_DIR}/sources/ui/foliorevisionsdialog.h
   ${QET_DIR}/sources/ui/diagrampropertieseditordockwidget.cpp

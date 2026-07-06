@@ -60,7 +60,8 @@ class QETMainWindow : public QMainWindow {
 	QAction *manual_online_;                 ///< Launch browser on QElectroTech online manual
 	QAction *youtube_;                       ///< Launch browser on QElectroTech Youtube channel
 	QAction *upgrade_;                       ///< Launch browser on QElectroTech Windows Nightly builds
-	QAction *upgrade_M;                      ///< Launch browser on QElectroTech MAC_OS_X builds
+	QAction *upgrade_M;
+	QAction *m_ota_update;                      ///< Launch browser on QElectroTech MAC_OS_X builds
 	QAction *donate_;                        ///< Launch browser to donate link 
 	QAction *about_qt_;                      ///< launch the "About Qt" dialog
 	QMenu *settings_menu_;                   ///< Settings menu

@@ -7973,6 +7973,10 @@ les conditions requises ne sont pas valides</source>
 <context>
     <name>QETMainWindow</name>
     <message>
+        <source>Vérifier les mises à jour (intranet)...</source>
+        <translation>檢查更新(內網)…</translation>
+    </message>
+    <message>
         <location filename="../sources/qetmainwindow.cpp" line="59"/>
         <source>&amp;Configurer QElectroTech</source>
         <translation>設定QElectroTech(&amp;C)</translation>
@@ -15246,6 +15250,88 @@ Longueur maximale : %2px
         <location filename="../sources/SearchAndReplace/ui/replaceadvanceddialog.ui" line="92"/>
         <source>Quoi :</source>
         <translation>什麼 ：</translation>
+    </message>
+</context>
+<context>
+    <name>AppUpdateDialog</name>
+    <message>
+        <source>Mise à jour de l&apos;application</source>
+        <comment>window title</comment>
+        <translation>應用程式更新</translation>
+    </message>
+    <message>
+        <source>Actualiser</source>
+        <translation>重新整理</translation>
+    </message>
+    <message>
+        <source>Passer à la version sélectionnée</source>
+        <translation>切換到選取版本</translation>
+    </message>
+    <message>
+        <source>Dépôt de mise à jour :</source>
+        <translation>更新倉庫：</translation>
+    </message>
+    <message>
+        <source>Version actuelle : %1</source>
+        <translation>目前版本：%1</translation>
+    </message>
+    <message>
+        <source>Interrogation du dépôt...</source>
+        <translation>查詢倉庫中…</translation>
+    </message>
+    <message>
+        <source>Échec : %1</source>
+        <translation>失敗：%1</translation>
+    </message>
+    <message>
+        <source>dernière version</source>
+        <translation>最新版</translation>
+    </message>
+    <message>
+        <source>version actuelle</source>
+        <translation>目前版本</translation>
+    </message>
+    <message>
+        <source>Aucune version publiée trouvée.</source>
+        <translation>找不到已發佈的版本。</translation>
+    </message>
+    <message>
+        <source>Versions disponibles : %1</source>
+        <translation>可用版本數:%1</translation>
+    </message>
+    <message>
+        <source>L&apos;application ne tourne pas depuis un bundle .app : mise à jour impossible.</source>
+        <translation>目前不是從 .app bundle 執行,無法更新。</translation>
+    </message>
+    <message>
+        <source>Téléchargement de %1...</source>
+        <translation>下載 %1 中…</translation>
+    </message>
+    <message>
+        <source>le dépôt ne contient pas qelectrotech.app</source>
+        <translation>倉庫內沒有 qelectrotech.app</translation>
+    </message>
+    <message>
+        <source>Installation de %1...</source>
+        <translation>安裝 %1 中…</translation>
+    </message>
+    <message>
+        <source>La mise à jour a échoué :
+%1
+
+Si le message indique un refus d&apos;accès, déplacez l&apos;application hors de /Applications (par exemple dans ~/Applications) puis réessayez.</source>
+        <translation>更新失敗：
+%1
+
+若訊息顯示存取被拒,請將應用程式移出 /Applications(例如放到 ~/Applications)後重試。</translation>
+    </message>
+    <message>
+        <source>%1 installée.</source>
+        <translation>已安裝 %1。</translation>
+    </message>
+    <message>
+        <source>Version %1 installée. Relancer maintenant ?</source>
+        <translation>已安裝 %1,現在重新啟動?</translation>
     </message>
 </context>
 </TS>
