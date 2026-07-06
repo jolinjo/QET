@@ -2234,17 +2234,10 @@ void QETApp::initFonts()
 		}
 	}
 
-	const int diagram_font_id = QFontDatabase::addApplicationFont(
-				":/fonts/YaHei.Consolas.1.11b.ttf");
-	if (diagram_font_id != -1) {
-		const QStringList fams = QFontDatabase::applicationFontFamilies(diagram_font_id);
-		if (!fams.isEmpty()) {
-			QSettings settings;
-			if (!settings.contains("diagramitemfont")) {
-				settings.setValue("diagramitemfont", fams.first());
-			}
-		}
-	}
+	/* charge la police hybride pour qu'elle reste disponible dans le
+	 * selecteur, mais sans l'imposer : la police de schema par defaut
+	 * reste Liberation Sans 9 (voir QETApp::diagramTextsFont) */
+	QFontDatabase::addApplicationFont(":/fonts/YaHei.Consolas.1.11b.ttf");
 
 	// Persist the Traditional-Chinese default on first run so the preferences
 	// language selector reflects it (the actual default is set in langFromSetting).
