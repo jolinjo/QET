@@ -6435,7 +6435,7 @@ Options disponibles :
         <location filename="../sources/qetdiagrameditor.cpp" line="102"/>
         <source>QElectroTech</source>
         <comment>window title</comment>
-        <translation>QElectroTech</translation>
+        <translation>虎氶科技</translation>
     </message>
     <message>
         <location filename="../sources/qetdiagrameditor.cpp" line="104"/>

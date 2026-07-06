@@ -170,29 +170,13 @@ void QETMainWindow::initCommonMenus()
 	settings_menu_ -> addAction(configure_menu_action_);
 	connect(settings_menu_, SIGNAL(aboutToShow()), this, SLOT(checkToolbarsmenu()));
 
+	/* menu d'aide reduit (version societe) : uniquement la mise a jour
+	 * interne ; « a propos » reste (deplace dans le menu application
+	 * sur macOS) */
 	help_menu_ = new QMenu(tr("&Aide", "window menu"), this);
-	help_menu_ -> addAction(whatsthis_action_);
-	help_menu_ -> addSeparator();
-	help_menu_ -> addAction(manual_online_);
-	help_menu_ -> addAction(youtube_);
-	help_menu_ -> addAction(upgrade_);
-	help_menu_ -> addAction(upgrade_M);
 	help_menu_ -> addAction(m_ota_update);
-	help_menu_ -> addAction(donate_);
 	help_menu_ -> addAction(about_qt_);
 	help_menu_ -> addAction(about_qet_);
-
-#ifdef Q_OS_WIN32
-upgrade_ -> setVisible(true);
-#else
-upgrade_ -> setVisible(false);
-#endif
-
-#ifdef Q_OS_MACOS
-upgrade_M -> setVisible(true);
-#else
-upgrade_M -> setVisible(false);
-#endif
 
 // OTA 內網更新:mac 與 Windows 免安裝版都支援
 #if defined(Q_OS_MACOS) || defined(Q_OS_WIN)
