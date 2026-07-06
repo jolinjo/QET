@@ -805,7 +805,12 @@ void QETDiagramEditor::setUpActions()
 	m_project_add_diagram->setShortcut(Qt::CTRL | Qt::Key_T);
 	connect(m_project_add_diagram, &QAction::triggered, [this]() {
 		if (ProjectView *current_project = currentProjectView()) {
-			current_project->project()->addNewDiagram();
+			Diagram *diagram =
+				current_project->project()->addNewDiagram();
+			//ouvrir directement le cartouche du nouveau folio
+			if (diagram) {
+				editDiagramProperties(diagram);
+			}
 		}
 	});
 
