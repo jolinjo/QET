@@ -22,7 +22,7 @@ CACHE="$HOME/.qet-release-publish"
 STAGE="$(mktemp -d /tmp/qet-ota-stage.XXXXXX)"
 trap 'rm -rf "$STAGE"' EXIT
 
-VERSION=$(sed -n 's/^[[:space:]]*VERSION[[:space:]]*\(0\.[0-9.]*\)$/\1/p' "$ROOT/CMakeLists.txt" | head -1)
+VERSION=$(sed -n 's/^[[:space:]]*VERSION[[:space:]]*\([0-9][0-9.]*\)$/\1/p' "$ROOT/CMakeLists.txt" | head -1)
 [ -n "$VERSION" ] || { echo "!! 讀不到 CMakeLists.txt 的 VERSION"; exit 1; }
 TAG="${TAG_PREFIX}${VERSION}"
 echo "== 發佈 mac 版 v$VERSION → $REPO_URL ($BRANCH, tag $TAG)"
@@ -111,16 +111,22 @@ if [ -f "$CACHE/.fork-sha" ]; then
 	NOTES=$(git -C "$ROOT" log --no-merges --pretty='- %s' \
 		"$PREV_SHA..HEAD" 2>/dev/null || true)
 fi
-[ -n "$NOTES" ] || NOTES="- (無變更紀錄)"
 CHANGELOG="$CACHE/CHANGELOG-mac.md"
-{
-	echo "## v$VERSION($(date +%Y-%m-%d))"
-	echo
-	printf '%s\n' "$NOTES"
-	echo
-	[ -f "$CHANGELOG" ] && cat "$CHANGELOG"
-} > "$CHANGELOG.new"
-mv "$CHANGELOG.new" "$CHANGELOG"
+# 重跑冪等:沒有新 commit 且該版已記錄過,就不再增添區塊
+if [ -z "$NOTES" ] && [ -f "$CHANGELOG" ] \
+	&& grep -q "^## v$VERSION" "$CHANGELOG"; then
+	:
+else
+	[ -n "$NOTES" ] || NOTES="- (無變更紀錄)"
+	{
+		echo "## v$VERSION($(date +%Y-%m-%d))"
+		echo
+		printf '%s\n' "$NOTES"
+		echo
+		[ -f "$CHANGELOG" ] && cat "$CHANGELOG"
+	} > "$CHANGELOG.new"
+	mv "$CHANGELOG.new" "$CHANGELOG"
+fi
 printf '%s\n' "$FORK_SHA" > "$CACHE/.fork-sha"
 
 git add -A
