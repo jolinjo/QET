@@ -190,9 +190,14 @@ upgrade_ -> setVisible(false);
 
 #ifdef Q_OS_MACOS
 upgrade_M -> setVisible(true);
-m_ota_update -> setVisible(true);
 #else
 upgrade_M -> setVisible(false);
+#endif
+
+// OTA 內網更新:mac 與 Windows 免安裝版都支援
+#if defined(Q_OS_MACOS) || defined(Q_OS_WIN)
+m_ota_update -> setVisible(true);
+#else
 m_ota_update -> setVisible(false);
 #endif
 

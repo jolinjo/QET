@@ -15354,5 +15354,31 @@ Si le message indique un refus d&apos;accès, déplacez l&apos;application hors 
         <source>Version %1 installée. Relancer maintenant ?</source>
         <translation>已安裝 %1,現在重新啟動?</translation>
     </message>
+    <message>
+        <source>L&apos;application ne tourne pas depuis le dossier portable (bin\QElectroTech.exe) : mise à jour impossible.</source>
+        <translation>目前不是從免安裝資料夾(bin\QElectroTech.exe)執行,無法更新。</translation>
+    </message>
+    <message>
+        <source>Extraction de %1...</source>
+        <translation>解壓 %1 中…</translation>
+    </message>
+    <message>
+        <source>l&apos;archive ne contient pas bin/QElectroTech.exe</source>
+        <translation>壓縮檔內沒有 bin/QElectroTech.exe</translation>
+    </message>
+    <message>
+        <source>La mise à jour a échoué :
+%1</source>
+        <translation>更新失敗:
+%1</translation>
+    </message>
+    <message>
+        <source>%1 téléchargée.</source>
+        <translation>已下載 %1。</translation>
+    </message>
+    <message>
+        <source>Version %1 téléchargée. L&apos;application va se fermer, se mettre à jour puis redémarrer. Continuer ?</source>
+        <translation>已下載 %1,應用程式將關閉並自動更新後重新啟動。繼續?</translation>
+    </message>
 </context>
 </TS>

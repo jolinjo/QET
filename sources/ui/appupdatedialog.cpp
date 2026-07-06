@@ -24,6 +24,10 @@
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QEventLoop>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -32,12 +36,22 @@
 #include <QPushButton>
 #include <QSettings>
 #include <QTextBrowser>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QVersionNumber>
 
 namespace
 {
+	//依平台決定發佈通道:release repo 的分支、tag 前綴與更新紀錄檔
+#ifdef Q_OS_WIN
+	const QLatin1String TAG_PREFIX("win-v");
+	const QLatin1String OTA_BRANCH("win-stable");
+	const QLatin1String OTA_CHANGELOG("CHANGELOG-win.md");
+#else
 	const QLatin1String TAG_PREFIX("mac-v");
+	const QLatin1String OTA_BRANCH("mac-stable");
+	const QLatin1String OTA_CHANGELOG("CHANGELOG-mac.md");
+#endif
 
 	bool run_process(const QString &program, const QStringList &arguments,
 			 QString *output)
@@ -127,8 +141,8 @@ AppUpdateDialog::AppUpdateDialog(QWidget *parent) :
 }
 
 /**
-	List the published versions (mac-v* tags of the release repository),
-	newest first.
+	List the published versions (win-v*/mac-v* tags of the release
+	repository), newest first.
 */
 void AppUpdateDialog::refreshVersionList()
 {
@@ -140,6 +154,34 @@ void AppUpdateDialog::refreshVersionList()
 	m_status->setText(tr("Interrogation du dépôt..."));
 	QCoreApplication::processEvents();
 
+	QList<QVersionNumber> versions;
+#ifdef Q_OS_WIN
+	//les postes Windows n'ont pas forcement git : on interroge
+	//l'API Gitea (curl est fourni avec Windows 10+)
+	const QUrl base(url);
+	const QString api = base.scheme() % QStringLiteral("://")
+			    % base.authority()
+			    % QStringLiteral("/api/v1/repos") % base.path()
+			    % QStringLiteral("/tags");
+	QString output;
+	if (!run_process(QStringLiteral("curl"),
+			 { QStringLiteral("-fsS"), QStringLiteral("--max-time"),
+			   QStringLiteral("10"), api },
+			 &output)) {
+		m_status->setText(tr("Échec : %1").arg(output.right(600)));
+		return;
+	}
+	const QJsonArray tags =
+		QJsonDocument::fromJson(output.toUtf8()).array();
+	for (const QJsonValue &value : tags) {
+		const QString name =
+			value.toObject().value(QLatin1String("name")).toString();
+		if (name.startsWith(TAG_PREFIX)) {
+			versions << QVersionNumber::fromString(
+				name.mid(TAG_PREFIX.size()));
+		}
+	}
+#else
 	QString output;
 	if (!run_process(QStringLiteral("git"),
 			 { QStringLiteral("ls-remote"), QStringLiteral("--tags"),
@@ -149,7 +191,6 @@ void AppUpdateDialog::refreshVersionList()
 		return;
 	}
 
-	QList<QVersionNumber> versions;
 	const QStringList lines = output.split(QChar('\n'));
 	for (const QString &line : lines) {
 		const int index = line.indexOf(
@@ -160,6 +201,7 @@ void AppUpdateDialog::refreshVersionList()
 		versions << QVersionNumber::fromString(
 			line.mid(index + 10 + TAG_PREFIX.size()));
 	}
+#endif
 	std::sort(versions.begin(), versions.end(),
 		  [](const QVersionNumber &a, const QVersionNumber &b) {
 		return a > b;
@@ -193,8 +235,8 @@ void AppUpdateDialog::refreshVersionList()
 	if (run_process(QStringLiteral("curl"),
 			{ QStringLiteral("-fsS"), QStringLiteral("--max-time"),
 			  QStringLiteral("5"),
-			  url % QStringLiteral(
-				  "/raw/branch/mac-stable/CHANGELOG-mac.md") },
+			  url % QStringLiteral("/raw/branch/") % OTA_BRANCH
+				  % QChar('/') % OTA_CHANGELOG },
 			&notes)) {
 		m_notes->setMarkdown(notes);
 	} else {
@@ -204,22 +246,34 @@ void AppUpdateDialog::refreshVersionList()
 }
 
 /**
-	@return the path of the running application bundle,
-	or an empty string when not running from a bundle.
+	@return the installation root of the running application (.app bundle
+	on macOS, portable folder -- parent of bin/ -- on Windows), or an
+	empty string when the layout is not recognized.
 */
 QString AppUpdateDialog::bundlePath() const
 {
 	QDir dir(QCoreApplication::applicationDirPath());
+#ifdef Q_OS_WIN
+	if (dir.dirName().compare(QLatin1String("bin"), Qt::CaseInsensitive)) {
+		return QString();
+	}
+	dir.cdUp();               // racine du dossier portable
+	return dir.path();
+#else
 	if (dir.dirName() != QLatin1String("MacOS")) return QString();
 	dir.cdUp();               // Contents
 	dir.cdUp();               // *.app
 	return dir.path().endsWith(QLatin1String(".app")) ? dir.path()
 							   : QString();
+#endif
 }
 
 /**
-	Download (blobless fetch) the selected version and swap the running
-	bundle with it, then offer to relaunch. Works for downgrades too.
+	Download the selected version and swap the installed files with it,
+	then offer to relaunch. Works for downgrades too.
+	macOS: blobless git fetch + rsync over the running .app bundle.
+	Windows: Gitea zip archive + updater script run after the exit
+	(the running exe cannot be overwritten).
 */
 void AppUpdateDialog::applySelectedVersion()
 {
@@ -230,13 +284,111 @@ void AppUpdateDialog::applySelectedVersion()
 
 	const QString bundle = bundlePath();
 	if (bundle.isEmpty()) {
+#ifdef Q_OS_WIN
+		QMessageBox::warning(this, windowTitle(),
+			tr("L'application ne tourne pas depuis le dossier"
+			   " portable (bin\\QElectroTech.exe) :"
+			   " mise à jour impossible."));
+#else
 		QMessageBox::warning(this, windowTitle(),
 			tr("L'application ne tourne pas depuis un bundle"
 			   " .app : mise à jour impossible."));
+#endif
 		return;
 	}
 
 	m_apply->setEnabled(false);
+#ifdef Q_OS_WIN
+	const QString work =
+		QETApp::dataDir() % QStringLiteral("/app-ota-win");
+	QDir().mkpath(work);
+	const QString zip = work % QChar('/') % tag % QStringLiteral(".zip");
+	const QString stage = work % QStringLiteral("/stage");
+	QDir(stage).removeRecursively();
+	QDir().mkpath(stage);
+
+	QString log;
+	m_status->setText(tr("Téléchargement de %1...").arg(tag));
+	QCoreApplication::processEvents();
+	bool ok = run_process(QStringLiteral("curl"),
+		{ QStringLiteral("-fsS"), QStringLiteral("-o"), zip,
+		  url % QStringLiteral("/archive/") % tag
+			  % QStringLiteral(".zip") },
+		&log);
+
+	if (ok) {
+		m_status->setText(tr("Extraction de %1...").arg(tag));
+		QCoreApplication::processEvents();
+		//tar (bsdtar) est fourni avec Windows 10+ et extrait les zip
+		ok = run_process(QStringLiteral("tar"),
+			{ QStringLiteral("-xf"), zip,
+			  QStringLiteral("--strip-components=1"),
+			  QStringLiteral("-C"), stage }, &log);
+	}
+	if (ok && !QFileInfo::exists(
+			stage % QStringLiteral("/bin/QElectroTech.exe"))) {
+		ok = false;
+		log = tr("l'archive ne contient pas bin/QElectroTech.exe");
+	}
+
+	//l'executable en cours ne peut pas etre remplace sous Windows :
+	//un script attend la fermeture (la copie de l'exe ne reussit
+	//qu'apres), recopie tout puis relance. robocopy /E ne supprime
+	//pas les fichiers que l'utilisateur garde dans le dossier.
+	const QString bat = QDir::toNativeSeparators(
+		work % QStringLiteral("/apply-update.bat"));
+	if (ok) {
+		QFile file(bat);
+		ok = file.open(QIODevice::WriteOnly | QIODevice::Truncate);
+		if (!ok) {
+			log = file.errorString();
+		} else {
+			const QString script = QStringLiteral(
+				"@echo off\r\n"
+				"echo Mise a jour de QElectroTech (%1)...\r\n"
+				":wait\r\n"
+				"ping -n 2 127.0.0.1 >nul\r\n"
+				"copy /y \"%2\\bin\\QElectroTech.exe\""
+					" \"%3\\bin\\QElectroTech.exe\""
+					" >nul 2>&1\r\n"
+				"if errorlevel 1 goto wait\r\n"
+				"robocopy \"%2\" \"%3\""
+					" /E /NFL /NDL /NJH /NJS /NP\r\n"
+				"if errorlevel 8 (\r\n"
+				"  echo ECHEC de la mise a jour.\r\n"
+				"  pause\r\n"
+				"  exit /b 1\r\n"
+				")\r\n"
+				"start \"\" \"%3\\bin\\QElectroTech.exe\"\r\n"
+				"exit /b 0\r\n")
+				.arg(tag,
+				     QDir::toNativeSeparators(stage),
+				     QDir::toNativeSeparators(bundle));
+			file.write(script.toLocal8Bit());
+			file.close();
+		}
+	}
+
+	m_apply->setEnabled(true);
+	if (!ok) {
+		m_status->setText(QString());
+		QMessageBox::warning(this, windowTitle(),
+			tr("La mise à jour a échoué :\n%1")
+				.arg(log.right(800)));
+		return;
+	}
+
+	m_status->setText(tr("%1 téléchargée.").arg(tag));
+	const auto answer = QMessageBox::question(this, windowTitle(),
+		tr("Version %1 téléchargée. L'application va se fermer,"
+		   " se mettre à jour puis redémarrer. Continuer ?").arg(tag),
+		QMessageBox::Yes | QMessageBox::No);
+	if (answer == QMessageBox::Yes) {
+		QProcess::startDetached(QStringLiteral("cmd.exe"),
+			{ QStringLiteral("/c"), bat });
+		QCoreApplication::quit();
+	}
+#else
 	const QString cache =
 		QETApp::dataDir() % QStringLiteral("/app-ota-cache");
 	QString log;
@@ -312,4 +464,5 @@ void AppUpdateDialog::applySelectedVersion()
 				  .arg(bundle) });
 		QCoreApplication::quit();
 	}
+#endif
 }

@@ -1,0 +1,177 @@
+name: Windows OTA Build
+
+# 建置 Windows 免安裝版（Qt6 / MSYS2 UCRT64），供內網 OTA 發佈用。
+# 產出 artifact：qelectrotech-win-portable（bin/ + elements/ + lang/ ... 免安裝佈局）。
+# 發佈流程：手動觸發本 workflow → 下載 artifact → 本機跑 scripts/publish_windows_ota.sh
+# 推進內網 QET-release repo（win-stable 分支、win-vX.Y.Z tag）。
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'OTA 發行版（QET_RELEASE_BUILD=ON，版號無 -dev 字尾）'
+        type: boolean
+        default: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows-ota:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install MSYS2 (UCRT64, Qt6)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          cache: true
+          install: >-
+            git
+            mingw-w64-ucrt-x86_64-ccache
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-qt6-base
+            mingw-w64-ucrt-x86_64-qt6-svg
+            mingw-w64-ucrt-x86_64-qt6-tools
+            mingw-w64-ucrt-x86_64-qt6-translations
+            mingw-w64-ucrt-x86_64-sqlite3
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-kcoreaddons
+            mingw-w64-ucrt-x86_64-kwidgetsaddons
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: C:\Users\runneradmin\AppData\Local\ccache
+          key: ccache-win-ota-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            ccache-win-ota-${{ github.ref_name }}-
+            ccache-win-ota-
+
+      - name: Configure ccache
+        shell: msys2 {0}
+        run: |
+          /ucrt64/bin/ccache --set-config=max_size=500M
+          /ucrt64/bin/ccache --set-config=compression=true
+          /ucrt64/bin/ccache -z
+
+      - name: Build with cmake (Qt6)
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          RELEASE_FLAG=OFF
+          [ "${{ inputs.release }}" = "true" ] && RELEASE_FLAG=ON
+          echo "QET_RELEASE_BUILD=$RELEASE_FLAG"
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DQET_RELEASE_BUILD=$RELEASE_FLAG \
+            -DBUILD_TESTING=OFF \
+            -DCMAKE_C_COMPILER_LAUNCHER=/ucrt64/bin/ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=/ucrt64/bin/ccache \
+            -DSQLite3_INCLUDE_DIR=/ucrt64/include \
+            -DSQLite3_LIBRARY=/ucrt64/lib/libsqlite3.dll.a
+          ninja -C build -j"$(nproc)"
+          /ucrt64/bin/ccache -s
+
+      - name: Verify exe was built
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          EXE=$(find "$GITHUB_WORKSPACE/build" -maxdepth 3 -iname "qelectrotech.exe" | head -1)
+          [ -n "$EXE" ] || { echo "ERROR: no qelectrotech.exe in build/"; exit 1; }
+          SIZE=$(stat -c%s "$EXE")
+          echo "Exe found: $EXE ($SIZE bytes)"
+          [ "$SIZE" -gt 100000 ] || { echo "ERROR: exe too small"; exit 1; }
+
+      - name: Deploy portable layout
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          FILES="$GITHUB_WORKSPACE/portable"
+          BIN="$FILES/bin"
+          mkdir -p "$BIN"
+
+          EXE=$(find "$GITHUB_WORKSPACE/build" -maxdepth 3 -iname "qelectrotech.exe" | head -1)
+          cp "$EXE" "$BIN/QElectroTech.exe"
+
+          # windeployqt（Qt6 的執行檔名依打包方式可能不同，擇一存在者）
+          WDQ=""
+          for cand in /ucrt64/bin/windeployqt6.exe /ucrt64/bin/windeployqt-qt6.exe /ucrt64/bin/windeployqt.exe; do
+            [ -f "$cand" ] && { WDQ="$cand"; break; }
+          done
+          [ -n "$WDQ" ] || { echo "ERROR: windeployqt not found"; ls /ucrt64/bin/windeployqt* || true; exit 1; }
+          echo "Using: $WDQ"
+          cd "$BIN"
+          "$WDQ" --release --no-translations --no-compiler-runtime ./QElectroTech.exe || true
+
+          echo "=== 3-pass transitive DLL scan ==="
+          set +e
+          for PASS in 1 2 3; do
+            for bin_file in "$BIN"/*.dll "$BIN"/*.exe "$BIN"/*/*.dll; do
+              [ -f "$bin_file" ] || continue
+              while IFS= read -r line; do
+                dll_path=$(echo "$line" | awk '{print $3}')
+                [ -f "$dll_path" ] || continue
+                dll_name=$(basename "$dll_path")
+                if [ ! -f "$BIN/$dll_name" ]; then
+                  cp "$dll_path" "$BIN/$dll_name"
+                  echo "  Copied (pass $PASS): $dll_name"
+                fi
+              done < <(ldd "$bin_file" 2>/dev/null | grep -i '/ucrt64/bin/')
+            done
+          done
+          set -e
+
+          # MinGW 執行期
+          cp /ucrt64/bin/libgcc_s_seh-1.dll "$BIN/"
+          cp /ucrt64/bin/libstdc++-6.dll    "$BIN/"
+          cp /ucrt64/bin/libwinpthread-1.dll "$BIN/"
+
+          DLL_COUNT=$(find "$BIN" -name "*.dll" | wc -l)
+          echo "=== $DLL_COUNT DLLs present ==="
+          [ "$DLL_COUNT" -gt 5 ] || { echo "ERROR: too few DLLs"; exit 1; }
+          cd "$GITHUB_WORKSPACE"
+
+          # 資料目錄與啟動捷徑（Lancer QET.bat 用 repo 內版本，不再抓上游）
+          cp -r "$GITHUB_WORKSPACE/elements"    "$FILES/elements"
+          cp -r "$GITHUB_WORKSPACE/titleblocks" "$FILES/titleblocks"
+          cp -r "$GITHUB_WORKSPACE/examples"    "$FILES/examples"    || true
+          cp -r "$GITHUB_WORKSPACE/lang"        "$FILES/lang"
+          find "$GITHUB_WORKSPACE/build" -name "*.qm" -exec cp {} "$FILES/lang/" \; 2>/dev/null || true
+          rm -rf "$FILES/elements/.git" "$FILES/lang/"*.ts 2>/dev/null || true
+          cp "$GITHUB_WORKSPACE/build-aux/windows/Lancer QET.bat" "$FILES/Lancer QET.bat"
+          for f in LICENSE ChangeLog CREDIT README ELEMENTS.LICENSE; do
+            cp "$GITHUB_WORKSPACE/$f" "$FILES/$f" 2>/dev/null || true
+          done
+
+          echo "=== Portable layout ==="
+          ls "$FILES"
+          ls -lh "$BIN/QElectroTech.exe"
+
+      - name: Extract version
+        shell: msys2 {0}
+        id: qet_version
+        run: |
+          set -euo pipefail
+          VERSION=$(sed -n 's/^[[:space:]]*VERSION[[:space:]]*\([0-9][0-9.]*\)$/\1/p' \
+            "$GITHUB_WORKSPACE/CMakeLists.txt" | head -1)
+          [ -n "$VERSION" ] || { echo "ERROR: no VERSION in CMakeLists.txt"; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "VERSION: $VERSION"
+
+      - name: Upload portable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qelectrotech-win-portable-v${{ steps.qet_version.outputs.version }}
+          path: portable/
+          retention-days: 14
