@@ -912,10 +912,17 @@ QString QETApp::dataDir()
 #ifdef QET_ALLOW_OVERRIDE_DD_OPTION
 	if (data_dir != QString()) return(data_dir);
 #endif
-	QString datadir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-	while (datadir.endsWith('/')) {
-		datadir.remove(datadir.length()-1, 1);
-	}
+	/* resultat mis en cache : writableLocation interroge le systeme a
+	 * chaque appel et cette methode est sur des chemins tres chauds
+	 * (construction d'ElementsLocation, journalisation...) */
+	static const QString datadir = []() {
+		QString dir = QStandardPaths::writableLocation(
+			QStandardPaths::AppDataLocation);
+		while (dir.endsWith('/')) {
+			dir.chop(1);
+		}
+		return dir;
+	}();
 	return datadir;
 }
 
