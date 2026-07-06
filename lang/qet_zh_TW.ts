@@ -6189,11 +6189,11 @@ Options disponibles :
     </message>
     <message>
         <source>Par</source>
-        <translation>修改</translation>
+        <translation>修改者</translation>
     </message>
     <message>
         <source>Approuvé</source>
-        <translation>核准</translation>
+        <translation>核准者</translation>
     </message>
 </context>
 <context>
