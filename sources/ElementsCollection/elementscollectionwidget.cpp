@@ -289,10 +289,24 @@ void ElementsCollectionWidget::setCurrentLocation(
 {
 	if (!location.exist())
 		return;
+	if (!m_model)
+		return;
 
-	if (m_model)
-		m_tree_view->setCurrentIndex(
-					m_model->indexFromLocation(location));
+	const QModelIndex index = m_model->indexFromLocation(location);
+	if (!index.isValid())
+		return;
+
+	/* les elements sont caches dans l'arbre : deployer et selectionner
+	 * le dossier parent, puis mettre le focus sur l'element dans la
+	 * grille en dessous */
+	const QModelIndex dir_index = index.parent();
+	m_tree_view->setCurrentIndex(dir_index);
+	m_tree_view->expand(dir_index);
+	m_tree_view->scrollTo(dir_index);
+
+	updateGridRoot(index);
+	m_grid_view->scrollTo(index, QAbstractItemView::PositionAtCenter);
+	m_grid_view->setFocus();
 }
 
 void ElementsCollectionWidget::leaveEvent(QEvent *event)
