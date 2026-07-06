@@ -2234,7 +2234,7 @@ Note: These options DO NOT allow or block Auto Numberings, only their Update Pol
     <message>
         <location filename="../sources/ui/elementpropertieswidget.cpp" line="401"/>
         <source>Retrouver dans le panel</source>
-        <translation>在面板中查找</translation>
+        <translation>在元件库中定位</translation>
     </message>
     <message>
         <location filename="../sources/ui/elementpropertieswidget.cpp" line="403"/>
@@ -6728,7 +6728,7 @@ Options disponibles :
     <message>
         <location filename="../sources/qetdiagrameditor.cpp" line="609"/>
         <source>Retrouver dans le panel</source>
-        <translation>在面板中查找</translation>
+        <translation>在元件库中定位</translation>
     </message>
     <message>
         <location filename="../sources/qetdiagrameditor.cpp" line="610"/>
@@ -6783,7 +6783,7 @@ Options disponibles :
         <location filename="../sources/qetdiagrameditor.cpp" line="621"/>
         <source>Retrouve l&apos;élément sélectionné dans le panel</source>
         <comment>status bar tip</comment>
-        <translation>在面板中查找所选元件</translation>
+        <translation>在元件库中定位所选元件</translation>
     </message>
     <message>
         <location filename="../sources/qetdiagrameditor.cpp" line="633"/>
