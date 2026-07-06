@@ -40,7 +40,9 @@ namespace
 		ChangeTextHtmlCommand(IndependentTextItem *item,
 				      const QString &before,
 				      const QString &after,
-				      const QString &text) :
+				      const QString &text,
+				      QUndoCommand *parent = nullptr) :
+			QUndoCommand(parent),
 			m_item(item), m_before(before), m_after(after)
 		{ setText(text); }
 
@@ -54,6 +56,16 @@ namespace
 		QString m_before;
 		QString m_after;
 	};
+
+	QString html_after_merge(IndependentTextItem *item,
+				 const QTextCharFormat &format)
+	{
+		QScopedPointer<QTextDocument> clone(item->document()->clone());
+		QTextCursor cursor(clone.data());
+		cursor.select(QTextCursor::Document);
+		cursor.mergeCharFormat(format);
+		return clone->toHtml();
+	}
 }
 
 /**
@@ -296,9 +308,20 @@ QUndoCommand *IndiTextPropertiesWidget::associatedUndo() const
 						if (!parent_undo) {
 							parent_undo = new QUndoCommand(tr("Modifier la taille de plusieurs champs texte"));
 						}
-						QFont font = piti->font();
-						font.setPointSize(ui->m_size_sb->value());
-						new QPropertyUndoCommand(piti.data(), "font", QVariant(piti->font()), QVariant(font), parent_undo);
+						if (piti->isHtml()) {
+							QTextCharFormat format;
+							format.setFontPointSize(
+								ui->m_size_sb->value());
+							new ChangeTextHtmlCommand(
+								piti.data(),
+								piti->toHtml(),
+								html_after_merge(piti.data(), format),
+								QString(), parent_undo);
+						} else {
+							QFont font = piti->font();
+							font.setPointSize(ui->m_size_sb->value());
+							new QPropertyUndoCommand(piti.data(), "font", QVariant(piti->font()), QVariant(font), parent_undo);
+						}
 					}
 				}
 			}
@@ -312,7 +335,18 @@ QUndoCommand *IndiTextPropertiesWidget::associatedUndo() const
 						if (!parent_undo) {
 							parent_undo = new QUndoCommand(tr("Modifier la police de plusieurs champs texte"));
 						}
-						new QPropertyUndoCommand(piti.data(), "font", piti->font(), m_selected_font, parent_undo);
+						if (piti->isHtml()) {
+							QTextCharFormat format;
+							format.setFont(m_selected_font,
+								QTextCharFormat::FontPropertiesAll);
+							new ChangeTextHtmlCommand(
+								piti.data(),
+								piti->toHtml(),
+								html_after_merge(piti.data(), format),
+								QString(), parent_undo);
+						} else {
+							new QPropertyUndoCommand(piti.data(), "font", piti->font(), m_selected_font, parent_undo);
+						}
 					}
 				}
 			}
@@ -459,15 +493,11 @@ void IndiTextPropertiesWidget::updateUi()
 		}
 		ui->m_angle_sb->setValue(angle_equal ? rotation_ : 0);
 		
-		bool valid_ = true;
-		for (QPointer<IndependentTextItem> piti : m_text_list) {
-			if (piti->isHtml()) {
-				valid_ = false;
-			}
-		}
-		ui->m_font_pb->setEnabled(valid_);
+		/* police et taille restent editables meme avec des textes en
+		 * html : ceux-ci recoivent le format sur tout leur contenu */
+		ui->m_font_pb->setEnabled(true);
 		ui->m_font_pb->setText(font_equal ? font_.family() : tr("Police"));
-		ui->m_size_sb->setEnabled(valid_);
+		ui->m_size_sb->setEnabled(true);
 		ui->m_size_sb->setValue(size_equal ? size_ : 0);
 		ui->m_label->setVisible(false);
 		ui->m_break_html_pb->setVisible(true);
