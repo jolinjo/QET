@@ -68,7 +68,6 @@ void ProjectPrintWindow::launchDialog(QETProject *project, QPrinter::OutputForma
 	{
 		QPrintDialog print_dialog(printer_, parent);
 #ifdef Q_OS_MACOS
-		print_dialog.setWindowFlags(Qt::Sheet);
 #endif
 		print_dialog.setWindowTitle(tr("Options d'impression", "window title"));
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)	// ### Qt 6: remove

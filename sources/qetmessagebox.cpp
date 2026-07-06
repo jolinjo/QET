@@ -33,9 +33,10 @@ QMessageBox::StandardButton QET::QetMessageBox::critical (
 				title,
 				text,
 				buttons,
-				parent,
-				Qt::Sheet);
-	message_box.setWindowModality(Qt::WindowModal);
+				parent);
+	/* pas de Qt::Sheet : le rendu des sheets Qt est defaillant sur
+	 * cette plateforme (panneau invisible qui bloque la fenetre) */
+	message_box.setWindowModality(Qt::ApplicationModal);
 #else
 	QMessageBox message_box(
 				QMessageBox::Critical,
@@ -65,9 +66,10 @@ QMessageBox::StandardButton QET::QetMessageBox::information(
 				title,
 				text,
 				buttons,
-				parent,
-				Qt::Sheet);
-	message_box.setWindowModality(Qt::WindowModal);
+				parent);
+	/* pas de Qt::Sheet : le rendu des sheets Qt est defaillant sur
+	 * cette plateforme (panneau invisible qui bloque la fenetre) */
+	message_box.setWindowModality(Qt::ApplicationModal);
 #else
 	QMessageBox message_box(
 				QMessageBox::Information,
@@ -97,9 +99,10 @@ QMessageBox::StandardButton QET::QetMessageBox::question (
 				title,
 				text,
 				buttons,
-				parent,
-				Qt::Sheet);
-	message_box.setWindowModality(Qt::WindowModal);
+				parent);
+	/* pas de Qt::Sheet : le rendu des sheets Qt est defaillant sur
+	 * cette plateforme (panneau invisible qui bloque la fenetre) */
+	message_box.setWindowModality(Qt::ApplicationModal);
 #else
 	QMessageBox message_box(
 				QMessageBox::Question,
@@ -129,9 +132,10 @@ QMessageBox::StandardButton QET::QetMessageBox::warning (
 				title,
 				text,
 				buttons,
-				parent,
-				Qt::Sheet);
-	message_box.setWindowModality(Qt::WindowModal);
+				parent);
+	/* pas de Qt::Sheet : le rendu des sheets Qt est defaillant sur
+	 * cette plateforme (panneau invisible qui bloque la fenetre) */
+	message_box.setWindowModality(Qt::ApplicationModal);
 #else
 	QMessageBox message_box(
 				QMessageBox::Warning,

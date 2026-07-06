@@ -44,7 +44,6 @@ DiagramPropertiesDialog::DiagramPropertiesDialog(Diagram *diagram, QWidget *pare
 
 	setWindowModality(Qt::WindowModal);
 #ifdef Q_OS_MACOS
-	setWindowFlags(Qt::Sheet);
 #endif
 
 	setWindowTitle(tr("Propriétés du folio", "window title"));

@@ -85,11 +85,6 @@ ConfigDialog::ConfigDialog(QWidget *parent) : QDialog(parent) {
 	resize(std::min(1400,maximumWidth()),
 		   std::min(1000,maximumHeight()));
 
-#ifdef Q_OS_MACOS
-	if (parent) {
-		setWindowFlags(Qt::Sheet);
-	}
-#endif
 }
 
 /// Destructeur

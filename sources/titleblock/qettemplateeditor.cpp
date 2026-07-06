@@ -1000,7 +1000,6 @@ void QETTitleBlockTemplateEditor::editTemplateInformation()
 	QDialog dialog_author(this);
 	dialog_author.setModal(true);
 #ifdef Q_OS_MACOS
-	dialog_author.setWindowFlags(Qt::Sheet);
 #endif
 	dialog_author.setMinimumSize(400, 260);
 	dialog_author.setWindowTitle(tr("Éditer les informations complémentaires", "window title"));

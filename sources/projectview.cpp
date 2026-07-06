@@ -647,7 +647,6 @@ void ProjectView::exportProject()
 
 	ExportDialog ed(m_project, parentWidget());
 #ifdef Q_OS_MACOS
-	ed.setWindowFlags(Qt::Sheet);
 #endif
 	ed.exec();
 }
@@ -736,7 +735,6 @@ int ProjectView::cleanProject()
 
 	QDialog clean_dialog(parentWidget());
 #ifdef Q_OS_MACOS
-	clean_dialog.setWindowFlags(Qt::Sheet);
 #endif
 
 	clean_dialog.setWindowTitle(tr("Nettoyer le projet", "window title"));

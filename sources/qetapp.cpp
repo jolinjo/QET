@@ -2027,7 +2027,6 @@ void QETApp::aboutQET()
 {
 	AboutQETDialog aqd(qApp->activeWindow());
 #ifdef Q_OS_MACOS
-	aqd.setWindowFlags(Qt::Sheet);
 #endif
 	aqd.exec();
 }
