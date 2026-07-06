@@ -110,6 +110,10 @@ void RecentFiles::fileWasOpened(const QString &filepath) {
 	insertFile(filepath);
 	m_open_times.insert(QDir::toNativeSeparators(filepath),
 			    QDateTime::currentDateTime());
+	/* persister immediatement : la sauvegarde a la fermeture ne
+	 * suffit pas (fermeture non propre = horodatages perdus, et la
+	 * vue d'accueil retombe sur la date de modification du fichier) */
+	saveFilesToSettings();
 	buildMenu();
 }
 
