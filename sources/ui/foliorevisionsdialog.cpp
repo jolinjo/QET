@@ -262,8 +262,8 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 		   " chaque folio)"),
 		all_page);
 	auto *rev_form = new QFormLayout(rev_group);
-	m_all_rev_idx = new QLineEdit(rev_group);
-	rev_form->addRow(tr("Indice"), m_all_rev_idx);
+	//la colonne « indice » de la ligne reprend l'indice de revision
+	//saisi plus haut : pas de champ dedie
 	m_all_rev_date = new QDateEdit(rev_group);
 	m_all_rev_date->setCalendarPopup(true);
 	m_all_rev_date->setMinimumDate(QDate(1900, 1, 1));
@@ -352,7 +352,7 @@ void FolioRevisionsDialog::applyToAllFolios()
 			: m_all_rev_date->date().toString(
 				  QStringLiteral("yyyy/M/d"));
 	const QStringList rev_values {
-		m_all_rev_idx->text().trimmed(),
+		batch_index,
 		rev_date_text,
 		m_all_rev_zone->text().trimmed(),
 		m_all_rev_desc->text().trimmed(),

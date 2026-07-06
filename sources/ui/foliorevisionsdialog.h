@@ -64,7 +64,6 @@ class FolioRevisionsDialog : public QDialog
 	QLineEdit *m_all_indexrev;
 	QComboBox *m_all_doc_status;
 	QDateEdit *m_all_issue_date;
-	QLineEdit *m_all_rev_idx;
 	QDateEdit *m_all_rev_date;
 	QLineEdit *m_all_rev_zone;
 	QLineEdit *m_all_rev_desc;
