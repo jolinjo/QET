@@ -6245,6 +6245,16 @@ Options disponibles :
 <context>
     <name>QETDiagramEditor</name>
     <message>
+        <source>Ajouter un folio</source>
+        <comment>toolbar icon text</comment>
+        <translation>新增页面</translation>
+    </message>
+    <message>
+        <source>Supprimer le folio</source>
+        <comment>toolbar icon text</comment>
+        <translation>删除页面</translation>
+    </message>
+    <message>
         <source>Aujourd&#x27;hui</source>
         <comment>welcome view</comment>
         <translation>今天</translation>

@@ -1145,6 +1145,9 @@ void QETDiagramEditor::setUpToolBar()
 	main_tool_bar -> addAction(m_print);
 	main_tool_bar -> addAction(m_export_to_pdf);
 	main_tool_bar -> addSeparator();
+	main_tool_bar -> addAction(m_project_add_diagram);
+	main_tool_bar -> addAction(m_remove_diagram_from_project);
+	main_tool_bar -> addSeparator();
 	main_tool_bar -> addAction(undo);
 	main_tool_bar -> addAction(redo);
 	main_tool_bar -> addSeparator();
@@ -1204,6 +1207,10 @@ void QETDiagramEditor::setUpToolBar()
 			 tr("Éloigner", "toolbar icon text"),
 			 tr("Arrière plan", "toolbar icon text") });
 	m_print->setIconText(tr("Imprimer", "toolbar icon text"));
+	m_project_add_diagram->setIconText(
+		tr("Ajouter un folio", "toolbar icon text"));
+	m_remove_diagram_from_project->setIconText(
+		tr("Supprimer le folio", "toolbar icon text"));
 	m_export_to_pdf->setIconText(tr("Exporter en PDF", "toolbar icon text"));
 	undo->setIconText(tr("Annuler", "toolbar icon text"));
 	redo->setIconText(tr("Refaire", "toolbar icon text"));
