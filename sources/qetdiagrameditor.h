@@ -198,8 +198,7 @@ class QETDiagramEditor : public QETMainWindow
 		*m_paste,			///< Paste clipboard content on the current diagram
 		*m_auto_conductor,		///< Enable/Disable the use of auto conductor
 		*conductor_default,		///< Show a dialog to edit default conductor properties
-		*m_grey_background,		///< Switch the background color in white or grey
-		*m_draw_grid,			///< Switch the background grid display or not
+			*m_draw_grid,			///< Switch the background grid display or not
 		*m_project_edit_properties,	///< Edit the properties of the current project.
 		*m_project_add_diagram,		///< Add a diagram to the current project.
 		*m_remove_diagram_from_project,	///< Delete a diagram from the current project

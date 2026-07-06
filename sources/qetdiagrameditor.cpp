@@ -756,15 +756,6 @@ void QETDiagramEditor::setUpActions()
 	});
 
 		//Switch background color
-	m_grey_background = new QAction   (QET::Icons::DiagramBg, tr("Couleur de fond blanc/gris","Tool tip of white/grey background button"), this);
-	m_grey_background -> setStatusTip (tr("Affiche la couleur de fond du folio en blanc ou en gris", "Status tip of white/grey background button"));
-	m_grey_background -> setCheckable (true);
-	connect (m_grey_background, &QAction::triggered, [this](bool checked) {
-		Diagram::background_color = checked ? Qt::darkGray : Qt::white;
-		if (this->currentDiagramView() &&  this->currentDiagramView()->diagram())
-			this->currentDiagramView()->diagram()->update();
-	});
-
 		//Draw or not the background grid
 	m_draw_grid = new QAction ( QET::Icons::Grid, tr("Afficher la grille"), this);
 	m_draw_grid->setStatusTip(tr("Affiche ou masque la grille des folios"));
@@ -1173,7 +1164,6 @@ void QETDiagramEditor::setUpToolBar()
 	view_tool_bar -> addWidget(new DiagramEditorHandlerSizeWidget(this));
 	view_tool_bar -> addSeparator();
 	view_tool_bar -> addAction(m_draw_grid);
-	view_tool_bar -> addAction (m_grey_background);
 	view_tool_bar -> addSeparator();
 	view_tool_bar -> addActions(m_zoom_action_toolBar);
 
@@ -1233,7 +1223,6 @@ void QETDiagramEditor::setUpToolBar()
 	m_mode_selection->setIconText(tr("Sélection", "toolbar icon text"));
 	m_mode_visualise->setIconText(tr("Visualisation", "toolbar icon text"));
 	m_draw_grid->setIconText(tr("Grille", "toolbar icon text"));
-	m_grey_background->setIconText(tr("Fond gris", "toolbar icon text"));
 	m_edit_diagram_properties->setIconText(
 		tr("Cartouche", "toolbar icon text"));
 	m_edit_folio_revisions->setIconText(
@@ -1356,7 +1345,6 @@ void QETDiagramEditor::setUpMenu()
 	menu_affichage -> addAction(m_mode_visualise);
 	menu_affichage -> addSeparator();
 	menu_affichage -> addAction(m_draw_grid);
-	menu_affichage -> addAction(m_grey_background);
 	menu_affichage -> addSeparator();
 	menu_affichage -> addActions(m_zoom_actions_group.actions());
 
@@ -2057,7 +2045,6 @@ void QETDiagramEditor::slot_updateActions()
 	m_select_actions_group.         setEnabled(opened_diagram);
 	m_add_item_actions_group.       setEnabled(editable_project);
 	m_row_column_actions_group.     setEnabled(editable_project);
-	m_grey_background->             setEnabled(opened_diagram);
 	m_draw_grid->                   setEnabled(opened_diagram);
 
 		//Project menu
