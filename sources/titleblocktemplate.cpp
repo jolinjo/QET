@@ -1751,6 +1751,10 @@ QString TitleBlockTemplate::interpreteVariables(
 		interpreted_string.replace("%" % key,
 					   diagram_context[key].toString());
 	}
+	/* les variables restees sans valeur (cle absente du folio)
+	 * s'affichent en blanc plutot qu'en litteral « %{rev1-idx} » */
+	static const QRegularExpression unresolved("%\\{[^}]*\\}");
+	interpreted_string.remove(unresolved);
 	return(interpreted_string);
 }
 
