@@ -31,6 +31,7 @@
 #include <QProcess>
 #include <QPushButton>
 #include <QSettings>
+#include <QTextBrowser>
 #include <QVBoxLayout>
 #include <QVersionNumber>
 
@@ -79,7 +80,11 @@ AppUpdateDialog::AppUpdateDialog(QWidget *parent) :
 		this);
 
 	m_versions = new QListWidget(this);
-	m_versions->setMinimumSize(420, 180);
+	m_versions->setMinimumSize(460, 140);
+
+	m_notes = new QTextBrowser(this);
+	m_notes->setMinimumHeight(180);
+	m_notes->setOpenExternalLinks(false);
 
 	m_refresh = new QPushButton(tr("Actualiser"), this);
 	connect(m_refresh, &QPushButton::clicked,
@@ -113,6 +118,8 @@ AppUpdateDialog::AppUpdateDialog(QWidget *parent) :
 		tr("Version actuelle : %1").arg(
 			QetVersion::displayedVersion()), this));
 	layout->addWidget(m_versions);
+	layout->addWidget(new QLabel(tr("Nouveautés :"), this));
+	layout->addWidget(m_notes);
 	layout->addWidget(m_status);
 	layout->addWidget(buttons);
 
@@ -180,6 +187,20 @@ void AppUpdateDialog::refreshVersionList()
 	m_status->setText(versions.isEmpty()
 		? tr("Aucune version publiée trouvée.")
 		: tr("Versions disponibles : %1").arg(versions.count()));
+
+	//journal des modifications publie a cote des binaires (Gitea raw)
+	QString notes;
+	if (run_process(QStringLiteral("curl"),
+			{ QStringLiteral("-fsS"), QStringLiteral("--max-time"),
+			  QStringLiteral("5"),
+			  url % QStringLiteral(
+				  "/raw/branch/mac-stable/CHANGELOG-mac.md") },
+			&notes)) {
+		m_notes->setMarkdown(notes);
+	} else {
+		m_notes->setPlainText(
+			tr("(journal des modifications indisponible)"));
+	}
 }
 
 /**

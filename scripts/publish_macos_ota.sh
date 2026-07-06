@@ -102,6 +102,27 @@ else
 	find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
 fi
 rsync -a --delete "$APP/" "$CACHE/qelectrotech.app/"
+
+# 7. 更新紀錄:彙整自上次發佈以來 fork 的所有 commit ---------------------------
+FORK_SHA=$(git -C "$ROOT" rev-parse HEAD)
+NOTES=""
+if [ -f "$CACHE/.fork-sha" ]; then
+	PREV_SHA=$(cat "$CACHE/.fork-sha")
+	NOTES=$(git -C "$ROOT" log --no-merges --pretty='- %s' \
+		"$PREV_SHA..HEAD" 2>/dev/null || true)
+fi
+[ -n "$NOTES" ] || NOTES="- (無變更紀錄)"
+CHANGELOG="$CACHE/CHANGELOG-mac.md"
+{
+	echo "## v$VERSION($(date +%Y-%m-%d))"
+	echo
+	printf '%s\n' "$NOTES"
+	echo
+	[ -f "$CHANGELOG" ] && cat "$CHANGELOG"
+} > "$CHANGELOG.new"
+mv "$CHANGELOG.new" "$CHANGELOG"
+printf '%s\n' "$FORK_SHA" > "$CACHE/.fork-sha"
+
 git add -A
 if ! git diff --cached --quiet; then
 	git commit -q -m "mac 版 v$VERSION"

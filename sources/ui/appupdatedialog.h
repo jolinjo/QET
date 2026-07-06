@@ -24,6 +24,7 @@ class QLabel;
 class QLineEdit;
 class QListWidget;
 class QPushButton;
+class QTextBrowser;
 
 /**
 	@brief The AppUpdateDialog class
@@ -45,6 +46,7 @@ class AppUpdateDialog : public QDialog
 
 	QLineEdit *m_url;
 	QListWidget *m_versions;
+	QTextBrowser *m_notes;
 	QPushButton *m_refresh;
 	QPushButton *m_apply;
 	QLabel *m_status;

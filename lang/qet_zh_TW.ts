@@ -15268,6 +15268,14 @@ Longueur maximale : %2px
 <context>
     <name>AppUpdateDialog</name>
     <message>
+        <source>Nouveautés :</source>
+        <translation>更新內容：</translation>
+    </message>
+    <message>
+        <source>(journal des modifications indisponible)</source>
+        <translation>（無法取得更新紀錄）</translation>
+    </message>
+    <message>
         <source>Mise à jour de l&apos;application</source>
         <comment>window title</comment>
         <translation>應用程式更新</translation>
