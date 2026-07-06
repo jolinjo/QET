@@ -407,16 +407,32 @@ void FolioRevisionsDialog::applyToAllFolios()
 				if (empty) { free_row = row; break; }
 			}
 			if (free_row == -1) {
-				++full;
-			} else {
-				for (int column = 0 ;
-				     column < REV_FIELD_COUNT ; ++column) {
-					new_properties.context.addValue(
-						revKey(free_row, column),
-						rev_values.at(column));
+				/* six lignes occupees : faire defiler --
+				 * la plus ancienne (ligne 1) disparait,
+				 * la nouvelle s'ecrit en ligne 6 */
+				for (int row = 0 ; row < ROW_COUNT - 1 ;
+				     ++row) {
+					for (int column = 0 ;
+					     column < REV_FIELD_COUNT ;
+					     ++column) {
+						new_properties.context.addValue(
+							revKey(row, column),
+							new_properties.context
+								.value(revKey(row + 1,
+									      column))
+								.toString());
+					}
 				}
-				changed = true;
+				free_row = ROW_COUNT - 1;
+				++full;
 			}
+			for (int column = 0 ;
+			     column < REV_FIELD_COUNT ; ++column) {
+				new_properties.context.addValue(
+					revKey(free_row, column),
+					rev_values.at(column));
+			}
+			changed = true;
 		}
 
 		if (changed && new_properties != old_properties) {
@@ -429,8 +445,8 @@ void FolioRevisionsDialog::applyToAllFolios()
 	QMessageBox::information(
 		this->parentWidget() ? this->parentWidget() : nullptr,
 		tr("Révisions du folio", "window title"),
-		tr("Appliqué à %1 folios. %2 folios sans ligne de révision"
-		   " libre (non modifiés).").arg(applied).arg(full));
+		tr("Appliqué à %1 folios (%2 avec défilement : la révision"
+		   " la plus ancienne a été retirée).").arg(applied).arg(full));
 }
 
 /**

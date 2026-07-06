@@ -6111,6 +6111,10 @@ Options disponibles :
 <context>
     <name>FolioRevisionsDialog</name>
     <message>
+        <source>Appliqué à %1 folios (%2 avec défilement : la révision la plus ancienne a été retirée).</source>
+        <translation>已套用 %1 頁（其中 %2 頁修訂列已滿，移除最早一筆後續填）。</translation>
+    </message>
+    <message>
         <source>Ce folio</source>
         <translation>本頁</translation>
     </message>
