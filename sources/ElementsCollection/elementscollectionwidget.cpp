@@ -1544,8 +1544,24 @@ void ElementsCollectionWidget::loadingFinished()
 		/* les elements ajoutes apres coup (projets ouverts, imports)
 		 * doivent aussi rester caches dans l'arbre */
 		connect(m_model, &QStandardItemModel::rowsInserted, this,
-			[this](const QModelIndex &parent, int, int) {
-			hideElementRows(parent);
+			[this](const QModelIndex &parent, int first, int last) {
+			/* borner le travail aux lignes reellement inserees :
+			 * re-balayer tout le sous-arbre du parent a chaque
+			 * insertion devenait quadratique lors des integrations
+			 * en serie (collage inter-projets) */
+			for (int row = first ; row <= last ; ++row) {
+				const QModelIndex index =
+					m_model->index(row, 0, parent);
+				ElementCollectionItem *eci =
+					elementCollectionItemForIndex(index);
+				if (!eci) continue;
+				if (eci->isElement()) {
+					m_tree_view->setRowHidden(
+						row, parent, true);
+				} else {
+					hideElementRows(index);
+				}
+			}
 		});
 	}
 	else {
