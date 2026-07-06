@@ -625,6 +625,61 @@ namespace autonum
 		return formula;
 	}
 
+	namespace
+	{
+		/**
+			Parcourt un fichier qet_labels.xml (meme format que le
+			fichier officiel) et retourne le prefixe correspondant au
+			chemin de dossiers donne ; chaine nulle si le fichier est
+			absent ou sans correspondance.
+		*/
+		QString prefixFromLabelsFile(const QString &filepath,
+					     const QString *path,
+					     int start_index,
+					     int dirLevel)
+		{
+			QFile file(filepath);
+			if (!file.open(QFile::ReadOnly | QFile::Text))
+				return QString();
+
+			QXmlStreamReader rxml;
+			rxml.setDevice(&file);
+			rxml.readNext();
+			int i = start_index;
+		while(!rxml.atEnd())
+		{
+			if (rxml.attributes().value("name").toString() == path[i])
+			{
+				rxml.readNext();
+				i=i-1;
+					//reached element directory
+				if (i==0)
+				{
+					for (int j=i; j<= dirLevel; j = j +1)
+					{
+							//if there is a prefix available apply prefix
+						if(rxml.name().toString()=="prefix")
+						{
+							return rxml.readElementText();
+						}
+							//if there isn't a prefix available, find parent prefix in parent folder
+						else
+						{
+							while (rxml.readNextStartElement() && rxml.name().toString()!="prefix")
+							{
+								rxml.skipCurrentElement();
+								rxml.readNext();
+							}
+						}
+					}
+				}
+			}
+			rxml.readNext();
+			}
+			return QString();
+		}
+	}
+
 	/**
 		@brief elementPrefixForLocation
 		@param location
@@ -638,7 +693,6 @@ namespace autonum
 		if (!location.isProject())
 			return QString();
 
-		QXmlStreamReader rxml;
 		QString path[10];
 		int i = -1;
 		ElementsLocation current_location = location;
@@ -661,91 +715,28 @@ namespace autonum
 			dirLevel = 0;
 		}
 
-		// Create Custom labels if qet_labels.xml exits in customElementsDir
+		// collections non officielles : chaine de recherche
+		// 1) collection company  2) collection utilisateur (spec B)
 		if (current_location.fileName() != "10_electric"){
-		QString custom_labels = "qet_labels.xml";
-		QString customfilepath = QETApp::customElementsDir().append(custom_labels);
-		
-		QFile file(customfilepath);
-		file.isReadable();
-		if (!file.open(QFile::ReadOnly | QFile::Text))
-			return QString();
-				rxml.setDevice(&file);
-				rxml.readNext();
-
-		while(!rxml.atEnd())
+		const QStringList labels_files {
+			QETApp::companyElementsDir() % QStringLiteral("qet_labels.xml"),
+			QETApp::customElementsDir() % QStringLiteral("qet_labels.xml") };
+		for (const QString &labels_file : labels_files)
 		{
-			if (rxml.attributes().value("name").toString() == path[i])
-			{
-				rxml.readNext();
-				i=i-1;
-					//reached element directory
-				if (i==0)
-				{
-					for (int j=i; j<= dirLevel; j = j +1)
-					{
-							//if there is a prefix available apply prefix
-						if(rxml.name().toString()=="prefix")
-						{
-							return rxml.readElementText();
-						}
-							//if there isn't a prefix available, find parent prefix in parent folder
-						else
-						{
-							while (rxml.readNextStartElement() && rxml.name().toString()!="prefix")
-							{
-								rxml.skipCurrentElement();
-								rxml.readNext();
-							}
-						}
-					}
-				}
+			const QString prefix = prefixFromLabelsFile(
+				labels_file, path, i, dirLevel);
+			if (!prefix.isEmpty()) {
+				return prefix;
 			}
-			rxml.readNext();
-			}
+		}
+		return QString();
 		}
 		else
 		{
-		QString qet_labels = "10_electric/qet_labels.xml";
-		QString filepath = QETApp::commonElementsDir().append(qet_labels);
-		QFile file(filepath);
-		file.isReadable();
-		if (!file.open(QFile::ReadOnly | QFile::Text))
-			return QString();
-			
-		rxml.setDevice(&file);
-		rxml.readNext();
-
-		while(!rxml.atEnd())
-		{
-			if (rxml.attributes().value("name").toString() == path[i])
-			{
-				rxml.readNext();
-				i=i-1;
-					//reached element directory
-				if (i==0)
-				{
-					for (int j=i; j<= dirLevel; j = j +1)
-					{
-							//if there is a prefix available apply prefix
-						if(rxml.name().toString()=="prefix")
-						{
-							return rxml.readElementText();
-						}
-							//if there isn't a prefix available, find parent prefix in parent folder
-						else
-						{
-							while (rxml.readNextStartElement() && rxml.name().toString()!="prefix")
-							{
-								rxml.skipCurrentElement();
-								rxml.readNext();
-							}
-						}
-					}
-				}
-			}
-			rxml.readNext();
-		}
+		return prefixFromLabelsFile(
+			QETApp::commonElementsDir()
+				% QStringLiteral("10_electric/qet_labels.xml"),
+			path, i, dirLevel);
 		}
 		return QString();
 	}

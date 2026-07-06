@@ -113,7 +113,11 @@ Element::Element(
 		*state = 0;
 	}
 
-	setPrefix(autonum::elementPrefixForLocation(location));
+	/* les esclaves de reference croisee heritent du label de leur
+	 * maitre : pas de prefixe d'auto-numerotation (spec C) */
+	if (m_link_type != Element::Slave) {
+		setPrefix(autonum::elementPrefixForLocation(location));
+	}
 	m_uuid = QUuid::createUuid();
 	setZValue(10);
 	setFlags(QGraphicsItem::ItemIsMovable
@@ -452,6 +456,19 @@ bool Element::buildFromXml(const QDomElement &xml_def_elmt, int *state)
 	m_data.m_informations.fromXml(
 				xml_def_elmt.firstChildElement(QStringLiteral("elementInformations")),
 				QStringLiteral("elementInformation"));
+
+	/* priorite 1 : prefixe declare dans la definition de l'element
+	 * (<elementInformation name="prefix">) ; prime sur la table
+	 * qet_labels.xml deja appliquee au constructeur (spec A) */
+	if (m_link_type != Element::Slave) {
+		const QString definition_prefix =
+			m_data.m_informations
+				.value(QStringLiteral("prefix"))
+				.toString();
+		if (!definition_prefix.isEmpty()) {
+			setPrefix(definition_prefix);
+		}
+	}
 
 		//scroll of the Children of the Definition: Parts of the Drawing
 	int parsed_elements_count = 0;
