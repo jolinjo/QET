@@ -141,7 +141,7 @@ AppUpdateDialog::AppUpdateDialog(QWidget *parent) :
 }
 
 /**
-	List the published versions (win-v*/mac-v* tags of the release
+	List the published versions (win-v* or mac-v* tags of the release
 	repository), newest first.
 */
 void AppUpdateDialog::refreshVersionList()
