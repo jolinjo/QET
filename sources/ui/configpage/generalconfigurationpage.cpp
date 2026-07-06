@@ -123,7 +123,7 @@ GeneralConfigurationPage::GeneralConfigurationPage(QWidget *parent) :
 	ui->m_library_git_url_le->setText(settings.value("elementspanel/library-git-url", "https://github.com/jolinjo/QET-Lib").toString());
 	ui->m_hide_common_elements_cb->setChecked(settings.value("collections/hide-common-elements", false).toBool());
 	ui->m_hide_common_titleblocks_cb->setChecked(settings.value("collections/hide-common-titleblocks", false).toBool());
-	ui->m_save_label_paste->setChecked(settings.value("diagramcommands/erase-label-on-copy", true).toBool());
+	ui->m_save_label_paste->setChecked(settings.value("diagramcommands/erase-label-on-copy", false).toBool());
 	ui->m_use_folio_label->setChecked(settings.value("genericpanel/folio", true).toBool());
 	ui->m_border_0->setChecked(settings.value("border-columns_0", false).toBool());
 	ui->m_autosave_sb->setValue(settings.value("diagrameditor/autosave-interval", 0).toInt());

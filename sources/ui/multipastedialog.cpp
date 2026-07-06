@@ -104,7 +104,7 @@ void MultiPasteDialog::on_m_button_box_accepted()
 		m_diagram->undoStack().beginMacro(tr("Multi-collage"));
 
 		QSettings settings;
-		bool erase_label = settings.value("diagramcommands/erase-label-on-copy", true).toBool();
+		bool erase_label = settings.value("diagramcommands/erase-label-on-copy", false).toBool();
 			//Ensure when 'auto_num' is checked, the settings 'save_label' is to true.
 			//Because in the class PasteDiagramCommand, if the settings 'save_label' is to false,
 			//the function redo of PasteDiagramCommand, clear the formula and the label of the pasted element
