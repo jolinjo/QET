@@ -256,7 +256,7 @@ void ElementsLocation::setPath(const QString &path)
 	}
 	else if (tmp_path.startsWith("project"))
 	{
-		QRegularExpression re ("^project(?<project_id>[0-9])\\+(?<collection_path>embed://*.*)$");
+		static const QRegularExpression re ("^project(?<project_id>[0-9])\\+(?<collection_path>embed://*.*)$");
 		if (!re.isValid()) return;
 		QRegularExpressionMatch match = re.match(tmp_path);
 		if (!match.hasMatch()) return;
@@ -399,21 +399,13 @@ bool ElementsLocation::addToPath(const QString &string)
 ElementsLocation ElementsLocation::parent() const
 {
 	ElementsLocation copy(*this);
-	QRegularExpression re ("^(?<path_proto>[a-z]+://.*)/.*$");
-	if (!re.isValid())
-	{
-		qWarning()
-			<<QObject::tr("this is an error in the code")
-			<< re.errorString()
-			<< re.patternErrorOffset();
-	}
+	/* expression statique et pas de qDebug sur l'absence de
+	 * correspondance : methode appelee en masse lors des collages
+	 * inter-projets (cas sans correspondance inclus) */
+	static const QRegularExpression re(
+		"^(?<path_proto>[a-z]+://.*)/.*$");
 	QRegularExpressionMatch match = re.match(m_collection_path);
-	if (!match.hasMatch())
-	{
-		qDebug()
-			<<"no Match => return"
-			<<m_collection_path;
-	}else {
+	if (match.hasMatch()) {
 		copy.setPath(match.captured("path_proto"));
 	}
 	return(copy);
