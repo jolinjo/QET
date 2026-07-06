@@ -145,7 +145,7 @@ bool ElementsLocation::operator!=(const ElementsLocation &other) const
 */
 QString ElementsLocation::baseName() const
 {
-	QRegularExpression regexp("^.*(?<name>[^/]+)\\.elmt$");
+	static const QRegularExpression regexp("^.*(?<name>[^/]+)\\.elmt$");
 	if (!regexp.isValid())
 	{
 		qWarning() <<"this is an error in the code"
@@ -180,8 +180,13 @@ QString ElementsLocation::collectionPath(bool protocol) const
 		return m_collection_path;
 	else
 	{
+		/* expression statique : cette methode est appelee en masse
+		 * lors des collages inter-projets, recompiler l'expression a
+		 * chaque appel dominait le temps d'execution */
+		static const QRegularExpression protocols(
+			"common://|company://|custom://|macros://|embed://");
 		QString path = m_collection_path;
-		return path.remove(QRegularExpression("common://|company://|custom://|macros://|embed://"));
+		return path.remove(protocols);
 	}
 }
 
