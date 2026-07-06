@@ -653,8 +653,12 @@ void DiagramView::wheelEvent(QWheelEvent *event)
 	{
 		if (event->modifiers() == Qt::ControlModifier) //zoom
 		{
-			qreal value = angle.y();
-			zoom(1 + value/1000);
+			/* pas de zoom proportionnel au delta : l'acceleration
+			 * de la molette rendait le resultat dependant de la
+			 * vitesse ; un cran = un facteur fixe */
+			if (angle.y() != 0) {
+				zoom(angle.y() > 0 ? 1.15 : 1.0 / 1.15);
+			}
 		}
 		else //scroll
 		{
@@ -664,8 +668,9 @@ void DiagramView::wheelEvent(QWheelEvent *event)
 	}
 	else if (event->modifiers() == Qt::NoModifier) //Else we suppose the wheel event are made from a mouse.
 	{
-		qreal value = angle.y();
-		zoom(1 + value/1000);
+		if (angle.y() != 0) {
+			zoom(angle.y() > 0 ? 1.15 : 1.0 / 1.15);
+		}
 	}
 	else
 		QGraphicsView::wheelEvent(event);
