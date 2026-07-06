@@ -1461,6 +1461,23 @@ void QETDiagramEditor::saveAs()
 */
 bool QETDiagramEditor::newProject()
 {
+	/* modele de projet societe (synchronise par « 更新公司元件庫 ») :
+	 * un nouveau projet est une copie sans titre du modele */
+	const QDir template_dir(
+		QETApp::dataDir() % QStringLiteral("/Project-Example"));
+	const QStringList template_files = template_dir.entryList(
+		{ QStringLiteral("*.qet") }, QDir::Files, QDir::Name);
+	if (!template_files.isEmpty())
+	{
+		auto *project = new QETProject(
+			template_dir.filePath(template_files.last()), this);
+		if (project->state() == QETProject::Ok) {
+			project->setFilePath(QString());
+			return addProject(project);
+		}
+		delete project;
+	}
+
 	auto new_project = new QETProject(this);
 
 	// add new diagram

@@ -613,6 +613,31 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 		items << it;
 	}
 
+	// project template : the whole Project-Example dir, versioned by filename
+	QString tpl_tree;
+	if (run_process(QStringLiteral("git"),
+		{ QStringLiteral("-c"), QStringLiteral("core.quotepath=false"),
+		  QStringLiteral("ls-tree"), QStringLiteral("--name-only"),
+		  QStringLiteral("HEAD"), QStringLiteral("Project-Example/") },
+		cache_dir, &tpl_tree)
+	    && !tpl_tree.trimmed().isEmpty()) {
+		QString online_ver;
+		const QStringList tpl_files = tpl_tree.split(QChar('\n'), Qt::SkipEmptyParts);
+		for (const QString &f : tpl_files) {
+			const QString v = qetlib_version(f.section(QChar('/'), -1));
+			if (v > online_ver) online_ver = v;
+		}
+		LibItem it;
+		it.kind = QStringLiteral("project-template");
+		it.repo_sub = QStringLiteral("Project-Example");
+		it.target_sub = it.repo_sub;
+		it.display = tr("專案範本(新增專案用)");
+		it.online_ver = online_ver;
+		it.local_ver = qetlib_titleblocks_version(
+			data_dir % QStringLiteral("/Project-Example"));
+		items << it;
+	}
+
 	sync_value(m_sync_progress->maximum());
 	sync_end();
 
@@ -667,6 +692,7 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 	};
 	add_group(tr("元件庫"), QStringLiteral("elements"));
 	add_group(tr("圖框"), QStringLiteral("titleblocks"));
+	add_group(tr("專案範本"), QStringLiteral("project-template"));
 	tree->expandAll();
 	for (int c = 1 ; c < 4 ; ++c) tree->resizeColumnToContents(c);
 
