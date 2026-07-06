@@ -1286,6 +1286,24 @@ Diagram *QETProject::addNewDiagram(int pos)
 	if (tbp.folio.isEmpty()) {
 		tbp.folio = QStringLiteral("%id / %total");
 	}
+	/* le numero de document est commun a tout le projet (comme le
+	 * titre) : le nouveau folio herite de celui des folios existants */
+	if (tbp.context.value(QStringLiteral("doc-id")).toString().isEmpty()) {
+		const QList<Diagram *> existing = diagrams();
+		if (!existing.isEmpty()) {
+			const QString doc_id =
+				existing.first()
+					->border_and_titleblock
+					.exportTitleBlock()
+					.context
+					.value(QStringLiteral("doc-id"))
+					.toString();
+			if (!doc_id.isEmpty()) {
+				tbp.context.addValue(
+					QStringLiteral("doc-id"), doc_id);
+			}
+		}
+	}
 	diagram->border_and_titleblock.importTitleBlock(tbp);
 	diagram->defaultConductorProperties = defaultConductorProperties();
 
