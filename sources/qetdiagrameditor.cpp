@@ -1159,7 +1159,6 @@ void QETDiagramEditor::setUpToolBar()
 	view_tool_bar -> addAction(m_mode_selection);
 	view_tool_bar -> addAction(m_mode_visualise);
 	view_tool_bar -> addSeparator();
-	view_tool_bar -> addAction(m_draw_grid);
 	view_tool_bar -> addSeparator();
 	view_tool_bar -> addActions(m_zoom_action_toolBar);
 
@@ -1215,7 +1214,6 @@ void QETDiagramEditor::setUpToolBar()
 	m_rotate_selection->setIconText(tr("Pivoter", "toolbar icon text"));
 	m_mode_selection->setIconText(tr("Sélection", "toolbar icon text"));
 	m_mode_visualise->setIconText(tr("Visualisation", "toolbar icon text"));
-	m_draw_grid->setIconText(tr("Grille", "toolbar icon text"));
 	m_edit_diagram_properties->setIconText(
 		tr("Cartouche", "toolbar icon text"));
 	m_edit_folio_revisions->setIconText(

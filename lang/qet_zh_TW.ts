@@ -8115,7 +8115,7 @@ les conditions requises ne sont pas valides</source>
         <location filename="../sources/qetproject.cpp" line="395"/>
         <source>Projet « %1 : %2»</source>
         <comment>displayed title for a ProjectView - %1 is the project title, -%2 is the project path</comment>
-        <translation>專案 « %1 : %2»</translation>
+        <translation>檔案 « %1 : %2»</translation>
     </message>
     <message>
         <location filename="../sources/qetproject.cpp" line="402"/>
