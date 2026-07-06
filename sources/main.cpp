@@ -23,6 +23,7 @@
 #include "utils/macosxopenevent.h"
 #include "utils/qetsettings.h"
 
+#include <QMutex>
 #include <QStyleFactory>
 #include <QtConcurrentRun>
 #include <QSettings>
@@ -55,8 +56,10 @@ void myMessageOutput(QtMsgType type,
 			file,
 			context.line,
 			function);
-		txt+=" Debug: ";
-		break;
+		/* les messages de debug ne vont pas dans le fichier journal :
+		 * certains chemins (collage inter-projets...) en emettent des
+		 * milliers et l'ecriture fichier gelait l'interface */
+		return;
 	case QtInfoMsg:
 		fprintf(stderr,
 			"%s Info: %s \n",
@@ -115,16 +118,25 @@ void myMessageOutput(QtMsgType type,
 		txt+= context.function ? context.function : "";
 		txt+=")\n";
 	}
-	QFile outFile(QETApp::dataDir()
-			  +"/"
-			  +QDate::currentDate().toString("yyyyMMdd")
-			  +".log");
-	if(outFile.open(QIODevice::WriteOnly | QIODevice::Append))
-	{
+	/* fichier journal garde ouvert (l'ouverture/fermeture a chaque
+	 * message coutait tres cher) ; mutex : le gestionnaire peut etre
+	 * appele depuis les threads de travail */
+	static QMutex log_mutex;
+	QMutexLocker locker(&log_mutex);
+	static QFile outFile;
+	static QString log_date;
+	const QString date = QDate::currentDate().toString("yyyyMMdd");
+	if (!outFile.isOpen() || log_date != date) {
+		outFile.close();
+		log_date = date;
+		outFile.setFileName(QETApp::dataDir() % "/" % date % ".log");
+		outFile.open(QIODevice::WriteOnly | QIODevice::Append);
+	}
+	if (outFile.isOpen()) {
 		QTextStream ts(&outFile);
 		ts << txt;
+		ts.flush();
 	}
-	outFile.close();
 }
 
 /**
