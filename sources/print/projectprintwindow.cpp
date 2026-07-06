@@ -698,18 +698,23 @@ QList<Diagram *> ProjectPrintWindow::selectedDiagram() const
 void ProjectPrintWindow::exportToPDF()
 {
 	/* proposition par defaut : dossier Téléchargements,
-	 * nom = <date de publication>-<indice de revision>-<titre du
+	 * nom = <date de publication>-<indice de revision>_<titre du
 	 * projet>.pdf (cartouche du premier folio) */
-	QStringList parts;
+	QStringList head_parts;
 	if (!m_project->diagrams().isEmpty()) {
 		auto &btb = m_project->diagrams().first()->border_and_titleblock;
 		const TitleBlockProperties tbp = btb.exportTitleBlock();
 		if (tbp.date.isValid()) {
-			parts << tbp.date.toString(QStringLiteral("yyyyMMdd"));
+			head_parts << tbp.date.toString(
+				QStringLiteral("yyyyMMdd"));
 		}
 		if (!tbp.indexrev.isEmpty()) {
-			parts << tbp.indexrev;
+			head_parts << tbp.indexrev;
 		}
+	}
+	QStringList parts;
+	if (!head_parts.isEmpty()) {
+		parts << head_parts.join(QStringLiteral("-"));
 	}
 	if (!m_project->title().isEmpty()) {
 		parts << m_project->title();
@@ -717,7 +722,7 @@ void ProjectPrintWindow::exportToPDF()
 	if (parts.isEmpty()) {
 		parts << QStringLiteral("projet");
 	}
-	QString default_name = parts.join(QStringLiteral("-"))
+	QString default_name = parts.join(QStringLiteral("_"))
 		+ QStringLiteral(".pdf");
 	// caracteres interdits dans un nom de fichier
 	default_name.replace(QRegularExpression(
