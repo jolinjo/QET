@@ -19,7 +19,12 @@
 
 namespace QetVersion
 {
+#ifdef QET_RELEASE_BUILD
+	/* 組建 OTA 發行版:顯示乾淨版號(無 -dev 字尾) */
+	QetVersion::VersionType VERSION_TYPE = QetVersion::stable;
+#else
 	QetVersion::VersionType VERSION_TYPE = QetVersion::dev;
+#endif
 
 	QVersionNumber currentVersion()
 	{

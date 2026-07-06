@@ -158,7 +158,10 @@ void AppUpdateDialog::refreshVersionList()
 		return a > b;
 	});
 
-	const QVersionNumber current = QetVersion::currentVersion();
+	//version courante d'apres la version affichee (currentVersion()
+	//garde la valeur amont pour la compatibilite des fichiers)
+	const QVersionNumber current = QVersionNumber::fromString(
+		QetVersion::displayedVersion().section(QChar('-'), 0, 0));
 	for (int i = 0 ; i < versions.count() ; ++i) {
 		const QVersionNumber &version = versions.at(i);
 		QString text = QStringLiteral("v") + version.toString();

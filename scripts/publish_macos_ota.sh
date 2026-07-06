@@ -5,7 +5,9 @@
 #       自包含稽核 → 推進內網 QET-release repo(mac-stable 分支),
 #       打 mac-vX.Y.Z tag 並只保留最近 KEEP 版。
 #
-# 用法:  scripts/publish_macos_ota.sh [--no-build]
+# 用法:  scripts/publish_macos_ota.sh [--no-build|--release]
+#        --release:以 QET_RELEASE_BUILD=ON 重建(版號無 -dev),發佈後
+#        還原為 OFF。OTA 正式版一律用 --release。
 # 需求:  對 $REPO_URL 有 push 權限(git 認證先設定好)。
 
 set -euo pipefail
@@ -26,7 +28,11 @@ TAG="${TAG_PREFIX}${VERSION}"
 echo "== 發佈 mac 版 v$VERSION → $REPO_URL ($BRANCH, tag $TAG)"
 
 # 1. 建置 ------------------------------------------------------------------
-if [ "${1:-}" != "--no-build" ]; then
+if [ "${1:-}" = "--release" ]; then
+	cmake -B "$ROOT/build" -S "$ROOT" -DQET_RELEASE_BUILD=ON >/dev/null
+	cmake --build "$ROOT/build"
+	trap 'cmake -B "$ROOT/build" -S "$ROOT" -DQET_RELEASE_BUILD=OFF >/dev/null; rm -rf "$STAGE"' EXIT
+elif [ "${1:-}" != "--no-build" ]; then
 	cmake --build "$ROOT/build"
 fi
 [ -d "$ROOT/build/qelectrotech.app" ] || { echo "!! 找不到 build/qelectrotech.app"; exit 1; }

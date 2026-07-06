@@ -67,8 +67,14 @@ qt_add_executable(
 
 # Scope the version define to qetversion.cpp only, so bumping the project version
 # recompiles just that one file (+ relink) instead of the whole target.
+# QET_RELEASE_BUILD=ON 時為 OTA 發行版:版號無 -dev 字尾。
+option(QET_RELEASE_BUILD "OTA release build (clean version, no -dev suffix)" OFF)
+set(QET_VERSION_DEFS QET_PROJECT_VERSION="${PROJECT_VERSION}")
+if(QET_RELEASE_BUILD)
+  list(APPEND QET_VERSION_DEFS QET_RELEASE_BUILD)
+endif()
 set_source_files_properties(${QET_DIR}/sources/qetversion.cpp PROPERTIES
-  COMPILE_DEFINITIONS QET_PROJECT_VERSION="${PROJECT_VERSION}")
+  COMPILE_DEFINITIONS "${QET_VERSION_DEFS}")
 
 if(APPLE)
   set_target_properties(${PROJECT_NAME} PROPERTIES
