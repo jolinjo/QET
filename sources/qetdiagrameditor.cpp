@@ -1083,7 +1083,6 @@ void QETDiagramEditor::setUpActions()
 	QAction *add_rectangle = m_add_item_actions_group.addAction(QET::Icons::PartRectangle, tr("Ajouter un rectangle"));
 	QAction *add_ellipse   = m_add_item_actions_group.addAction(QET::Icons::PartEllipse,   tr("Ajouter une ellipse"));
 	QAction *add_polyline  = m_add_item_actions_group.addAction(QET::Icons::PartPolygon,   tr("Ajouter une polyligne"));
-	QAction *add_terminal_strip = m_add_item_actions_group.addAction(QET::Icons::TerminalStrip, tr("Ajouter un plan de bornes"));
 
 	add_text     ->setStatusTip(tr("Ajoute un champ de texte sur le folio actuel"));
 	add_image    ->setStatusTip(tr("Ajoute une image sur le folio actuel"));
@@ -1091,7 +1090,6 @@ void QETDiagramEditor::setUpActions()
 	add_rectangle->setStatusTip(tr("Ajoute un rectangle sur le folio actuel"));
 	add_ellipse  ->setStatusTip(tr("Ajoute une ellipse sur le folio actuel"));
 	add_polyline ->setStatusTip(tr("Ajoute une polyligne sur le folio actuel"));
-	add_terminal_strip->setStatusTip(tr("Ajoute un plan de bornier sur le folio actuel"));
 
 	add_text     ->setData(QStringLiteral("text"));
 	add_image    ->setData(QStringLiteral("image"));
@@ -1099,7 +1097,6 @@ void QETDiagramEditor::setUpActions()
 	add_rectangle->setData(QStringLiteral("rectangle"));
 	add_ellipse  ->setData(QStringLiteral("ellipse"));
 	add_polyline ->setData(QStringLiteral("polyline"));
-	add_terminal_strip->setData(QStringLiteral("terminal_strip"));
 
 	add_text->setCheckable(true);
 	add_line->setCheckable(true);
@@ -1202,8 +1199,7 @@ void QETDiagramEditor::setUpToolBar()
 			 tr("Ligne", "toolbar icon text"),
 			 tr("Rectangle", "toolbar icon text"),
 			 tr("Ellipse", "toolbar icon text"),
-			 tr("Polyligne", "toolbar icon text"),
-			 tr("Bornier", "toolbar icon text") });
+			 tr("Polyligne", "toolbar icon text") });
 	set_icon_texts(m_depth_action_group->actions(),
 		       { tr("Premier plan", "toolbar icon text"),
 			 tr("Rapprocher", "toolbar icon text"),

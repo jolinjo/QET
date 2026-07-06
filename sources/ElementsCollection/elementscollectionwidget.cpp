@@ -1525,7 +1525,7 @@ void ElementsCollectionWidget::reload()
 		&ElementsCollectionWidget::loadingFinished);
 
 	const bool show_common = !QSettings().value(
-		QStringLiteral("collections/hide-common-elements"), false).toBool();
+		QStringLiteral("collections/hide-common-elements"), true).toBool();
 	m_new_model->loadCollections(show_common, true, true, project_list);
 
 	if (m_macros_model) {

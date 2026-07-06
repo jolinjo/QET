@@ -271,7 +271,7 @@ void ElementsPanel::reload()
 	if (first_reload_) common_tbt_collection_item_ -> setExpanded(true);
 	// hide the QET built-in title block collection when the user asked to
 	common_tbt_collection_item_ -> setHidden(QSettings().value(
-		QStringLiteral("collections/hide-common-titleblocks"), false).toBool());
+		QStringLiteral("collections/hide-common-titleblocks"), true).toBool());
 
 	// load the company title block templates collection
 	TitleBlockTemplatesCollection *company_tbt_collection = QETApp::companyTitleBlockTemplatesCollection();
