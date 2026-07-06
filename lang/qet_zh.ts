@@ -6112,6 +6112,14 @@ Options disponibles :
 <context>
     <name>FolioRevisionsDialog</name>
     <message>
+        <source>Supprimer la révision sélectionnée</source>
+        <translation>删除选中的修订</translation>
+    </message>
+    <message>
+        <source>Ajouter une révision</source>
+        <translation>新增一笔修订</translation>
+    </message>
+    <message>
         <source>Appliqué à %1 folios (%2 avec défilement : la révision la plus ancienne a été retirée).</source>
         <translation>已套用 %1 页（其中 %2 页修订列已满，移除最早一笔后续填）。</translation>
     </message>

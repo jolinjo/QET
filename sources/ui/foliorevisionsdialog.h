@@ -50,6 +50,7 @@ class FolioRevisionsDialog : public QDialog
 	FolioRevisionsDialog(Diagram *diagram, QWidget *parent = nullptr);
 	TitleBlockProperties editedProperties() const;
 	void applyToAllFolios();
+	void deleteSelectedRevisions();
 
 	static const int ROW_COUNT = 6;
 
@@ -60,6 +61,11 @@ class FolioRevisionsDialog : public QDialog
 	QComboBox *m_doc_status;
 	QDateEdit *m_issue_date;
 	QTableWidget *m_table;
+	QDateEdit *m_cur_rev_date;
+	QLineEdit *m_cur_rev_zone;
+	QLineEdit *m_cur_rev_desc;
+	QLineEdit *m_cur_rev_by;
+	QLineEdit *m_cur_rev_appd;
 	/// onglet « tous les folios »
 	QLineEdit *m_all_indexrev;
 	QComboBox *m_all_doc_status;

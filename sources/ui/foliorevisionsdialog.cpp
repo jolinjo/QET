@@ -39,36 +39,6 @@
 
 namespace
 {
-	/* editeur calendrier pour la colonne « date » du tableau */
-	class RevisionDateDelegate : public QStyledItemDelegate
-	{
-		public:
-		using QStyledItemDelegate::QStyledItemDelegate;
-
-		QWidget *createEditor(QWidget *parent,
-				      const QStyleOptionViewItem &,
-				      const QModelIndex &index) const override
-		{
-			auto *editor = new QDateEdit(parent);
-			editor->setCalendarPopup(true);
-			const QDate current = QDate::fromString(
-				index.data().toString(),
-				QStringLiteral("yyyy/M/d"));
-			editor->setDate(current.isValid()
-					? current : QDate::currentDate());
-			return editor;
-		}
-
-		void setModelData(QWidget *editor,
-				  QAbstractItemModel *model,
-				  const QModelIndex &index) const override
-		{
-			model->setData(index,
-				static_cast<QDateEdit *>(editor)->date()
-					.toString(QStringLiteral("yyyy/M/d")));
-		}
-	};
-
 	// champs d'une ligne de revision, dans l'ordre des colonnes
 	const char *REV_FIELDS[] = { "idx", "date", "zone", "desc", "by", "appd" };
 	const int REV_FIELD_COUNT = 6;
@@ -168,37 +138,40 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 			m_table->setItem(row, column, item);
 		}
 	}
-	m_table->setItemDelegateForColumn(1, new RevisionDateDelegate(m_table));
-	/* clic sur cellule selectionnee / double-clic / touche : le mode
-	 * « toujours editer » ecrivait une date au simple passage ; la
-	 * touche Suppr/Retour arriere vide les cellules selectionnees */
-	m_table->setEditTriggers(QAbstractItemView::SelectedClicked
-				 | QAbstractItemView::DoubleClicked
-				 | QAbstractItemView::EditKeyPressed
-				 | QAbstractItemView::AnyKeyPressed);
+	/* tableau en lecture seule : la saisie passe par le formulaire
+	 * « ajouter une revision », la suppression par ligne entiere */
+	m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+	m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
 	m_table->installEventFilter(this);
 	m_table->setMinimumWidth(680);
 
-	auto *table_today = new QPushButton(
-		tr("Date du jour sur la ligne sélectionnée"), this);
-	connect(table_today, &QPushButton::clicked, this, [this]() {
-		QSet<int> rows;
-		const auto items = m_table->selectedItems();
-		for (QTableWidgetItem *item : items) {
-			rows.insert(item->row());
-		}
-		if (rows.isEmpty() && m_table->currentRow() >= 0) {
-			rows.insert(m_table->currentRow());
-		}
-		const QString today = QDate::currentDate().toString(
-			QStringLiteral("yyyy/M/d"));
-		for (int row : rows) {
-			m_table->item(row, 1)->setText(today);
-		}
-	});
+	auto *delete_revision = new QPushButton(
+		tr("Supprimer la révision sélectionnée"), this);
+	connect(delete_revision, &QPushButton::clicked,
+		this, &FolioRevisionsDialog::deleteSelectedRevisions);
 	auto *table_button_row = new QHBoxLayout();
-	table_button_row->addWidget(table_today);
+	table_button_row->addWidget(delete_revision);
 	table_button_row->addStretch();
+
+	/* formulaire d'ajout : l'indice reprend celui saisi plus haut, la
+	 * ligne cible (premiere vide, defilement si plein) est choisie
+	 * automatiquement a la validation */
+	auto *cur_rev_group = new QGroupBox(tr("Ajouter une révision"), this);
+	auto *cur_rev_form = new QFormLayout(cur_rev_group);
+	m_cur_rev_date = new QDateEdit(cur_rev_group);
+	m_cur_rev_date->setCalendarPopup(true);
+	m_cur_rev_date->setMinimumDate(QDate(1900, 1, 1));
+	m_cur_rev_date->setSpecialValueText(QStringLiteral(" "));
+	m_cur_rev_date->setDate(QDate::currentDate());
+	cur_rev_form->addRow(tr("Date"), m_cur_rev_date);
+	m_cur_rev_zone = new QLineEdit(cur_rev_group);
+	cur_rev_form->addRow(tr("Zone"), m_cur_rev_zone);
+	m_cur_rev_desc = new QLineEdit(cur_rev_group);
+	cur_rev_form->addRow(tr("Description de la révision"), m_cur_rev_desc);
+	m_cur_rev_by = new QLineEdit(cur_rev_group);
+	cur_rev_form->addRow(tr("Par"), m_cur_rev_by);
+	m_cur_rev_appd = new QLineEdit(cur_rev_group);
+	cur_rev_form->addRow(tr("Approuvé"), m_cur_rev_appd);
 
 	auto *buttons = new QDialogButtonBox(
 		m_diagram->isReadOnly()
@@ -214,6 +187,7 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 	current_layout->addLayout(form);
 	current_layout->addWidget(m_table);
 	current_layout->addLayout(table_button_row);
+	current_layout->addWidget(cur_rev_group);
 
 	//page « tous les folios » : reglage groupe
 	auto *all_page = new QWidget(this);
@@ -302,15 +276,14 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 		m_issue_date->setReadOnly(true);
 		issue_today->setEnabled(false);
 		issue_clear->setEnabled(false);
-		table_today->setEnabled(false);
-		m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+		delete_revision->setEnabled(false);
+		cur_rev_group->setEnabled(false);
 	}
 }
 
 /**
-	Delete / Backspace clears the selected revision cells (this is the
-	only way to empty a date cell, since the calendar editor always
-	commits a valid date).
+	Delete / Backspace removes the selected revision line(s), like the
+	dedicated button.
 */
 bool FolioRevisionsDialog::eventFilter(QObject *watched, QEvent *event)
 {
@@ -318,14 +291,50 @@ bool FolioRevisionsDialog::eventFilter(QObject *watched, QEvent *event)
 		auto *key_event = static_cast<QKeyEvent *>(event);
 		if (key_event->key() == Qt::Key_Delete
 		    || key_event->key() == Qt::Key_Backspace) {
-			const auto items = m_table->selectedItems();
-			for (QTableWidgetItem *item : items) {
-				item->setText(QString());
+			if (!m_diagram->isReadOnly()) {
+				deleteSelectedRevisions();
 			}
 			return true;
 		}
 	}
 	return QDialog::eventFilter(watched, event);
+}
+
+/**
+	Remove the selected revision line(s) and compact the remaining ones
+	upward, so the history stays gapless.
+*/
+void FolioRevisionsDialog::deleteSelectedRevisions()
+{
+	QSet<int> rows;
+	const auto items = m_table->selectedItems();
+	for (QTableWidgetItem *item : items) {
+		rows.insert(item->row());
+	}
+	if (rows.isEmpty() && m_table->currentRow() >= 0) {
+		rows.insert(m_table->currentRow());
+	}
+	if (rows.isEmpty()) return;
+
+	QList<QStringList> kept;
+	for (int row = 0 ; row < ROW_COUNT ; ++row) {
+		if (rows.contains(row)) continue;
+		QStringList values;
+		bool empty = true;
+		for (int column = 0 ; column < REV_FIELD_COUNT ; ++column) {
+			const QString value = m_table->item(row, column)->text();
+			if (!value.isEmpty()) empty = false;
+			values << value;
+		}
+		if (!empty) kept << values;
+	}
+	for (int row = 0 ; row < ROW_COUNT ; ++row) {
+		for (int column = 0 ; column < REV_FIELD_COUNT ; ++column) {
+			m_table->item(row, column)->setText(
+				row < kept.count() ? kept.at(row).at(column)
+						   : QString());
+		}
+	}
 }
 
 /**
@@ -486,13 +495,57 @@ TitleBlockProperties FolioRevisionsDialog::editedProperties() const
 			}
 		}
 	}
-	if (any_value
+	//nouvelle revision saisie dans le formulaire d'ajout
+	const QString new_rev_date =
+		(m_cur_rev_date->date() == m_cur_rev_date->minimumDate())
+			? QString()
+			: m_cur_rev_date->date().toString(
+				  QStringLiteral("yyyy/M/d"));
+	QStringList new_rev {
+		m_indexrev->text().trimmed(),
+		new_rev_date,
+		m_cur_rev_zone->text().trimmed(),
+		m_cur_rev_desc->text().trimmed(),
+		m_cur_rev_by->text().trimmed(),
+		m_cur_rev_appd->text().trimmed() };
+	/* la date seule (pre-remplie a aujourd'hui) et l'indice repris du
+	 * champ du haut ne suffisent pas a vouloir une nouvelle ligne */
+	const bool new_rev_wanted = !new_rev.at(2).isEmpty()
+				    || !new_rev.at(3).isEmpty()
+				    || !new_rev.at(4).isEmpty()
+				    || !new_rev.at(5).isEmpty();
+
+	if (any_value || new_rev_wanted
 	    || properties.context.keys().contains(QStringLiteral("rev1-idx"))) {
+		//contenu du tableau (lignes existantes, deja compactees)
+		QList<QStringList> lines;
 		for (int row = 0 ; row < ROW_COUNT ; ++row) {
-			for (int column = 0 ; column < REV_FIELD_COUNT ; ++column) {
+			QStringList values;
+			bool empty = true;
+			for (int column = 0 ; column < REV_FIELD_COUNT ;
+			     ++column) {
+				const QString value =
+					m_table->item(row, column)->text();
+				if (!value.isEmpty()) empty = false;
+				values << value;
+			}
+			if (!empty) lines << values;
+		}
+		if (new_rev_wanted) {
+			if (lines.count() >= ROW_COUNT) {
+				//defilement : la plus ancienne disparait
+				lines.removeFirst();
+			}
+			lines << new_rev;
+		}
+		for (int row = 0 ; row < ROW_COUNT ; ++row) {
+			for (int column = 0 ; column < REV_FIELD_COUNT ;
+			     ++column) {
 				properties.context.addValue(
 					revKey(row, column),
-					m_table->item(row, column)->text());
+					row < lines.count()
+						? lines.at(row).at(column)
+						: QString());
 			}
 		}
 	}
