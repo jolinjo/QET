@@ -479,7 +479,7 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 	const QString cache_dir =
 		data_dir % QStringLiteral("/library-git-cache");
 
-		//inline progress shown right under the「更新公司庫」button (no popup dialog)
+		//inline progress shown right under the「更新公司元件庫」button (no popup dialog)
 	auto sync_begin = [this](const QString &text) {
 		m_sync_status->setText(text);
 		m_sync_progress->setRange(0, 0);   // indeterminate (busy)
@@ -516,7 +516,7 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 			   QStringLiteral("--no-checkout"), QStringLiteral("--single-branch"),
 			   url, cache_dir }, QString(), &log)) {
 		sync_end();
-		QMessageBox::warning(this, tr("更新公司庫"),
+		QMessageBox::warning(this, tr("更新公司元件庫"),
 			tr("讀取線上倉庫失敗：\n%1").arg(log.right(1500)));
 		return;
 	}
@@ -603,14 +603,14 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 	sync_end();
 
 	if (items.isEmpty()) {
-		QMessageBox::information(this, tr("更新公司庫"),
+		QMessageBox::information(this, tr("更新公司元件庫"),
 			tr("線上倉庫沒有可更新的公司庫。"));
 		return;
 	}
 
 		//3) selection dialog
 	QDialog dlg(this);
-	dlg.setWindowTitle(tr("線上更新公司庫"));
+	dlg.setWindowTitle(tr("線上更新公司元件庫"));
 	dlg.resize(560, 420);
 	auto *vl = new QVBoxLayout(&dlg);
 	vl->addWidget(new QLabel(
@@ -691,7 +691,7 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 		{ QStringLiteral("-c"), QStringLiteral("core.longpaths=true"),
 		  QStringLiteral("checkout") }, cache_dir, &log)) {
 		sync_end();
-		QMessageBox::warning(this, tr("更新公司庫"),
+		QMessageBox::warning(this, tr("更新公司元件庫"),
 			tr("下載選取的庫失敗：\n%1").arg(log.right(1500)));
 		return;
 	}
@@ -708,7 +708,7 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 		if (!QFileInfo::exists(source)) continue;
 		if (!qetlib_mirror(source, target)) {
 			sync_end();
-			QMessageBox::warning(this, tr("更新公司庫"),
+			QMessageBox::warning(this, tr("更新公司元件庫"),
 				tr("更新「%1」失敗。").arg(it.display));
 			return;
 		}
@@ -723,7 +723,7 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 	QDir(cache_dir).removeRecursively();
 	sync_end();
 
-	QMessageBox::information(this, tr("更新公司庫"),
+	QMessageBox::information(this, tr("更新公司元件庫"),
 		tr("已更新：\n%1").arg(updated.join(QChar('\n'))));
 
 	// drop the cached element pictures so updated elements are re-rendered
@@ -938,13 +938,13 @@ void ElementsCollectionWidget::setUpWidget()
 	m_tab_widget->addTab(collections_splitter, tr("Collections"));
 	m_tab_widget->addTab(m_macros_tree_view, tr("Modèles"));
 
-	auto *update_lib_btn = new QPushButton(tr("更新公司庫…", "button"), this);
+	auto *update_lib_btn = new QPushButton(tr("更新公司元件庫…", "button"), this);
 	update_lib_btn->setToolTip(tr("從線上倉庫更新公司元件庫與圖框"));
 	connect(update_lib_btn, &QPushButton::clicked,
 		this, &ElementsCollectionWidget::updateLibraryFromGit);
 	m_main_vlayout->addWidget(update_lib_btn);
 
-		//更新公司庫的進度：直接內嵌在更新按鈕下方（狀態文字 + 進度條），不另跳對話框
+		//更新公司元件庫的進度：直接內嵌在更新按鈕下方（狀態文字 + 進度條），不另跳對話框
 	m_sync_status = new QLabel(this);
 	m_sync_status->setWordWrap(true);
 	m_sync_status->hide();
