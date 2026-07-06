@@ -351,7 +351,14 @@ void DiagramView::zoomFit()
 	const Qt::ScrollBarPolicy v_policy = verticalScrollBarPolicy();
 	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-	fitInView(m_diagram->sceneRect(), Qt::KeepAspectRatio);
+	/* petite marge (0,5 % par cote) : un cadrage exact fait
+	 * reapparaitre les barres a cause des arrondis de pixels */
+	QRectF fit_rect = m_diagram->sceneRect();
+	fit_rect.adjust(-fit_rect.width() * 0.005,
+			-fit_rect.height() * 0.005,
+			fit_rect.width() * 0.005,
+			fit_rect.height() * 0.005);
+	fitInView(fit_rect, Qt::KeepAspectRatio);
 	setHorizontalScrollBarPolicy(h_policy);
 	setVerticalScrollBarPolicy(v_policy);
 	adjustGridToZoom();
@@ -366,7 +373,12 @@ void DiagramView::zoomContent()
 	const Qt::ScrollBarPolicy v_policy = verticalScrollBarPolicy();
 	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-	fitInView(m_diagram -> itemsBoundingRect(), Qt::KeepAspectRatio);
+	QRectF content_rect = m_diagram->itemsBoundingRect();
+	content_rect.adjust(-content_rect.width() * 0.005,
+			    -content_rect.height() * 0.005,
+			    content_rect.width() * 0.005,
+			    content_rect.height() * 0.005);
+	fitInView(content_rect, Qt::KeepAspectRatio);
 	setHorizontalScrollBarPolicy(h_policy);
 	setVerticalScrollBarPolicy(v_policy);
 	adjustGridToZoom();
