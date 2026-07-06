@@ -7,6 +7,9 @@
 # 打 win-vX.Y.Z tag 並只保留最近 KEEP 版。
 #
 # 用法:
+#   scripts/publish_windows_ota.sh --build
+#       --build:本機建置(MSYS2 UCRT64,scripts/build_windows_portable.sh
+#       --release)後發佈。標準發佈流程。
 #   scripts/publish_windows_ota.sh <artifact.zip | 免安裝目錄>
 #   scripts/publish_windows_ota.sh --ci [RUN_ID]
 #       --ci:用 gh CLI 下載 windows-ota.yml 最近一次成功建置的
@@ -41,7 +44,10 @@ BSDTAR="$SYSTEMROOT/System32/tar.exe"
 
 # 1. 取得免安裝版 ------------------------------------------------------------
 SRC="${1:-}"
-if [ "$SRC" = "--ci" ]; then
+if [ "$SRC" = "--build" ]; then
+	bash "$ROOT/scripts/build_windows_portable.sh" --release
+	PORTABLE="$ROOT/build-win/portable"
+elif [ "$SRC" = "--ci" ]; then
 	command -v gh >/dev/null || { echo "!! --ci 需要 gh CLI(winget install GitHub.cli)"; exit 1; }
 	RUN_ID="${2:-}"
 	if [ -z "$RUN_ID" ]; then
@@ -128,6 +134,34 @@ else
 	mv "$CHANGELOG.new" "$CHANGELOG"
 fi
 printf '%s\n' "$FORK_SHA" > "$CACHE/.fork-sha-win"
+
+# 4. 產生 Gitea 首頁說明(README.md):安裝資訊 + 最新版更新內容 ----------------
+LATEST_NOTES=$(awk '/^## /{n++} n==1' "$CHANGELOG")
+cat > "$CACHE/README.md" <<EOF
+# QElectroTech Windows 免安裝版
+
+**目前版本:$TAG**(發佈日期:$(date +%Y-%m-%d))
+
+## 首次安裝
+
+1. 下載 [${TAG}.zip]($REPO_URL/archive/${TAG}.zip)
+2. 解壓到任意資料夾(例如 \`D:\\QET\`)
+3. 執行 \`Lancer QET.bat\`(或 \`bin\\QElectroTech.exe\`)
+
+需求:Windows 10 1803 以上(更新功能用系統內建 curl/tar),
+**不需要**安裝 git 或任何其他軟體。
+
+## 之後怎麼更新
+
+程式內「**說明 → 檢查更新(內網)**」,選版本按「切換到選取版本」,
+程式會自動關閉、更新、重新啟動。要退回舊版也是同一個地方。
+
+## 最新版本更新內容
+
+$LATEST_NOTES
+
+完整更新紀錄見 [CHANGELOG-win.md](CHANGELOG-win.md)。
+EOF
 
 git add -A
 if ! git diff --cached --quiet; then
