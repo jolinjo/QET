@@ -153,6 +153,13 @@ void ConductorAutoNumerotation::newProperties(
 	QString formula = autonum::numerotationContextToFormula(context);
 	cp.m_formula = formula;
 
+	/* couleur liee a la regle : appliquee au nouveau conducteur
+	 * (regle sans couleur = comportement inchange) */
+	const QString rule_color = context.color();
+	if (!rule_color.isEmpty()) {
+		cp.color = QColor(rule_color);
+	}
+
 	autonum::setSequential(formula, seq, context, diagram, autoNum_name);
 
 	NumerotationContextCommands ncc (context, diagram);

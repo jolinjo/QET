@@ -49,9 +49,13 @@ class NumerotationContext
 	QDomElement toXml(QDomDocument &, const QString&);
 	void fromXml(QDomElement &);
 	void replaceValue(int, QString);
+	/// couleur optionnelle liee a la regle (regles de conducteurs)
+	QString color() const { return m_color; }
+	void setColor(const QString &color) { m_color = color; }
 
 	private:
 	QStringList content_;
+	QString m_color;
 };
 
 #endif // NUMEROTATIONCONTEXT_H

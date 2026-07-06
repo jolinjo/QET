@@ -49,6 +49,8 @@ NumerotationContext NumerotationContextCommands::next()
 		setNumStrategy(str.at(0));
 		contextnum << strategy_ -> next(context_, i);
 	}
+	//la couleur de la regle suit le contexte avance
+	contextnum.setColor(context_.color());
 	return contextnum;
 }
 

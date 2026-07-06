@@ -10955,6 +10955,22 @@ Créer votre propre texte en vous aidant des variables suivantes :
 <context>
     <name>SelectAutonumW</name>
     <message>
+        <source>Couleur des conducteurs :</source>
+        <translation>導線顏色：</translation>
+    </message>
+    <message>
+        <source>Couleur des conducteurs</source>
+        <translation>導線顏色</translation>
+    </message>
+    <message>
+        <source>Aucune couleur</source>
+        <translation>未設定顏色</translation>
+    </message>
+    <message>
+        <source>Effacer</source>
+        <translation>清除</translation>
+    </message>
+    <message>
         <location filename="../sources/autoNum/ui/selectautonumw.ui" line="20"/>
         <source>Form</source>
         <translation>表單</translation>

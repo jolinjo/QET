@@ -17,6 +17,11 @@
 */
 #include "selectautonumw.h"
 
+#include <QColorDialog>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QPushButton>
+
 #include "../assignvariables.h"
 #include "../numerotationcontextcommands.h"
 #include "formulaautonumberingw.h"
@@ -50,6 +55,38 @@ SelectAutonumW::SelectAutonumW(int type, QWidget *parent) :
 		m_fcaw = new FormulaAutonumberingW();
 		m_fcaw->ui->label->setHidden(true);
 		ui->m_widget->layout()->addWidget(m_fcaw);
+
+		/* couleur liee a la regle : les nouveaux conducteurs de la
+		 * regle courante recoivent cette couleur */
+		auto *color_container = new QWidget(this);
+		auto *color_row = new QHBoxLayout(color_container);
+		color_row->setContentsMargins(0, 0, 0, 0);
+		color_row->addWidget(new QLabel(
+			tr("Couleur des conducteurs :"), color_container));
+		m_color_pb = new QPushButton(color_container);
+		color_row->addWidget(m_color_pb, 1);
+		auto *color_clear = new QPushButton(
+			tr("Effacer"), color_container);
+		color_row->addWidget(color_clear);
+		ui->m_widget->layout()->addWidget(color_container);
+
+		connect(m_color_pb, &QPushButton::clicked, this, [this]() {
+			const QColor color = QColorDialog::getColor(
+				m_rule_color.isEmpty() ? QColor(Qt::black)
+						       : QColor(m_rule_color),
+				this, tr("Couleur des conducteurs"));
+			if (color.isValid()) {
+				m_rule_color = color.name();
+				updateColorButton();
+				applyEnable();
+			}
+		});
+		connect(color_clear, &QPushButton::clicked, this, [this]() {
+			m_rule_color.clear();
+			updateColorButton();
+			applyEnable();
+		});
+		updateColorButton();
 	}
 	setContext(NumerotationContext());
 }
@@ -102,6 +139,8 @@ SelectAutonumW::~SelectAutonumW()
 void SelectAutonumW::setContext(const NumerotationContext &context)
 {
 	m_context = context;
+	m_rule_color = context.color();
+	updateColorButton();
 
 	qDeleteAll(num_part_list_);
 	num_part_list_.clear();
@@ -134,7 +173,24 @@ NumerotationContext SelectAutonumW::toNumContext() const
 	NumerotationContext nc;
 	foreach (NumPartEditorW *npew, num_part_list_)
 		nc << npew -> toNumContext();
+	nc.setColor(m_rule_color);
 	return nc;
+}
+
+/**
+	Refresh the color button (swatch + text) from the rule color.
+*/
+void SelectAutonumW::updateColorButton()
+{
+	if (!m_color_pb) return;
+	if (m_rule_color.isEmpty()) {
+		m_color_pb->setText(tr("Aucune couleur"));
+		m_color_pb->setStyleSheet(QString());
+	} else {
+		m_color_pb->setText(m_rule_color);
+		m_color_pb->setStyleSheet(
+			QStringLiteral("background-color:%1;").arg(m_rule_color));
+	}
 }
 
 /**

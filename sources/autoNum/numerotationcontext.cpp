@@ -42,6 +42,7 @@ NumerotationContext::NumerotationContext(QDomElement &e) {
 void NumerotationContext::clear ()
 {
 	content_.clear();
+	m_color.clear();
 }
 
 /**
@@ -161,6 +162,9 @@ bool NumerotationContext::keyIsNumber(const QString &type) const
 */
 QDomElement NumerotationContext::toXml(QDomDocument &d, const QString& str) {
 	QDomElement num_auto = d.createElement(str);
+	if (!m_color.isEmpty()) {
+		num_auto.setAttribute(QStringLiteral("color"), m_color);
+	}
 	for (int i=0; i<content_.size(); ++i) {
 		QStringList strl = itemAt(i);
 		QDomElement part = d.createElement("part");
@@ -182,6 +186,7 @@ QDomElement NumerotationContext::toXml(QDomDocument &d, const QString& str) {
 	load numerotation context from e
 */
 void NumerotationContext::fromXml(QDomElement &e) {
+	m_color = e.attribute(QStringLiteral("color"));
 	clear();
 	foreach(QDomElement qde, QET::findInDomElement(e, "part")) addValue(qde.attribute("type"), qde.attribute("value"), qde.attribute("increase").toInt(), qde.attribute("initialvalue").toInt());
 }

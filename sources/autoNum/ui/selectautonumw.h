@@ -25,6 +25,7 @@
 
 class NumPartEditorW;
 class QAbstractButton;
+class QPushButton;
 class FormulaAutonumberingW;
 class QComboBox;
 
@@ -71,8 +72,12 @@ class SelectAutonumW : public QWidget
 		void on_m_remove_pb_clicked();
 		
 	private:
+		void updateColorButton();
+
 		Ui::SelectAutonumW *ui;
 		QList <NumPartEditorW *> num_part_list_;
+		QString m_rule_color;
+		QPushButton *m_color_pb = nullptr;
 		NumerotationContext m_context;
 		FormulaAutonumberingW *m_feaw;
 		FormulaAutonumberingW *m_fcaw;
