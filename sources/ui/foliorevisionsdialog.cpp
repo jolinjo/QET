@@ -184,10 +184,11 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 	//page « ce folio »
 	auto *current_page = new QWidget(this);
 	auto *current_layout = new QVBoxLayout(current_page);
+	//saisies en haut, tableau (affichage) en bas
 	current_layout->addLayout(form);
+	current_layout->addWidget(cur_rev_group);
 	current_layout->addWidget(m_table);
 	current_layout->addLayout(table_button_row);
-	current_layout->addWidget(cur_rev_group);
 
 	//page « tous les folios » : reglage groupe
 	auto *all_page = new QWidget(this);
