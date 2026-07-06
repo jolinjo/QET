@@ -128,8 +128,20 @@ XmlElementCollection::XmlElementCollection(const QDomElement &dom_element,
 	m_project(project)
 {
 	if (dom_element.tagName() == "collection")
+	{
 		m_dom_document.appendChild(m_dom_document.importNode(
 						   dom_element, true));
+		/* certains fichiers generes hors de QET ont une <collection>
+		 * vide : sans la categorie racine « import », toute
+		 * integration d'element (collage inter-projets, glisser-
+		 * deposer) echoue. La garantir ici. */
+		if (importCategory().isNull()) {
+			QDomElement import_cat =
+				m_dom_document.createElement("category");
+			import_cat.setAttribute("name", "import");
+			root().appendChild(import_cat);
+		}
+	}
 	else
 		qDebug() << "XmlElementCollection : tagName of dom_element is not collection";
 }
