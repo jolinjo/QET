@@ -436,10 +436,12 @@ namespace {
 	}
 
 	/// Highest version token among the *.titleblock files of a directory.
-	QString qetlib_titleblocks_version(const QString &dir) {
+	QString qetlib_titleblocks_version(
+		const QString &dir,
+		const QString &pattern = QStringLiteral("*.titleblock")) {
 		QString best;
 		const QFileInfoList list = QDir(dir).entryInfoList(
-			QStringList { QStringLiteral("*.titleblock") }, QDir::Files);
+			QStringList { pattern }, QDir::Files);
 		for (const QFileInfo &fi : list) {
 			const QString v = qetlib_version(fi.fileName());
 			if (v > best) best = v;
@@ -634,7 +636,8 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 		it.display = tr("專案範本(新增專案用)");
 		it.online_ver = online_ver;
 		it.local_ver = qetlib_titleblocks_version(
-			data_dir % QStringLiteral("/Project-Example"));
+			data_dir % QStringLiteral("/Project-Example"),
+			QStringLiteral("*.qet"));
 		items << it;
 	}
 
