@@ -344,7 +344,16 @@ void DiagramView::zoom(const qreal zoom_factor)
 void DiagramView::zoomFit()
 {
 	adjustSceneRect();
+	/* couper les barres de defilement le temps du cadrage : leur
+	 * presence modifiait la taille du viewport et faisait alterner
+	 * deux niveaux de zoom d'un appui a l'autre */
+	const Qt::ScrollBarPolicy h_policy = horizontalScrollBarPolicy();
+	const Qt::ScrollBarPolicy v_policy = verticalScrollBarPolicy();
+	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	fitInView(m_diagram->sceneRect(), Qt::KeepAspectRatio);
+	setHorizontalScrollBarPolicy(h_policy);
+	setVerticalScrollBarPolicy(v_policy);
 	adjustGridToZoom();
 }
 
@@ -353,7 +362,13 @@ void DiagramView::zoomFit()
 */
 void DiagramView::zoomContent()
 {
+	const Qt::ScrollBarPolicy h_policy = horizontalScrollBarPolicy();
+	const Qt::ScrollBarPolicy v_policy = verticalScrollBarPolicy();
+	setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 	fitInView(m_diagram -> itemsBoundingRect(), Qt::KeepAspectRatio);
+	setHorizontalScrollBarPolicy(h_policy);
+	setVerticalScrollBarPolicy(v_policy);
 	adjustGridToZoom();
 }
 

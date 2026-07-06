@@ -1054,7 +1054,8 @@ void QETDiagramEditor::setUpActions()
 	QAction *zoom_content = m_zoom_actions_group.addAction( QET::Icons::ZoomDraw,     tr("Zoom sur le contenu"));
 	QAction *zoom_fit     = m_zoom_actions_group.addAction( QET::Icons::ZoomFitBest,  tr("Zoom adapté"));
 	QAction *zoom_reset   = m_zoom_actions_group.addAction( QET::Icons::ZoomOriginal, tr("Pas de zoom"));
-	m_zoom_action_toolBar << zoom_content << zoom_fit << zoom_reset;
+	//barre d'outils : seul le cadrage du folio (version societe)
+	m_zoom_action_toolBar << zoom_fit;
 
 	zoom_in     ->setShortcut(QKeySequence::ZoomIn);
 	zoom_out    ->setShortcut(QKeySequence::ZoomOut);
@@ -1190,9 +1191,7 @@ void QETDiagramEditor::setUpToolBar()
 			 tr("Enregistrer sous", "toolbar icon text"),
 			 tr("Fermer", "toolbar icon text") });
 	set_icon_texts(m_zoom_action_toolBar,
-		       { tr("Zoom contenu", "toolbar icon text"),
-			 tr("Zoom folio", "toolbar icon text"),
-			 tr("Zoom 1:1", "toolbar icon text") });
+		       { tr("Zoom folio", "toolbar icon text") });
 	set_icon_texts(m_add_item_actions_group.actions(),
 		       { tr("Texte", "toolbar icon text"),
 			 tr("Image", "toolbar icon text"),
