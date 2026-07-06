@@ -17,6 +17,10 @@
 */
 #include "inditextpropertieswidget.h"
 
+#include <QColorDialog>
+#include <QTextCursor>
+#include <QTextDocument>
+
 #include "../QPropertyUndoCommand/qpropertyundocommand.h"
 #include "../diagram.h"
 #include "../diagramcommands.h"
@@ -25,6 +29,32 @@
 
 #include <QLineEdit>
 #include <QtGlobal>
+
+namespace
+{
+	/* application d'un format de caracteres a tout le texte : passe par
+	 * le html complet de l'item pour rester annulable */
+	class ChangeTextHtmlCommand : public QUndoCommand
+	{
+		public:
+		ChangeTextHtmlCommand(IndependentTextItem *item,
+				      const QString &before,
+				      const QString &after,
+				      const QString &text) :
+			m_item(item), m_before(before), m_after(after)
+		{ setText(text); }
+
+		void redo() override
+		{ if (m_item) m_item->setHtml(m_after); }
+		void undo() override
+		{ if (m_item) m_item->setHtml(m_before); }
+
+		private:
+		QPointer<IndependentTextItem> m_item;
+		QString m_before;
+		QString m_after;
+	};
+}
 
 /**
 	@brief IndiTextPropertiesWidget::IndiTextPropertiesWidget
@@ -36,6 +66,14 @@ IndiTextPropertiesWidget::IndiTextPropertiesWidget(IndependentTextItem *text, QW
 	ui(new Ui::IndiTextPropertiesWidget)
 {
 	ui->setupUi(this);
+	{
+		QFont bold_font = ui->m_bold_pb->font();
+		bold_font.setBold(true);
+		ui->m_bold_pb->setFont(bold_font);
+		QFont underline_font = ui->m_underline_pb->font();
+		underline_font.setUnderline(true);
+		ui->m_underline_pb->setFont(underline_font);
+	}
 	if (text) {
 		setText(text);
 	}
@@ -378,6 +416,25 @@ void IndiTextPropertiesWidget::updateUi()
 		ui->m_break_html_pb->setVisible(m_text->isHtml() ? true : false);
 		ui->m_font_pb->setDisabled(m_text->isHtml() ? true : false);
 		ui->m_font_pb->setText(m_text->isHtml() ? tr("Police") : m_text->font().family());
+
+		//etat des boutons de format (texte entier)
+		ui->m_bold_pb->blockSignals(true);
+		ui->m_underline_pb->blockSignals(true);
+		ui->m_sup_pb->blockSignals(true);
+		ui->m_sub_pb->blockSignals(true);
+		ui->m_bold_pb->setChecked(m_text->font().bold());
+		ui->m_underline_pb->setChecked(m_text->font().underline());
+		QTextCursor cursor(m_text->document());
+		cursor.select(QTextCursor::Document);
+		const auto v_align = cursor.charFormat().verticalAlignment();
+		ui->m_sup_pb->setChecked(
+			v_align == QTextCharFormat::AlignSuperScript);
+		ui->m_sub_pb->setChecked(
+			v_align == QTextCharFormat::AlignSubScript);
+		ui->m_bold_pb->blockSignals(false);
+		ui->m_underline_pb->blockSignals(false);
+		ui->m_sup_pb->blockSignals(false);
+		ui->m_sub_pb->blockSignals(false);
 	}
 	else
 	{
@@ -419,6 +476,166 @@ void IndiTextPropertiesWidget::updateUi()
 	
 		//Set the connection now
 	setUpEditConnection();
+}
+
+/**
+	@return the texts currently edited by this widget
+*/
+QList<IndependentTextItem *> IndiTextPropertiesWidget::editedTexts() const
+{
+	QList<IndependentTextItem *> list;
+	if (m_text) {
+		list << m_text.data();
+	}
+	for (const QPointer<IndependentTextItem> &pointer : m_text_list) {
+		if (pointer) list << pointer.data();
+	}
+	return list;
+}
+
+/**
+	Merge \a format over the whole content of every edited text,
+	as an undoable command.
+*/
+void IndiTextPropertiesWidget::applyCharFormatToAll(
+		const QTextCharFormat &format,
+		const QString &undo_text)
+{
+	const QList<IndependentTextItem *> texts = editedTexts();
+	for (IndependentTextItem *item : texts) {
+		const QString before = item->toHtml();
+		QTextCursor cursor(item->document());
+		cursor.select(QTextCursor::Document);
+		cursor.mergeCharFormat(format);
+		const QString after = item->toHtml();
+		if (before == after) continue;
+		if (item->diagram()) {
+			item->diagram()->undoStack().push(
+				new ChangeTextHtmlCommand(item, before, after,
+							  undo_text));
+		}
+	}
+}
+
+void IndiTextPropertiesWidget::on_m_color_pb_clicked()
+{
+	const QList<IndependentTextItem *> texts = editedTexts();
+	if (texts.isEmpty()) return;
+
+	const QColor color = QColorDialog::getColor(
+		texts.first()->color(), this,
+		tr("Couleur du texte"));
+	if (!color.isValid()) return;
+
+	for (IndependentTextItem *item : texts) {
+		if (item->isHtml()) {
+			QTextCharFormat format;
+			format.setForeground(color);
+			QTextCursor cursor(item->document());
+			cursor.select(QTextCursor::Document);
+			const QString before = item->toHtml();
+			cursor.mergeCharFormat(format);
+			const QString after = item->toHtml();
+			if (before != after && item->diagram()) {
+				item->diagram()->undoStack().push(
+					new ChangeTextHtmlCommand(
+						item, before, after,
+						tr("Modifier la couleur d'un"
+						   " champ texte")));
+			}
+		} else if (item->color() != color && item->diagram()) {
+			item->diagram()->undoStack().push(
+				new QPropertyUndoCommand(
+					item, "color",
+					QVariant(item->color()),
+					QVariant(color)));
+		}
+	}
+}
+
+void IndiTextPropertiesWidget::on_m_bold_pb_clicked(bool checked)
+{
+	const QList<IndependentTextItem *> texts = editedTexts();
+	for (IndependentTextItem *item : texts) {
+		if (item->isHtml()) {
+			QTextCharFormat format;
+			format.setFontWeight(checked ? QFont::Bold
+						     : QFont::Normal);
+			applyCharFormatToAll(format,
+				tr("Modifier le format d'un champ texte"));
+			return;
+		}
+	}
+	for (IndependentTextItem *item : texts) {
+		QFont font = item->font();
+		if (font.bold() == checked) continue;
+		font.setBold(checked);
+		if (item->diagram()) {
+			auto *undo = new QPropertyUndoCommand(
+				item, "font",
+				QVariant(item->font()), QVariant(font));
+			undo->setText(
+				tr("Modifier le format d'un champ texte"));
+			item->diagram()->undoStack().push(undo);
+		}
+	}
+}
+
+void IndiTextPropertiesWidget::on_m_underline_pb_clicked(bool checked)
+{
+	const QList<IndependentTextItem *> texts = editedTexts();
+	for (IndependentTextItem *item : texts) {
+		if (item->isHtml()) {
+			QTextCharFormat format;
+			format.setFontUnderline(checked);
+			applyCharFormatToAll(format,
+				tr("Modifier le format d'un champ texte"));
+			return;
+		}
+	}
+	for (IndependentTextItem *item : texts) {
+		QFont font = item->font();
+		if (font.underline() == checked) continue;
+		font.setUnderline(checked);
+		if (item->diagram()) {
+			auto *undo = new QPropertyUndoCommand(
+				item, "font",
+				QVariant(item->font()), QVariant(font));
+			undo->setText(
+				tr("Modifier le format d'un champ texte"));
+			item->diagram()->undoStack().push(undo);
+		}
+	}
+}
+
+void IndiTextPropertiesWidget::on_m_sup_pb_clicked(bool checked)
+{
+	if (checked) {
+		ui->m_sub_pb->blockSignals(true);
+		ui->m_sub_pb->setChecked(false);
+		ui->m_sub_pb->blockSignals(false);
+	}
+	QTextCharFormat format;
+	format.setVerticalAlignment(checked
+		? QTextCharFormat::AlignSuperScript
+		: QTextCharFormat::AlignNormal);
+	applyCharFormatToAll(format,
+		tr("Modifier le format d'un champ texte"));
+}
+
+void IndiTextPropertiesWidget::on_m_sub_pb_clicked(bool checked)
+{
+	if (checked) {
+		ui->m_sup_pb->blockSignals(true);
+		ui->m_sup_pb->setChecked(false);
+		ui->m_sup_pb->blockSignals(false);
+	}
+	QTextCharFormat format;
+	format.setVerticalAlignment(checked
+		? QTextCharFormat::AlignSubScript
+		: QTextCharFormat::AlignNormal);
+	applyCharFormatToAll(format,
+		tr("Modifier le format d'un champ texte"));
 }
 
 /**

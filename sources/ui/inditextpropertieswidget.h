@@ -18,6 +18,7 @@
 #ifndef INDITEXTPROPERTIESWIDGET_H
 #define INDITEXTPROPERTIESWIDGET_H
 
+#include <QTextCharFormat>
 #include "../PropertiesEditor/propertieseditorwidget.h"
 
 #include <QPointer>
@@ -47,13 +48,21 @@ class IndiTextPropertiesWidget : public PropertiesEditorWidget
 		QUndoCommand* associatedUndo() const override;
 		
 	private slots:
-		void on_m_advanced_editor_pb_clicked();	
+		void on_m_advanced_editor_pb_clicked();
+	void on_m_color_pb_clicked();
+	void on_m_bold_pb_clicked(bool checked);
+	void on_m_underline_pb_clicked(bool checked);
+	void on_m_sup_pb_clicked(bool checked);
+	void on_m_sub_pb_clicked(bool checked);	
 		void on_m_break_html_pb_clicked();
 		void on_m_font_pb_clicked();
 
 		private:
 		void setUpEditConnection();
 		void updateUi() override;
+		QList<IndependentTextItem *> editedTexts() const;
+		void applyCharFormatToAll(const QTextCharFormat &format,
+					  const QString &undo_text);
 		
 	private:
 		Ui::IndiTextPropertiesWidget *ui;

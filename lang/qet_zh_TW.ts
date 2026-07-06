@@ -4276,6 +4276,38 @@ Toutes valeurs autre que ‘Pas d’arrondi’ peut causer des erreurs de rendu 
 <context>
     <name>IndiTextPropertiesWidget</name>
     <message>
+        <source>Couleur</source>
+        <translation>顏色</translation>
+    </message>
+    <message>
+        <source>Couleur du texte</source>
+        <translation>文字顏色</translation>
+    </message>
+    <message>
+        <source>Gras</source>
+        <translation>粗體</translation>
+    </message>
+    <message>
+        <source>Souligné</source>
+        <translation>底線</translation>
+    </message>
+    <message>
+        <source>Exposant</source>
+        <translation>上標</translation>
+    </message>
+    <message>
+        <source>Indice</source>
+        <translation>下標</translation>
+    </message>
+    <message>
+        <source>Modifier le format d&apos;un champ texte</source>
+        <translation>變更文字欄位格式</translation>
+    </message>
+    <message>
+        <source>Modifier la couleur d&apos;un champ texte</source>
+        <translation>變更文字欄位顏色</translation>
+    </message>
+    <message>
         <location filename="../sources/ui/inditextpropertieswidget.ui" line="14"/>
         <source>Form</source>
         <translation>表單</translation>
