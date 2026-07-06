@@ -54,7 +54,7 @@ class ElementsPanelWidget : public QWidget {
 		*prj_move_diagram_upx100,
 		*prj_move_diagram_downx10,
 		*prj_move_diagram_downx100;
-	QAction *tbt_add, *tbt_edit, *tbt_remove;
+	QAction *tbt_add, *tbt_edit, *tbt_remove, *tbt_apply_all;
 	QMenu *context_menu;
 	QLineEdit *filter_textfield;
 	
@@ -97,6 +97,7 @@ class ElementsPanelWidget : public QWidget {
 	void moveDiagramDownx100();
 	void addTitleBlockTemplate();
 	void editTitleBlockTemplate();
+	void applyTitleBlockTemplateToAllFolios();
 	void removeTitleBlockTemplate();
 	void updateButtons();
 	void handleContextMenu(const QPoint &);

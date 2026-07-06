@@ -2802,6 +2802,19 @@ Tout les éléments et les dossier contenus dans ce dossier seront supprimés.</
 <context>
     <name>ElementsPanelWidget</name>
     <message>
+        <source>Appliquer à tous les folios du projet</source>
+        <translation>套用到專案全部頁面</translation>
+    </message>
+    <message>
+        <source>Appliquer le modèle</source>
+        <comment>message box title</comment>
+        <translation>套用範本</translation>
+    </message>
+    <message>
+        <source>Modèle « %1 » appliqué à %2 folios.</source>
+        <translation>範本「%1」已套用到 %2 個頁面。</translation>
+    </message>
+    <message>
         <location filename="../sources/elementspanelwidget.cpp" line="56"/>
         <source>Ouvrir le dossier correspondant</source>
         <translation>開啟對應資料夾</translation>

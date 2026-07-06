@@ -23,7 +23,10 @@
 #include "qetapp.h"
 #include "qeticons.h"
 #include "qetproject.h"
+#include "qetdiagrameditor.h"
+#include "titleblock/integrationmovetemplateshandler.h"
 #include "titleblock/templatedeleter.h"
+#include "undocommand/changetitleblockcommand.h"
 #include <QFileInfo>
 #include <QMessageBox>
 
@@ -71,6 +74,7 @@ ElementsPanelWidget::ElementsPanelWidget(QWidget *parent) : QWidget(parent) {
 	tbt_add               = new QAction(QET::Icons::TitleBlock,                tr("Nouveau modèle"),                   this);
 	tbt_edit              = new QAction(QET::Icons::TitleBlock,                tr("Éditer ce modèle"),              this);
 	tbt_remove            = new QAction(QET::Icons::TitleBlock,                tr("Supprimer ce modèle"),              this);
+	tbt_apply_all         = new QAction(QET::Icons::TitleBlock,                tr("Appliquer à tous les folios du projet"), this);
 
 
 	prj_del_diagram -> setShortcut(QKeySequence(Qt::Key_Delete));
@@ -110,6 +114,7 @@ ElementsPanelWidget::ElementsPanelWidget(QWidget *parent) : QWidget(parent) {
 	connect(tbt_add,               SIGNAL(triggered()), this,           SLOT(addTitleBlockTemplate()));
 	connect(tbt_edit,              SIGNAL(triggered()), this,           SLOT(editTitleBlockTemplate()));
 	connect(tbt_remove,            SIGNAL(triggered()), this,           SLOT(removeTitleBlockTemplate()));
+	connect(tbt_apply_all,         SIGNAL(triggered()), this,           SLOT(applyTitleBlockTemplateToAllFolios()));
 
 	connect(filter_textfield,      SIGNAL(textChanged(const QString &)), this,             SLOT(filterEdited(const QString &)));
 
@@ -392,6 +397,59 @@ void ElementsPanelWidget::addTitleBlockTemplate()
 /**
 	Opens an editor to edit the currently selected title block template, if any.
 */
+/**
+	Apply the selected title block template to every folio of the target
+	project (the template's own project, otherwise the active project),
+	integrating it first when it comes from a file collection.
+*/
+void ElementsPanelWidget::applyTitleBlockTemplateToAllFolios()
+{
+	QTreeWidgetItem *current_item = elements_panel->currentItem();
+	if (!current_item
+	    || current_item->type() != QET::TitleBlockTemplate) {
+		return;
+	}
+	TitleBlockTemplateLocation location =
+		elements_panel->templateLocationForItem(current_item);
+	if (!location.isValid()) return;
+
+	QETProject *project = location.parentProject();
+	if (!project) {
+		if (QETDiagramEditor *editor =
+				QETApp::diagramEditorAncestorOf(this)) {
+			project = editor->currentProject();
+		}
+	}
+	if (!project || project->isReadOnly()) return;
+
+	//integration prealable si le modele vient d'une collection fichier
+	QString template_name = location.name();
+	if (location.parentProject() != project) {
+		IntegrationMoveTitleBlockTemplatesHandler handler(this);
+		template_name = project->integrateTitleBlockTemplate(
+			location, &handler);
+		if (template_name.isEmpty()) return;
+	}
+
+	int applied = 0;
+	const QList<Diagram *> diagrams = project->diagrams();
+	for (Diagram *diagram : diagrams) {
+		TitleBlockProperties before =
+			diagram->border_and_titleblock.exportTitleBlock();
+		if (before.template_name == template_name) continue;
+		TitleBlockProperties after = before;
+		after.template_name = template_name;
+		diagram->undoStack().push(new ChangeTitleBlockCommand(
+			diagram, before, after));
+		++applied;
+	}
+
+	QMessageBox::information(this,
+		tr("Appliquer le modèle", "message box title"),
+		tr("Modèle « %1 » appliqué à %2 folios.")
+			.arg(template_name).arg(applied));
+}
+
 void ElementsPanelWidget::editTitleBlockTemplate()
 {
 	QTreeWidgetItem *current_item = elements_panel -> currentItem();
@@ -513,6 +571,7 @@ void ElementsPanelWidget::handleContextMenu(const QPoint &pos) {
 			context_menu -> addAction(tbt_add);
 			break;
 		case QET::TitleBlockTemplate:
+			context_menu -> addAction(tbt_apply_all);
 			context_menu -> addAction(tbt_edit);
 			context_menu -> addAction(tbt_remove);
 			break;
