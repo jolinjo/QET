@@ -6111,6 +6111,18 @@ Options disponibles :
 <context>
     <name>FolioRevisionsDialog</name>
     <message>
+        <source>Aujourd'hui</source>
+        <translation>今天</translation>
+    </message>
+    <message>
+        <source>Effacer</source>
+        <translation>清除</translation>
+    </message>
+    <message>
+        <source>Date du jour sur la ligne sélectionnée</source>
+        <translation>選取列填入今天日期</translation>
+    </message>
+    <message>
         <source>Révisions du folio</source>
         <comment>window title</comment>
         <translation>頁面修訂紀錄</translation>

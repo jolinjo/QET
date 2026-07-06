@@ -28,6 +28,7 @@
 #include <QHeaderView>
 #include <QKeyEvent>
 #include <QLineEdit>
+#include <QPushButton>
 #include <QTableWidget>
 #include <QVBoxLayout>
 
@@ -120,9 +121,26 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 
 	m_issue_date = new QDateEdit(this);
 	m_issue_date->setCalendarPopup(true);
+	/* date minimale = valeur « vide » : affichee blanche et exportee
+	 * comme date invalide (champ efface du cartouche) */
+	m_issue_date->setMinimumDate(QDate(1900, 1, 1));
+	m_issue_date->setSpecialValueText(QStringLiteral(" "));
 	m_issue_date->setDate(m_original.date.isValid()
-			      ? m_original.date : QDate::currentDate());
-	form->addRow(tr("Date de publication :"), m_issue_date);
+			      ? m_original.date
+			      : m_issue_date->minimumDate());
+	auto *issue_today = new QPushButton(tr("Aujourd'hui"), this);
+	auto *issue_clear = new QPushButton(tr("Effacer"), this);
+	connect(issue_today, &QPushButton::clicked, this, [this]() {
+		m_issue_date->setDate(QDate::currentDate());
+	});
+	connect(issue_clear, &QPushButton::clicked, this, [this]() {
+		m_issue_date->setDate(m_issue_date->minimumDate());
+	});
+	auto *issue_row = new QHBoxLayout();
+	issue_row->addWidget(m_issue_date, 1);
+	issue_row->addWidget(issue_today);
+	issue_row->addWidget(issue_clear);
+	form->addRow(tr("Date de publication :"), issue_row);
 
 	m_table = new QTableWidget(ROW_COUNT, REV_FIELD_COUNT, this);
 	m_table->setHorizontalHeaderLabels({
@@ -150,6 +168,27 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 	m_table->installEventFilter(this);
 	m_table->setMinimumWidth(680);
 
+	auto *table_today = new QPushButton(
+		tr("Date du jour sur la ligne sélectionnée"), this);
+	connect(table_today, &QPushButton::clicked, this, [this]() {
+		QSet<int> rows;
+		const auto items = m_table->selectedItems();
+		for (QTableWidgetItem *item : items) {
+			rows.insert(item->row());
+		}
+		if (rows.isEmpty() && m_table->currentRow() >= 0) {
+			rows.insert(m_table->currentRow());
+		}
+		const QString today = QDate::currentDate().toString(
+			QStringLiteral("yyyy/M/d"));
+		for (int row : rows) {
+			m_table->item(row, 1)->setText(today);
+		}
+	});
+	auto *table_button_row = new QHBoxLayout();
+	table_button_row->addWidget(table_today);
+	table_button_row->addStretch();
+
 	auto *buttons = new QDialogButtonBox(
 		m_diagram->isReadOnly()
 			? QDialogButtonBox::Ok
@@ -161,12 +200,16 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 	auto *layout = new QVBoxLayout(this);
 	layout->addLayout(form);
 	layout->addWidget(m_table);
+	layout->addLayout(table_button_row);
 	layout->addWidget(buttons);
 
 	if (m_diagram->isReadOnly()) {
 		m_indexrev->setReadOnly(true);
 		m_doc_status->setEnabled(false);
 		m_issue_date->setReadOnly(true);
+		issue_today->setEnabled(false);
+		issue_clear->setEnabled(false);
+		table_today->setEnabled(false);
 		m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
 	}
 }
@@ -201,7 +244,10 @@ TitleBlockProperties FolioRevisionsDialog::editedProperties() const
 	TitleBlockProperties properties = m_original;
 
 	properties.indexrev = m_indexrev->text();
-	properties.date = m_issue_date->date();
+	const QDate issue_date = m_issue_date->date();
+	properties.date = (issue_date == m_issue_date->minimumDate())
+				  ? QDate()
+				  : issue_date;
 	properties.useDate = TitleBlockProperties::UseDateValue;
 
 	/* etat du document : ne pas creer la cle si elle n'existe pas
