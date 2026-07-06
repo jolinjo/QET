@@ -698,24 +698,26 @@ QList<Diagram *> ProjectPrintWindow::selectedDiagram() const
 void ProjectPrintWindow::exportToPDF()
 {
 	/* proposition par defaut : dossier Téléchargements,
-	 * nom = <numero de document>_<titre du folio>_<indice de revision>.pdf
-	 * (champs du cartouche du premier folio) */
+	 * nom = <date de publication>-<indice de revision>-<titre du
+	 * projet>.pdf (cartouche du premier folio) */
 	QStringList parts;
 	if (!m_project->diagrams().isEmpty()) {
 		auto &btb = m_project->diagrams().first()->border_and_titleblock;
-		DiagramContext info = btb.titleblockInformation();
-		const QString doc_id = info.value(QStringLiteral("doc-id")).toString();
-		const QString title = info.value(QStringLiteral("title")).toString();
-		const QString indexrev = info.value(QStringLiteral("indexrev")).toString();
-		if (!doc_id.isEmpty())   parts << doc_id;
-		if (!title.isEmpty())    parts << title;
-		if (!indexrev.isEmpty()) parts << indexrev;
+		const TitleBlockProperties tbp = btb.exportTitleBlock();
+		if (tbp.date.isValid()) {
+			parts << tbp.date.toString(QStringLiteral("yyyyMMdd"));
+		}
+		if (!tbp.indexrev.isEmpty()) {
+			parts << tbp.indexrev;
+		}
+	}
+	if (!m_project->title().isEmpty()) {
+		parts << m_project->title();
 	}
 	if (parts.isEmpty()) {
-		parts << (m_project->title().isEmpty()
-			  ? QStringLiteral("projet") : m_project->title());
+		parts << QStringLiteral("projet");
 	}
-	QString default_name = parts.join(QStringLiteral("_"))
+	QString default_name = parts.join(QStringLiteral("-"))
 		+ QStringLiteral(".pdf");
 	// caracteres interdits dans un nom de fichier
 	default_name.replace(QRegularExpression(
