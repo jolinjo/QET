@@ -102,6 +102,7 @@ class ProjectView : public QWidget
 		void changeTabDown();
 		void changeFirstTab();
 		void changeLastTab();
+		void applyTabFont(const QFont &font);
 
 	public slots:
 		void removeDiagram(DiagramView *diagram_view, bool silent = false);

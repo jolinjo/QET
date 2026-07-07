@@ -96,6 +96,18 @@ bool PropertiesEditorDockWidget::addEditor(PropertiesEditorWidget *editor,
 
 	ui -> m_main_vlayout -> insertWidget(index, editor);
 	m_editor_list << editor;
+
+	// The editor widgets are created on demand each time the selection changes,
+	// i.e. after applyInterfaceFonts() has already swept the dock. Without this,
+	// the fresh sub-widgets (tab labels, tables, …) keep the default UI size and
+	// the dock ends up with mixed font sizes. Apply the dock's current font (set
+	// to its interface-font zone) to the new editor and all its descendants.
+	const QFont dock_font = font();
+	editor->setFont(dock_font);
+	const QList<QWidget *> descendants = editor->findChildren<QWidget *>();
+	for (QWidget *w : descendants) {
+		w->setFont(dock_font);
+	}
 	return true;
 }
 

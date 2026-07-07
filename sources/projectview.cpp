@@ -189,6 +189,21 @@ void ProjectView::changeLastTab()
 }
 
 /**
+	@brief ProjectView::applyTabFont
+	Apply @a font to the folio (page) tab bar so its size follows the
+	"project panel" interface-font zone. Set on both the QTabWidget and its
+	QTabBar, since the bar does not always inherit the widget font.
+*/
+void ProjectView::applyTabFont(const QFont &font)
+{
+	if (!m_tab) return;
+	m_tab->setFont(font);
+	if (QTabBar *bar = m_tab->tabBar()) {
+		bar->setFont(font);
+	}
+}
+
+/**
 	@return last folio of current project
 */
 DiagramView *ProjectView::lastDiagram()

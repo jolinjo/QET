@@ -621,9 +621,19 @@ void QETDiagramEditor::applyInterfaceFonts()
 	for (QMenu *m : menus) {
 		m->setFont(menu_font);
 	}
+	const QFont toolbar_font = regionFont("fontsize_toolbar");
+	// The text-under-icon captions (列印 / 匯出PDF / …) have their own dedicated
+	// zone so they can be tuned independently of the rest of the toolbar font.
+	// ToolBarBottomTextStyle draws the caption from each tool button's own font,
+	// so set it on the buttons directly (after the toolbar font, so it wins).
+	const QFont toolbar_icontext_font = regionFont("fontsize_toolbar_icontext");
 	const QList<QToolBar *> toolbars = findChildren<QToolBar *>();
 	for (QToolBar *tb : toolbars) {
-		tb->setFont(regionFont("fontsize_toolbar"));
+		tb->setFont(toolbar_font);
+		const QList<QToolButton *> buttons = tb->findChildren<QToolButton *>();
+		for (QToolButton *btn : buttons) {
+			btn->setFont(toolbar_icontext_font);
+		}
 	}
 
 	// A QDockWidget::setFont only restyles its own title bar; the content widgets
@@ -645,6 +655,18 @@ void QETDiagramEditor::applyInterfaceFonts()
 	applyToDock(qdw_pa, "fontsize_projectpanel");
 	applyToDock(m_selection_properties_editor, "fontsize_properties");
 	applyToDock(m_autonumbering_dock, "fontsize_properties");
+
+	// The folio (page) tabs and the project title live in the central MDI area,
+	// not in a dock, so they are not reached by applyToDock. Make them follow the
+	// project-panel zone size as well. The MDI sub-window font drives the title
+	// bar ("檔案 « … »"); the ProjectView font propagates to the page tabs.
+	const QFont project_panel_font = regionFont("fontsize_projectpanel");
+	foreach (ProjectView *pv, openedProjects()) {
+		pv->applyTabFont(project_panel_font);
+		if (QMdiSubWindow *sub = subWindowForWidget(pv)) {
+			sub->setFont(project_panel_font);
+		}
+	}
 
 	// The collection panel needs its grid geometry recomputed after a font change,
 	// so it exposes a dedicated method rather than the generic descendant sweep.
@@ -1147,7 +1169,7 @@ void QETDiagramEditor::setUpToolBar()
 	diagram_tool_bar -> setObjectName("diagram");
 
 	main_tool_bar -> addActions(m_file_actions_group.actions());
-	main_tool_bar -> addAction(m_print);
+	// 列印按鈕自工具列移除(仍保留「檔案」選單項與 ⌘P 快捷鍵)
 	main_tool_bar -> addAction(m_export_to_pdf);
 	main_tool_bar -> addSeparator();
 	main_tool_bar -> addAction(m_project_add_diagram);
@@ -1679,6 +1701,20 @@ bool QETDiagramEditor::addProject(QETProject *project, bool update_panel)
 	// cree un ProjectView pour visualiser le projet
 	ProjectView *project_view = new ProjectView(project);
 	addProjectView(project_view);
+
+	// Make the new project's folio tabs and title bar follow the "project panel"
+	// font zone immediately (applyInterfaceFonts() only runs at startup / on pref
+	// change, so a freshly opened project would otherwise use the default size).
+	{
+		QSettings settings;
+		const int base = qApp->font().pointSize() > 0 ? qApp->font().pointSize() : 9;
+		QFont tab_font = qApp->font();
+		tab_font.setPointSize(settings.value("fontsize_projectpanel", base).toInt());
+		project_view->applyTabFont(tab_font);
+		if (QMdiSubWindow *sub = subWindowForWidget(project_view)) {
+			sub->setFont(tab_font);
+		}
+	}
 
 	undo_group.addStack(project -> undoStack());
 

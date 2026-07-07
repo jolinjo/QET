@@ -248,6 +248,36 @@ void ElementsCollectionWidget::expandFirstItems()
 }
 
 /**
+	@brief ElementsCollectionWidget::showDefaultCollection
+	Select the company "常用" (00_common) library in the tree and show its
+	content in the grid, as the default landing view. No-op if the company
+	collection / common folder is not installed.
+*/
+void ElementsCollectionWidget::showDefaultCollection()
+{
+	if (!m_model)
+		return;
+
+	// "company://00_common" is the company library's common ("常用") folder,
+	// stored on disk as <data>/elements-company/00_common.
+	const ElementsLocation common_dir(QStringLiteral("company://00_common"));
+	if (!common_dir.exist())
+		return;
+
+	const QModelIndex index = m_model->indexFromLocation(common_dir);
+	if (!index.isValid())
+		return;
+
+	m_default_collection_shown = true;
+
+	// Reveal and select the folder in the tree, then show its content below.
+	showAndExpandItem(index, true, false);
+	m_tree_view->setCurrentIndex(index);
+	m_tree_view->scrollTo(index);
+	updateGridRoot(index);
+}
+
+/**
 	@brief ElementsCollectionWidget::addProject
 	Add project to be displayed
 	@param project
@@ -975,9 +1005,29 @@ void ElementsCollectionWidget::setUpWidget()
 	m_tab_widget->setDocumentMode(true);
 	m_tab_widget->setTabPosition(QTabWidget::North);
 	auto *collections_splitter = new QSplitter(Qt::Vertical, this);
+	collections_splitter->setObjectName("collections_splitter");
 	collections_splitter->addWidget(m_tree_view);
 	collections_splitter->addWidget(m_grid_view);
-	collections_splitter->setSizes({500, 350});
+	// Remember the tree / preview divider position across sessions. Restore the
+	// saved state, or fall back to the default proportions the first time.
+	{
+		QSettings settings;
+		const QByteArray splitter_state =
+			settings.value("elementspanel/collections_splitter_state").toByteArray();
+		if (!splitter_state.isEmpty()) {
+			collections_splitter->restoreState(splitter_state);
+		} else {
+			collections_splitter->setSizes({500, 350});
+		}
+	}
+	// Persist the position as soon as the user drags the divider (the widget is
+	// created/destroyed on demand, so we cannot rely on a single save-on-close).
+	connect(collections_splitter, &QSplitter::splitterMoved, this,
+		[collections_splitter](int, int) {
+			QSettings settings;
+			settings.setValue("elementspanel/collections_splitter_state",
+				collections_splitter->saveState());
+		});
 	m_tab_widget->addTab(collections_splitter, tr("Collections"));
 	m_tab_widget->addTab(m_macros_tree_view, tr("Modèles"));
 
@@ -1613,6 +1663,14 @@ void ElementsCollectionWidget::loadingFinished()
 
 	m_progress_bar->hide();
 	m_tree_view->setEnabled(true);
+
+	// On the first successful load of a session, open the company "常用" (common)
+	// library by default so the grid below shows frequently-used elements right
+	// away. Only done once, so a later reload (e.g. after a library update) does
+	// not yank the user away from wherever they were.
+	if (!m_default_collection_shown) {
+		showDefaultCollection();
+	}
 
 	if (m_loading_timer) {
 		qInfo()<<"Elements collection finished to be loaded in" << m_loading_timer->elapsed()/1000.0 << "seconds";

@@ -97,6 +97,7 @@ class ElementsCollectionWidget : public QWidget
 
 	private:
 		void locationWasSaved(const ElementsLocation& location);
+		void showDefaultCollection();
 
 
 	private:
@@ -134,6 +135,7 @@ class ElementsCollectionWidget : public QWidget
 				*m_dir_propertie;
 
 		bool m_first_show = true;
+		bool m_default_collection_shown = false;
 		QList<QETProject *> m_waiting_project;
 		QScopedPointer<QElapsedTimer> m_loading_timer;
 };

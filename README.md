@@ -12,9 +12,13 @@
    無法直接編譯/啟動,本 fork 修掉了全部障礙(見下方修正清單)。
 2. **作為 AI 繪圖工具鏈的基座**:配合
    [jolinjo/qet-mcp](https://github.com/jolinjo/qet-mcp) 專案,讓 Claude 等
-   AI 透過 MCP 產生與編輯 .qet 電氣圖。原則:**本 fork 改動越少越好**,
-   智慧放在外部工具鏈;後續僅計畫新增 headless CLI(render / validate /
-   netlist)與極薄的 GUI RPC。
+   AI 透過 MCP 產生與編輯 .qet 電氣圖。**架構原則(僅針對 AI/MCP 介面層)**:
+   繪圖「智慧」放在外部工具鏈,QET 只提供穩定的資料與 RPC 介面;此線後續計畫
+   新增 headless CLI(render / validate / netlist)與極薄的 GUI RPC。
+
+   > ⚠️ 這條「改動越少越好」**只適用於 MCP 介面的智慧分工**,不是對整個 repo 的
+   > 限制。**讓 QET 本身更好用、更快、更穩定的改動是歡迎且鼓勵的**(UI/在地化/
+   > 效能/穩定性皆可),任何這類發現都可以提出來討論並修改。
 
 ## 主要分支
 

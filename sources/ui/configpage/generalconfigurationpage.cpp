@@ -232,6 +232,7 @@ GeneralConfigurationPage::GeneralConfigurationPage(QWidget *parent) :
 	ui->m_uifontsize_sb->setValue(settings.value("uifontsize", ui_font_base).toInt());
 	ui->m_fs_menu_sb->setValue(settings.value("fontsize_menu", ui_font_base).toInt());
 	ui->m_fs_toolbar_sb->setValue(settings.value("fontsize_toolbar", ui_font_base).toInt());
+	ui->m_fs_toolbar_icontext_sb->setValue(settings.value("fontsize_toolbar_icontext", ui_font_base).toInt());
 	ui->m_fs_project_sb->setValue(settings.value("fontsize_projectpanel", ui_font_base).toInt());
 	ui->m_fs_library_sb->setValue(settings.value("fontsize_library", ui_font_base).toInt());
 	ui->m_fs_props_sb->setValue(settings.value("fontsize_properties", ui_font_base).toInt());
@@ -266,6 +267,7 @@ void GeneralConfigurationPage::applyConf()
 	settings.setValue("uifontsize", ui->m_uifontsize_sb->value());
 	settings.setValue("fontsize_menu", ui->m_fs_menu_sb->value());
 	settings.setValue("fontsize_toolbar", ui->m_fs_toolbar_sb->value());
+	settings.setValue("fontsize_toolbar_icontext", ui->m_fs_toolbar_icontext_sb->value());
 	settings.setValue("fontsize_projectpanel", ui->m_fs_project_sb->value());
 	settings.setValue("fontsize_library", ui->m_fs_library_sb->value());
 	settings.setValue("fontsize_properties", ui->m_fs_props_sb->value());
