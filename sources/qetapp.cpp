@@ -35,6 +35,7 @@
 #include "titleblocktemplate.h"
 #include "ui/aboutqetdialog.h"
 #include "ui/configpage/generalconfigurationpage.h"
+#include "Pdm/pdmconfigpage.h"
 #include "machine_info.h"
 #include "TerminalStrip/ui/terminalstripeditorwindow.h"
 #include "qetversion.h"
@@ -2002,6 +2003,7 @@ void QETApp::configureQET()
 	cd.addPage(new NewDiagramPage());
 	cd.addPage(new ExportConfigPage());
 	cd.addPage(new PrintConfigPage());
+	cd.addPage(new PdmConfigPage());
 
 	// associates the dialog with a possible parent widget
 	// associe le dialogue a un eventuel widget parent

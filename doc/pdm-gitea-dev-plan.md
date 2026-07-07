@@ -44,7 +44,7 @@ protection 勾選 "Block approval by PR author"... 若該版本無此選項,由 
 
 ### 圖檔生命週期狀態機
 
-```
+```text
  [可出庫] --出庫(lfs lock)--> [編輯中(我鎖定)]
  [編輯中] --入庫(commit+push+unlock)--> [可出庫] 或 --送審--> [審核中(PR open)]
  [審核中] --確認者於 QET 瀏覽模式核准(PR review APPROVE)--> [已確認待發行]
@@ -107,7 +107,7 @@ protection 勾選 "Block approval by PR author"... 若該版本無此選項,由 
 
 ### 3.3 QET 客戶端模組
 
-```
+```text
 sources/Pdm/
   pdmservice.{h,cpp}        Gitea REST v1 客戶端(QNetworkAccessManager,token 認證)
   pdmgitworker.{h,cpp}      git / git-lfs CLI 包裝(QProcess,非同步,絕不在 UI 執行緒等待)
@@ -126,7 +126,29 @@ sources/Pdm/
   (`applyInterfaceFonts()` / `fontsize_*` 設定),並提供繁中翻譯。
 - **版號慣例**:沿用本 fork「每個功能 commit 版號 +1」。
 
-### 3.4 瀏覽(審核)模式——本案關鍵客製
+### 3.4 本機工作區模型(2026-07-08 補充,Phase 1 實作採用)
+
+單一 clone 的工作樹一次只能停在一條分支,但 PDM 需要「不同圖檔同時被
+不同人/不同分支編輯」。因此客戶端採 **vault + worktree** 模型:
+
+```text
+<workRoot>/<owner>/<repo>/
+  vault/          主 clone,永遠停在 main(瀏覽/鎖定/狀態查詢用)
+  checkouts/<圖號>/   git worktree,分支 work/<圖號>(出庫後的編輯工作區)
+```
+
+- **出庫**:`git lfs lock` 成功後,若遠端已有 `work/<圖號>` 分支
+  (前次入庫未發行的延續)則 worktree 掛該分支,否則從 `origin/main`
+  開新分支。開啟的檔案一律是 worktree 內的副本。
+- **入庫**:在 worktree 內 add/commit/push 到 `work/<圖號>`,再解鎖。
+  worktree 保留供下次出庫重用(fetch/pull 更新)。
+- **送審(Phase 2)**:PR `work/<圖號>` → `main`;發行後刪除該分支與 worktree。
+- 狀態推導:鎖清單 + `git ls-remote --heads origin "refs/heads/work/*"`
+  (存在 work 分支且未鎖 = 已入庫未發行)。
+- 注意:`git lfs install --local` 在 vault 執行一次即可,worktree 共用
+  同一份 repo config 與 hooks。lfs 指令**不支援 `-q` 參數**(會噴 usage)。
+
+### 3.5 瀏覽(審核)模式——本案關鍵客製
 
 確認者的操作流:PDM 面板「待我確認」清單 → 點一筆 → QET 自動:
 
@@ -144,7 +166,7 @@ sources/Pdm/
    - 退回 → 同 API(REQUEST_CHANGES + 意見文字)
 4. 送出後關閉審核視窗、清理暫存 checkout、清單刷新。
 
-### 3.5 發行(放行者)
+### 3.6 發行(放行者)
 
 PDM 面板「待發行」清單(有核准、未 merge 的 PR)→ 發行對話框:
 
@@ -212,7 +234,7 @@ A 入庫後 B 可出庫並拿到 A 的版本;全程使用者不接觸 git 指令
 
 - 製圖者「送審」按鈕:自動開 PR(標題含圖號,描述含變更說明必填),
   送審後該圖對製圖者變為唯讀直到退回或發行。
-- 確認者「待我確認」清單 + §3.4 審核模式(唯讀開圖、核准/退回)。
+- 確認者「待我確認」清單 + §3.5 審核模式(唯讀開圖、核准/退回)。
 - CI(Gitea Actions):PR 觸發 headless `validate`(檔案可正常載入、
   圖號與檔名一致、圖框欄位齊全),不過則 PR 標紅,QET 端顯示檢查狀態。
 - headless CLI:本 fork 原本就規劃的 `render / validate` 在此期落地
@@ -223,7 +245,7 @@ A 入庫後 B 可出庫並拿到 A 的版本;全程使用者不接觸 git 指令
 
 ### Phase 3:發行
 
-功能:§3.5 全部;PDM 面板顯示每張圖的已發行版次與發行歷史;
+功能:§3.6 全部;PDM 面板顯示每張圖的已發行版次與發行歷史;
 「開啟發行版」= 唯讀開啟 tag 上的檔案(檢視舊版圖)。
 
 **驗收**:放行者一鍵發行後,Gitea 上有 tag + Release + CI 產的 PDF 附件;
@@ -279,6 +301,43 @@ A 入庫後 B 可出庫並拿到 A 的版本;全程使用者不接觸 git 指令
 
 ---
 
-## 附錄 A:驗證紀錄(§4 完成後由開發 AI 填寫)
+## 附錄 A:驗證紀錄
 
-(待填:Gitea 版本、API 差異、QETProject 唯讀行為、平台驗證結果)
+**2026-07-08,對本機 Docker 沙盒 Gitea 1.24.7(macOS/OrbStack)實測。**
+內網正式 Gitea 上線前需以相同腳本重跑一次(版本若異於 1.24.x 特別留意)。
+沙盒:容器 `qet-pdm-gitea`(port 3000),org `pdm`、repo `pdm/pilot-line`、
+三個 Team 與測試帳號 drafter1/checker1/releaser1。
+
+| 驗證項 | 結果 |
+| --- | --- |
+| LFS lock 原子性(兩客戶端並發搶鎖同檔) | ✅ 恰一人成功;鎖清單可見鎖定者 |
+| `*.qet lockable` 未鎖定時磁碟唯讀(macOS) | ✅ 生效(clone 後即唯讀) |
+| main 直接 push 被拒 | ✅ branch protection `enable_push:false` |
+| 作者自我核准 | ✅ Gitea 原生就拒絕(http 422),不需 QET 端補擋 |
+| Dismiss stale approvals(核准後再 push) | ✅ 核准自動標記 dismissed+stale |
+| 無有效核准時 merge 被拒 | ✅ http 405 |
+| 非 releaser merge 被拒(merge 白名單) | ✅ http 405 |
+| releaser merge | ✅ 但**核准後立即 merge 會瞬態 405**,約 1 秒後重試即成功→ **QET 客戶端 merge 需帶重試(建議 1s×3 次)** |
+| Protected tag `release/*` | ✅ drafter 建 Release 被拒(422)、releaser 成功(201) |
+| 角色 token(scope: write:repository, read:user, read:organization) | ✅ 足夠支撐全部 API 操作 |
+
+**QETProject 唯讀行為(程式碼稽核):**
+
+- `QETProject::setReadOnly(bool)` / `isReadOnly()` 存在(`sources/qetproject.h:171-172`),
+  Diagram/DiagramView/ProjectView/QETDiagramEditor 已有大量守衛點。
+- **缺口 1**:`isReadOnly()` 綁定 `m_file_path`(`qetproject.cpp:1089`),
+  「另存新檔」改路徑後唯讀即失效→ 審核模式必須另外停用另存入口。
+- **缺口 2**:存檔按鈕在唯讀時仍可點(`slot_updateActions()` 只綁
+  `opened_project`),實際只被 `write()` 的磁碟可寫檢查擋住→ 審核模式
+  要自行 disable `m_save_file` / `m_save_file_as`。
+- 結論:審核模式 = `setReadOnly(true)` 加上暫存目錄檔案設唯讀(雙保險),
+  並明確停用存檔/另存 action。
+
+**其他環境事實:**
+
+- 開發機 git 2.50.1、git-lfs 3.7.1(brew);Windows 可攜包需一併打包 git-lfs。
+- codebase 無任何 QNetworkAccessManager 使用→ Pdm 模組需自行引入
+  Qt6::Network(CMake components + link)。
+- 內網正式 Gitea 推測為 `http://hc-server:3000`(OTA 更新器既有預設,
+  `sources/ui/appupdatedialog.cpp`,QSettings key `ota/repo-url`),
+  PDM 伺服器 URL 預設值沿用此主機。

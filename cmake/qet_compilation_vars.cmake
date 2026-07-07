@@ -369,6 +369,16 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/ElementsCollection/elementscollectionmodel.h
   ${QET_DIR}/sources/ElementsCollection/elementscollectionwidget.cpp
   ${QET_DIR}/sources/ElementsCollection/elementscollectionwidget.h
+  ${QET_DIR}/sources/Pdm/pdmconfigpage.cpp
+  ${QET_DIR}/sources/Pdm/pdmconfigpage.h
+  ${QET_DIR}/sources/Pdm/pdmdockwidget.cpp
+  ${QET_DIR}/sources/Pdm/pdmdockwidget.h
+  ${QET_DIR}/sources/Pdm/pdmgitworker.cpp
+  ${QET_DIR}/sources/Pdm/pdmgitworker.h
+  ${QET_DIR}/sources/Pdm/pdmservice.cpp
+  ${QET_DIR}/sources/Pdm/pdmservice.h
+  ${QET_DIR}/sources/Pdm/pdmsettings.cpp
+  ${QET_DIR}/sources/Pdm/pdmsettings.h
   ${QET_DIR}/sources/ElementsCollection/elementslocation.cpp
   ${QET_DIR}/sources/ElementsCollection/elementslocation.h
   ${QET_DIR}/sources/ElementsCollection/elementstreeview.cpp

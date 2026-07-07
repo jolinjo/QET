@@ -17,7 +17,7 @@
 cmake_minimum_required(VERSION 3.5...4.2)
 
 project(qelectrotech
-  VERSION 1.0.22
+  VERSION 1.0.23
   DESCRIPTION "QET is a CAD/CAE editor focusing on schematics drawing features."
   HOMEPAGE_URL "https://qelectrotech.org/"
   LANGUAGES CXX)
@@ -151,6 +151,7 @@ target_include_directories(
   ${QET_DIR}/sources/diagramevent
   ${QET_DIR}/sources/ElementsCollection
   ${QET_DIR}/sources/ElementsCollection/ui
+  ${QET_DIR}/sources/Pdm
   ${QET_DIR}/sources/autoNum
   ${QET_DIR}/sources/autoNum/ui
   ${QET_DIR}/sources/ui/configpage

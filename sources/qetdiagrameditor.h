@@ -43,6 +43,7 @@ class RecentFiles;
 class DiagramPropertiesEditorDockWidget;
 class ElementsCollectionWidget;
 class AutoNumberingDockWidget;
+class PdmDockWidget;
 class TerminalNumberingDialog;
 
 #ifdef BUILD_WITHOUT_KF5
@@ -91,6 +92,7 @@ class QETDiagramEditor : public QETMainWindow
 		void setUpUndoStack     ();
 		void setUpSelectionPropertiesEditor();
 		void setUpAutonumberingWidget();
+		void setUpPdmDock       ();
 		void setUpActions       ();
 		void setUpToolBar       ();
 		void setUpMenu          ();
@@ -259,6 +261,7 @@ class QETDiagramEditor : public QETMainWindow
 		
 		QUndoGroup undo_group;
 		AutoNumberingDockWidget *m_autonumbering_dock;
+		PdmDockWidget *m_pdm_dock = nullptr;
 		int activeSubWindowIndex;
 		bool m_first_show = true;
 		SearchAndReplaceWidget m_search_and_replace_widget;

@@ -87,6 +87,7 @@ public:
 #include "ElementsCollection/elementscollectionwidget.h"
 #include "QWidgetAnimation/qwidgetanimation.h"
 #include "autoNum/ui/autonumberingdockwidget.h"
+#include "Pdm/pdmdockwidget.h"
 #include "conductornumexport.h"
 #include "diagramcommands.h"
 #include "diagramevent/diagrameventaddimage.h"
@@ -177,6 +178,7 @@ QETDiagramEditor::QETDiagramEditor(const QStringList &files, QWidget *parent) :
 	setUpUndoStack();
 	setUpSelectionPropertiesEditor();
 	setUpAutonumberingWidget();
+	setUpPdmDock();
 
 	setUpActions();
 	setUpToolBar();
@@ -596,6 +598,25 @@ void QETDiagramEditor::setUpAutonumberingWidget()
 }
 
 /**
+	@brief QETDiagramEditor::setUpPdmDock
+	Setup the PDM (圖檔管理) dock: Gitea-backed check-out / check-in panel.
+*/
+void QETDiagramEditor::setUpPdmDock()
+{
+	m_pdm_dock = new PdmDockWidget(this);
+	m_pdm_dock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+	m_pdm_dock->setFeatures(QDockWidget::DockWidgetClosable
+				| QDockWidget::DockWidgetMovable
+				| QDockWidget::DockWidgetFloatable);
+	addDockWidget(Qt::LeftDockWidgetArea, m_pdm_dock);
+
+	connect(m_pdm_dock, &PdmDockWidget::requestOpenFile, this,
+		[this](const QString &file_path) {
+			openAndAddProject(file_path, false);
+		});
+}
+
+/**
 	@brief QETDiagramEditor::applyInterfaceFonts
 	Apply the per-region interface font sizes from the settings to the menu bar,
 	tool bars and dock panels. Each region falls back to the global UI font size
@@ -655,6 +676,7 @@ void QETDiagramEditor::applyInterfaceFonts()
 	applyToDock(qdw_pa, "fontsize_projectpanel");
 	applyToDock(m_selection_properties_editor, "fontsize_properties");
 	applyToDock(m_autonumbering_dock, "fontsize_properties");
+	applyToDock(m_pdm_dock, "fontsize_projectpanel");
 
 	// The folio (page) tabs and the project title live in the central MDI area,
 	// not in a dock, so they are not reached by applyToDock. Make them follow the
@@ -1357,6 +1379,7 @@ void QETDiagramEditor::setUpMenu()
 	diagram_tool_bar      -> toggleViewAction() -> setStatusTip(tr("Affiche ou non la barre d'outils Schéma"));
 	qdw_pa           -> toggleViewAction() -> setStatusTip(tr("Affiche ou non le panel d'appareils"));
 	qdw_undo         -> toggleViewAction() -> setStatusTip(tr("Affiche ou non la liste des modifications"));
+	m_pdm_dock       -> toggleViewAction() -> setStatusTip(tr("顯示或隱藏圖檔管理面板"));
 
 
 	// menu Affichage
