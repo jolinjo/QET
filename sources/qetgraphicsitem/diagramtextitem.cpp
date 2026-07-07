@@ -279,7 +279,10 @@ void DiagramTextItem::focusInEvent(QFocusEvent *event)
 
 	setFlag(QGraphicsItem::ItemIsMovable, false);
 	
-	m_previous_html_text = toHtml();
+	/* pour un texte brut, memoriser la version brute : ainsi la commande
+	 * d'annulation posterieure a l'edition ne reinjecte pas de balisage
+	 * html dans un champ qui n'en avait pas */
+	m_previous_html_text = isHtml() ? toHtml() : toPlainText();
 	m_previous_text = toPlainText();
 }
 

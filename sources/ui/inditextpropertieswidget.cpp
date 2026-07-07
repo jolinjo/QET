@@ -367,7 +367,12 @@ QUndoCommand *IndiTextPropertiesWidget::associatedUndo() const
 			new QPropertyUndoCommand(m_text.data(), "rotation", QVariant(m_text->rotation()), QVariant(ui->m_angle_sb->value()), undo);
 		}
 		if (ui->m_line_edit->text() != m_text->toPlainText()) {
-			new ChangeDiagramTextCommand(m_text.data(), m_text->toHtml(), ui->m_line_edit->text(), undo);
+			/* le champ de saisie n'est actif que pour un texte brut :
+			 * memoriser l'etat "avant" en brut, pour que l'annulation
+			 * ne transforme pas le texte en html */
+			new ChangeDiagramTextCommand(m_text.data(),
+				m_text->isHtml() ? m_text->toHtml() : m_text->toPlainText(),
+				ui->m_line_edit->text(), undo);
 		}
 		if (ui->m_size_sb->value() != m_text->font().pointSize())
 		{
@@ -434,7 +439,6 @@ void IndiTextPropertiesWidget::updateUi()
 	ui->m_x_sb->setEnabled(m_text_list.isEmpty() ? true : false);
 	ui->m_y_sb->setEnabled(m_text_list.isEmpty() ? true : false);
 	ui->m_line_edit->setEnabled(m_text_list.isEmpty() ? true : false);
-	ui->m_advanced_editor_pb->setEnabled(m_text_list.isEmpty() ? true : false);
 	
 	if (m_text_list.isEmpty())
 	{
@@ -666,16 +670,6 @@ void IndiTextPropertiesWidget::on_m_sub_pb_clicked(bool checked)
 		: QTextCharFormat::AlignNormal);
 	applyCharFormatToAll(format,
 		tr("Modifier le format d'un champ texte"));
-}
-
-/**
-	@brief IndiTextPropertiesWidget::on_m_advanced_editor_pb_clicked
-*/
-void IndiTextPropertiesWidget::on_m_advanced_editor_pb_clicked()
-{
-	if (m_text) {
-		m_text->edit();
-	}
 }
 
 void IndiTextPropertiesWidget::on_m_break_html_pb_clicked()

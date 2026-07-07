@@ -48,7 +48,6 @@ class IndiTextPropertiesWidget : public PropertiesEditorWidget
 		QUndoCommand* associatedUndo() const override;
 		
 	private slots:
-		void on_m_advanced_editor_pb_clicked();
 	void on_m_color_pb_clicked();
 	void on_m_bold_pb_clicked(bool checked);
 	void on_m_underline_pb_clicked(bool checked);

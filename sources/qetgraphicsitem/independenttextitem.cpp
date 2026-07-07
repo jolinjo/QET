@@ -24,6 +24,7 @@
 
 #include <QDomElement>
 #include <QSettings>
+#include <QTextDocument>
 
 /**
 	Constructeur
@@ -59,7 +60,15 @@ IndependentTextItem::~IndependentTextItem()
 */
 void IndependentTextItem::fromXml(const QDomElement &e) {
 	setPos(e.attribute("x").toDouble(), e.attribute("y").toDouble());
-	setHtml(e.attribute("text"));
+	/* les anciens fichiers stockent du balisage html complet, les textes
+	 * bruts recents seulement la chaine : ne marquer "html" que ce qui
+	 * l'est vraiment */
+	const QString text = e.attribute("text");
+	if (Qt::mightBeRichText(text)) {
+		setHtml(text);
+	} else {
+		setPlainText(text);
+	}
 	setRotation(e.attribute("rotation").toDouble());
 	if (e.hasAttribute("font"))
 	{
@@ -78,7 +87,8 @@ QDomElement IndependentTextItem::toXml(QDomDocument &document) const
 	QDomElement result = document.createElement("input");
 	result.setAttribute("x", QString("%1").arg(pos().x()));
 	result.setAttribute("y", QString("%1").arg(pos().y()));
-	result.setAttribute("text", toHtml());
+	// un texte brut est sauvegarde brut, pour rester brut au rechargement
+	result.setAttribute("text", isHtml() ? toHtml() : toPlainText());
 	result.setAttribute("rotation", QString::number(QET::correctAngle(rotation())));
 	result.setAttribute("font", font().toString());
 	
@@ -88,7 +98,11 @@ QDomElement IndependentTextItem::toXml(QDomDocument &document) const
 void IndependentTextItem::focusOutEvent(QFocusEvent *event)
 {
 	DiagramTextItem::focusOutEvent(event);
-	if (diagram() && (m_previous_html_text != this->toHtml())) {
-		diagram()->undoStack().push(new ChangeDiagramTextCommand(this, m_previous_html_text, this->toHtml()));
+	/* comparer dans la meme representation que celle memorisee au focusIn :
+	 * un texte brut reste compare (et annule) en brut, sans jamais passer
+	 * par du balisage html */
+	const QString current_text = isHtml() ? toHtml() : toPlainText();
+	if (diagram() && (m_previous_html_text != current_text)) {
+		diagram()->undoStack().push(new ChangeDiagramTextCommand(this, m_previous_html_text, current_text));
 	}
 }

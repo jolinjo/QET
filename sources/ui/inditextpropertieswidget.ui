@@ -103,13 +103,6 @@
      </property>
     </widget>
    </item>
-   <item row="2" column="0" colspan="4">
-    <widget class="QPushButton" name="m_advanced_editor_pb">
-     <property name="text">
-      <string>Éditeur avancé</string>
-     </property>
-    </widget>
-   </item>
    <item row="4" column="2">
     <widget class="QLabel" name="label_4">
      <property name="text">
@@ -251,7 +244,6 @@ Veuillez utiliser l'éditeur avancé pour cela.</string>
  <tabstops>
   <tabstop>m_line_edit</tabstop>
   <tabstop>m_font_pb</tabstop>
-  <tabstop>m_advanced_editor_pb</tabstop>
   <tabstop>m_x_sb</tabstop>
   <tabstop>m_y_sb</tabstop>
   <tabstop>m_angle_sb</tabstop>

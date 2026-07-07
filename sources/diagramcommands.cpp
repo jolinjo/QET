@@ -17,6 +17,8 @@
 */
 #include "diagramcommands.h"
 
+#include <QTextDocument>
+
 #include "diagram.h"
 #include "qetgraphicsitem/conductortextitem.h"
 #include "qetgraphicsitem/element.h"
@@ -289,13 +291,28 @@ ChangeDiagramTextCommand::~ChangeDiagramTextCommand()
 }
 
 /**
+	Applique @a text au champ : comme html seulement s'il contient
+	reellement du balisage riche, sinon comme texte brut. Ainsi un texte
+	ordinaire ne se retrouve plus marque "html" (contenu verrouille dans le
+	panneau des proprietes) apres une simple edition.
+*/
+static void apply_diagram_text(DiagramTextItem *item, const QString &text)
+{
+	if (Qt::mightBeRichText(text)) {
+		item->setHtml(text);
+	} else {
+		item->setPlainText(text);
+	}
+}
+
+/**
 	@brief ChangeDiagramTextCommand::undo
 	annule la modification de texte
 */
 void ChangeDiagramTextCommand::undo()
 {
 	diagram -> showMe();
-	text_item -> setHtml(text_before);
+	apply_diagram_text(text_item, text_before);
 }
 
 /**
@@ -304,7 +321,7 @@ void ChangeDiagramTextCommand::undo()
 void ChangeDiagramTextCommand::redo()
 {
 	diagram -> showMe();
-	text_item->setHtml(text_after);
+	apply_diagram_text(text_item, text_after);
 }
 
 /**
