@@ -31,9 +31,10 @@ class QTreeWidget;
 class QTreeWidgetItem;
 
 /**
-	@brief 「圖檔管理」面板(PDM Phase 1)。
-	串接 Gitea:列出 repo 與 .qet 圖檔、顯示鎖定狀態,提供
-	出庫(獨佔鎖定)/入庫(推送+解鎖)/取消出庫。
+	@brief 「圖檔管理」面板(PDM)。
+	串接 Gitea 實作完整圖檔生命週期:
+	出庫(獨佔鎖) → 入庫(推送 work 分支) → 送審(開 PR) →
+	審核(唯讀開圖+核准/退回) → 發行(merge+tag+Release+PDF 附件)。
 	本機採 vault + worktree 模型,見 doc/pdm-gitea-dev-plan.md §3.4。
 */
 class PdmDockWidget : public QDockWidget
@@ -44,7 +45,7 @@ class PdmDockWidget : public QDockWidget
 		explicit PdmDockWidget(QWidget *parent = nullptr);
 
 	signals:
-		/// 要求編輯器開啟一個 .qet 檔(出庫成功後發出)
+		/// 要求編輯器開啟一個 .qet 檔(出庫/審核檢視時發出)
 		void requestOpenFile(const QString &file_path);
 
 	public slots:
@@ -55,25 +56,43 @@ class PdmDockWidget : public QDockWidget
 			QString rel_path;      ///< 相對 vault 的路徑
 			QString lock_owner;    ///< 空 = 未鎖定
 			bool has_work_branch = false;
+			int pr_index = 0;      ///< 0 = 無開啟中 PR
+			QString pr_author;
+			QString pr_head_sha;
+			bool pr_approved = false;
 		};
 
 		void setUpWidget();
 		void connectionRefreshed();
 		void syncRepository();
 		void loadFileStates();
+		void loadPullRequests();
 		void rebuildTree();
 		void updateButtons();
+
 		void checkOut();
 		void checkIn();
 		void cancelCheckOut();
+		void submitForReview();
+		void openReviewView();
+		void approve();
+		void reject();
+		void releaseApproved();
+		void finishRelease(const QString &rel_path, const QString &stem,
+				   const QString &tag, const QString &sha);
+		void forceUnlock();
+		void showReleaseHistory();
+
 		void showBusy(bool busy);
 		void fail(const QString &title, const QString &log);
 
 		QString currentRepoFullName() const;
 		QString vaultDir() const;
 		QString worktreeDir(const QString &stem) const;
+		QString reviewDir(int pr_index) const;
 		QString remoteUrlWithCredentials() const;
 		QTreeWidgetItem *selectedFileItem() const;
+		FileState selectedState() const;
 
 		PdmService *m_service = nullptr;
 		PdmGitWorker *m_git = nullptr;
@@ -84,7 +103,14 @@ class PdmDockWidget : public QDockWidget
 		QPushButton *m_checkout_button = nullptr,
 			    *m_checkin_button = nullptr,
 			    *m_cancel_button = nullptr,
-			    *m_refresh_button = nullptr;
+			    *m_refresh_button = nullptr,
+			    *m_submit_button = nullptr,
+			    *m_review_button = nullptr,
+			    *m_approve_button = nullptr,
+			    *m_reject_button = nullptr,
+			    *m_release_button = nullptr,
+			    *m_force_unlock_button = nullptr,
+			    *m_history_button = nullptr;
 		QLabel *m_status_label = nullptr;
 		QProgressBar *m_progress = nullptr;
 

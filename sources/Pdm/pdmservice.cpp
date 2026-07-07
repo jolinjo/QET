@@ -19,10 +19,14 @@
 
 #include "pdmsettings.h"
 
-#include <QJsonObject>
+#include <QFile>
+#include <QFileInfo>
+#include <QJsonArray>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QTimer>
+#include <QUrl>
 
 PdmService::PdmService(QObject *parent) :
 	QObject(parent),
@@ -30,16 +34,23 @@ PdmService::PdmService(QObject *parent) :
 {
 }
 
-void PdmService::get(const QString &api_path, Callback done)
+void PdmService::request(const QByteArray &verb, const QString &api_path,
+			 const QByteArray &payload,
+			 const QByteArray &content_type, Callback done)
 {
-	QNetworkRequest request(QUrl(PdmSettings::serverUrl()
-				     + QStringLiteral("/api/v1") + api_path));
+	QNetworkRequest network_request(QUrl(PdmSettings::serverUrl()
+					     + QStringLiteral("/api/v1")
+					     + api_path));
 	// token 只進 Authorization 標頭,絕不進 URL 或任何 log。
-	request.setRawHeader("Authorization",
-			     "token " + PdmSettings::token().toUtf8());
-	request.setTransferTimeout(15000);
+	network_request.setRawHeader("Authorization",
+				     "token " + PdmSettings::token().toUtf8());
+	if (!content_type.isEmpty())
+		network_request.setHeader(QNetworkRequest::ContentTypeHeader,
+					  content_type);
+	network_request.setTransferTimeout(30000);
 
-	QNetworkReply *network_reply = m_network->get(request);
+	QNetworkReply *network_reply = m_network->sendCustomRequest(
+		network_request, verb, payload);
 	connect(network_reply, &QNetworkReply::finished, this,
 		[network_reply, done]() {
 			Reply reply;
@@ -57,12 +68,29 @@ void PdmService::get(const QString &api_path, Callback done)
 				reply.error = tr("無法連線伺服器:%1")
 					.arg(network_reply->errorString());
 			} else {
-				reply.error = tr("伺服器回應 http %1")
-					.arg(reply.http_status);
+				// Gitea 錯誤通常帶 message 欄位,一併給使用者
+				const QString detail = reply.json.object()
+					.value(QStringLiteral("message")).toString();
+				reply.error = tr("伺服器回應 http %1%2")
+					.arg(reply.http_status)
+					.arg(detail.isEmpty() ? QString()
+							      : ':' + detail);
 			}
 			network_reply->deleteLater();
 			if (done) done(reply);
 		});
+}
+
+void PdmService::get(const QString &api_path, Callback done)
+{
+	request("GET", api_path, {}, {}, std::move(done));
+}
+
+void PdmService::post(const QString &api_path, const QJsonObject &body,
+		      Callback done)
+{
+	request("POST", api_path, QJsonDocument(body).toJson(QJsonDocument::Compact),
+		"application/json", std::move(done));
 }
 
 void PdmService::verifyConnection(
@@ -84,4 +112,107 @@ void PdmService::listRepositories(Callback done)
 	// limit=50:試點階段足夠;超過時要改分頁(注意事項見開發計畫)
 	get(QStringLiteral("/repos/search?limit=50&archived=false"),
 	    std::move(done));
+}
+
+void PdmService::listOpenPullRequests(const QString &repo_full_name,
+				      Callback done)
+{
+	get(QStringLiteral("/repos/%1/pulls?state=open&limit=50")
+		.arg(repo_full_name), std::move(done));
+}
+
+void PdmService::createPullRequest(const QString &repo_full_name,
+				   const QString &head_branch,
+				   const QString &base_branch,
+				   const QString &title, const QString &body,
+				   Callback done)
+{
+	post(QStringLiteral("/repos/%1/pulls").arg(repo_full_name),
+	     {{QStringLiteral("head"), head_branch},
+	      {QStringLiteral("base"), base_branch},
+	      {QStringLiteral("title"), title},
+	      {QStringLiteral("body"), body}},
+	     std::move(done));
+}
+
+void PdmService::submitReview(const QString &repo_full_name, int pr_index,
+			      const QString &event, const QString &body,
+			      Callback done)
+{
+	post(QStringLiteral("/repos/%1/pulls/%2/reviews")
+		.arg(repo_full_name).arg(pr_index),
+	     {{QStringLiteral("event"), event},
+	      {QStringLiteral("body"), body}},
+	     std::move(done));
+}
+
+void PdmService::mergePullRequest(const QString &repo_full_name, int pr_index,
+				  Callback done, int max_retries)
+{
+	post(QStringLiteral("/repos/%1/pulls/%2/merge")
+		.arg(repo_full_name).arg(pr_index),
+	     {{QStringLiteral("Do"), QStringLiteral("merge")},
+	      {QStringLiteral("delete_branch_after_merge"), true}},
+	     [this, repo_full_name, pr_index, done, max_retries]
+	     (const Reply &reply) {
+		if (!reply.ok && max_retries > 0) {
+			// §4 驗證:核准後可合併狀態有短暫延遲,等 1 秒重試
+			QTimer::singleShot(1000, this,
+				[this, repo_full_name, pr_index, done,
+				 max_retries]() {
+					mergePullRequest(repo_full_name,
+						pr_index, done,
+						max_retries - 1);
+				});
+			return;
+		}
+		if (done) done(reply);
+	});
+}
+
+void PdmService::createRelease(const QString &repo_full_name,
+			       const QString &tag_name,
+			       const QString &target_commitish,
+			       const QString &title, const QString &body,
+			       Callback done)
+{
+	post(QStringLiteral("/repos/%1/releases").arg(repo_full_name),
+	     {{QStringLiteral("tag_name"), tag_name},
+	      {QStringLiteral("target_commitish"), target_commitish},
+	      {QStringLiteral("name"), title},
+	      {QStringLiteral("body"), body}},
+	     std::move(done));
+}
+
+void PdmService::uploadReleaseAsset(const QString &repo_full_name,
+				    qint64 release_id,
+				    const QString &file_path, Callback done)
+{
+	QFile file(file_path);
+	if (!file.open(QIODevice::ReadOnly)) {
+		Reply reply;
+		reply.error = tr("無法讀取附件:%1").arg(file_path);
+		if (done) done(reply);
+		return;
+	}
+	const QByteArray data = file.readAll();
+	const QString name = QFileInfo(file_path).fileName();
+
+	// Gitea 附件端點吃 multipart/form-data 的 "attachment" 欄位
+	const QByteArray boundary = "----QetPdmBoundary7MA4YWxkTrZu0gW";
+	QByteArray payload;
+	payload += "--" + boundary + "\r\n";
+	payload += "Content-Disposition: form-data; name=\"attachment\"; "
+		   "filename=\"" + name.toUtf8() + "\"\r\n";
+	payload += "Content-Type: application/pdf\r\n\r\n";
+	payload += data;
+	payload += "\r\n--" + boundary + "--\r\n";
+
+	request("POST",
+		QStringLiteral("/repos/%1/releases/%2/assets?name=%3")
+			.arg(repo_full_name).arg(release_id)
+			.arg(QString::fromUtf8(QUrl::toPercentEncoding(name))),
+		payload,
+		"multipart/form-data; boundary=" + boundary,
+		std::move(done));
 }

@@ -19,6 +19,7 @@
 #define PDMSERVICE_H
 
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QObject>
 
 #include <functional>
@@ -52,9 +53,54 @@ class PdmService : public QObject
 		/// GET /api/v1/repos/search — 列出 token 可存取的 repo
 		void listRepositories(Callback done);
 
+		/// GET /repos/{repo}/pulls?state=open
+		void listOpenPullRequests(const QString &repo_full_name,
+					  Callback done);
+
+		/// POST /repos/{repo}/pulls — 送審(head → base 開 PR)
+		void createPullRequest(const QString &repo_full_name,
+				       const QString &head_branch,
+				       const QString &base_branch,
+				       const QString &title,
+				       const QString &body,
+				       Callback done);
+
+		/// POST /repos/{repo}/pulls/{index}/reviews —
+		/// event = "APPROVED" 或 "REQUEST_CHANGES"
+		void submitReview(const QString &repo_full_name, int pr_index,
+				  const QString &event, const QString &body,
+				  Callback done);
+
+		/**
+			POST /repos/{repo}/pulls/{index}/merge。
+			核准後 Gitea 的可合併狀態有極短暫延遲(§4 驗證:瞬態
+			405),故失敗時每秒重試,最多 max_retries 次。
+		*/
+		void mergePullRequest(const QString &repo_full_name, int pr_index,
+				      Callback done, int max_retries = 3);
+
+		/// POST /repos/{repo}/releases
+		void createRelease(const QString &repo_full_name,
+				   const QString &tag_name,
+				   const QString &target_commitish,
+				   const QString &title, const QString &body,
+				   Callback done);
+
+		/// POST /repos/{repo}/releases/{id}/assets — 上傳發行附件
+		void uploadReleaseAsset(const QString &repo_full_name,
+					qint64 release_id,
+					const QString &file_path,
+					Callback done);
+
 		void get(const QString &api_path, Callback done);
+		void post(const QString &api_path, const QJsonObject &body,
+			  Callback done);
 
 	private:
+		void request(const QByteArray &verb, const QString &api_path,
+			     const QByteArray &payload,
+			     const QByteArray &content_type, Callback done);
+
 		QNetworkAccessManager *m_network = nullptr;
 };
 

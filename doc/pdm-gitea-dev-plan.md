@@ -204,6 +204,14 @@ PDM 面板「待發行」清單(有核准、未 merge 的 PR)→ 發行對話框
 
 ## 5. 開發分期與功能目標
 
+> **實作進度(2026-07-08)**:Phase 0 完成(附錄 A);Phase 1 完成
+> (commit 1.0.23,sources/Pdm/ 模組);Phase 2/3/4 客戶端功能已實作於
+> PdmDockWidget(送審/審核檢視/核准/退回/發行/強制解鎖/發行歷史),
+> headless CLI 上游已有 `--cli-validate / --cli-render / --cli-export-pdf`。
+> **尚未做**:Gitea Actions runner 與 PR 觸發的 CI validate(需內網
+> runner,部署時處理);審核模式的專屬工具列(目前以 dock 內按鈕代替,
+> 唯讀由 lockable+QETProject 原生機制保證);metadata 搜尋;OAuth2。
+
 ### Phase 0:規範與環境(不寫 QET 程式碼)
 
 - 完成 §3.2 Gitea 設定、§4 驗證,建立一個試點 repo(一條產品線)。
@@ -332,6 +340,20 @@ A 入庫後 B 可出庫並拿到 A 的版本;全程使用者不接觸 git 指令
   要自行 disable `m_save_file` / `m_save_file_as`。
 - 結論:審核模式 = `setReadOnly(true)` 加上暫存目錄檔案設唯讀(雙保險),
   並明確停用存檔/另存 action。
+
+**Phase 2-4 全流程實測補充(2026-07-08,沙盒 20/23 → 修正後全過):**
+
+- **lockable 唯讀的真實時機**:對「非 LFS 儲存、僅標 `lockable`」的檔案,
+  OS 唯讀是 `git lfs lock`(設可寫)/`git lfs unlock`(設唯讀)當下切換的,
+  **checkout/clone/worktree add 並不會套用**。結論:OS 唯讀只是輔助,
+  客戶端在審核檢視/發行版檢視開檔前、與解鎖後的舊工作區,一律自行
+  `QFile::setPermissions` 強制唯讀(PdmDockWidget::setFileWritable)。
+- **`git lfs unlock --force` 只需 repo write 權限**(Gitea 1.24 原生行為,
+  無設定可限縮):任何製圖者技術上都能解他人的鎖。防線=QET UI 強確認
+  對話框+流程紀律+Gitea 操作紀錄可稽核。內網部署時要在教育訓練明講。
+- 其餘全數通過:PR head sha 防偷換檢查、merge 重試(第 1 次即成)、
+  `--cli-export-pdf` 渲染(316K)、Release 附件上傳、
+  `delete_branch_after_merge` 自動清分支。
 
 **其他環境事實:**
 

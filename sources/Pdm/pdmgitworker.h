@@ -55,6 +55,12 @@ class PdmGitWorker : public QObject
 			     const QString &working_dir,
 			     Callback done);
 
+		/// 同 enqueue,但執行任意程式(發行時呼叫自身 CLI 產 PDF 用)
+		void enqueueProgram(const QString &program,
+				    const QStringList &arguments,
+				    const QString &working_dir,
+				    Callback done);
+
 		bool busy() const { return m_process != nullptr; }
 		void cancelPending();
 
@@ -67,6 +73,7 @@ class PdmGitWorker : public QObject
 		void startNext();
 
 		struct Job {
+			QString program;   ///< 空 = git
 			QStringList arguments;
 			QString working_dir;
 			Callback done;

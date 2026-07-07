@@ -28,7 +28,16 @@ void PdmGitWorker::enqueue(const QStringList &arguments,
 			   const QString &working_dir,
 			   Callback done)
 {
-	m_queue.enqueue({arguments, working_dir, std::move(done)});
+	m_queue.enqueue({QString(), arguments, working_dir, std::move(done)});
+	if (!m_process) startNext();
+}
+
+void PdmGitWorker::enqueueProgram(const QString &program,
+				  const QStringList &arguments,
+				  const QString &working_dir,
+				  Callback done)
+{
+	m_queue.enqueue({program, arguments, working_dir, std::move(done)});
 	if (!m_process) startNext();
 }
 
@@ -51,14 +60,20 @@ void PdmGitWorker::startNext()
 	if (!job.working_dir.isEmpty())
 		process->setWorkingDirectory(job.working_dir);
 
+	const bool is_git = job.program.isEmpty();
+	const QString program = is_git ? QStringLiteral("git") : job.program;
+
 	// CJK 檔名不轉義、Windows 長路徑;凡 clone/pull 觸發的 LFS 下載
 	// 都走同一組環境。
 	QStringList args;
-	args << "-c" << "core.quotepath=false"
-	     << "-c" << "core.longpaths=true"
-	     << job.arguments;
+	if (is_git) {
+		args << "-c" << "core.quotepath=false"
+		     << "-c" << "core.longpaths=true";
+	}
+	args << job.arguments;
 
-	emit stepStarted(QStringLiteral("git ") + job.arguments.join(' '));
+	emit stepStarted((is_git ? QStringLiteral("git ") : program + ' ')
+			 + job.arguments.join(' '));
 
 	connect(process,
 		QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
@@ -74,15 +89,16 @@ void PdmGitWorker::startNext()
 			startNext();
 		});
 	connect(process, &QProcess::errorOccurred, this,
-		[this, process, job](QProcess::ProcessError) {
+		[this, process, job, program](QProcess::ProcessError) {
 			if (process->state() != QProcess::NotRunning) return;
 			Result result;
-			result.output = tr("無法啟動 git,請確認已安裝 git 與 git-lfs。");
+			result.output = tr("無法啟動 %1,請確認已正確安裝。")
+				.arg(program);
 			process->deleteLater();
 			m_process = nullptr;
 			if (job.done) job.done(result);
 			startNext();
 		});
 
-	process->start(QStringLiteral("git"), args);
+	process->start(program, args);
 }
