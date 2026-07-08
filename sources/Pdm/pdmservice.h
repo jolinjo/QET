@@ -87,7 +87,8 @@ class PdmService : public QObject
 			405),故失敗時每秒重試,最多 max_retries 次。
 		*/
 		void mergePullRequest(const QString &repo_full_name, int pr_index,
-				      Callback done, int max_retries = 3);
+				      Callback done, int max_retries = 3,
+				      const QString &head_commit_id = QString());
 
 		/// POST /repos/{repo}/releases
 		void createRelease(const QString &repo_full_name,

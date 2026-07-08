@@ -1542,32 +1542,40 @@ void PdmDialog::approveAndRelease()
 		[this, rel_path, pr_index, stem, vault, msg]() {
 		// 推下一發行版次 → 合併 → 發行(核准成功或自我核准被拒都走這)
 		auto merge_and_release = [this, rel_path, pr_index, stem, vault]() {
-			m_git->enqueue({"ls-remote", "--tags", "origin",
-				QStringLiteral("refs/tags/release/%1-v*").arg(stem)},
-				vault,
+			// 先取剛推上去的「核准發行」commit SHA(work 分支工作區的 HEAD),
+			// 合併時指定它為 head_commit_id,保證併進 main 的是這顆正式發行
+			// commit,不會誤併到舊 head(消除 push 與 Gitea 索引的競態)。
+			const QString worktree = worktreeDir(stem);
+			m_git->enqueue({"rev-parse", "HEAD"}, worktree,
 				[this, rel_path, pr_index, stem, vault]
-				(const PdmGitWorker::Result &tags_result) {
-				int next_version = 1;
-				const QRegularExpression pattern(
-					QStringLiteral("refs/tags/release/%1-v(\\d+)")
-					.arg(QRegularExpression::escape(stem)));
-				auto matches = pattern.globalMatch(tags_result.output);
-				while (matches.hasNext()) {
-					next_version = qMax(next_version,
-						matches.next().captured(1).toInt() + 1);
-				}
-				const QString tag = QStringLiteral("release/%1-v%2")
-					.arg(stem).arg(next_version);
-				m_service->mergePullRequest(currentRepoFullName(),
-					pr_index,
-					[this, rel_path, stem, tag, vault]
-					(const PdmService::Reply &merge_reply) {
-					if (!merge_reply.ok) {
-						fail(tr("合併失敗(需有效核准,且僅"
-							"核准者有權發行)"),
-						     merge_reply.error);
-						return;
+				(const PdmGitWorker::Result &sha_r) {
+				const QString head_sha = sha_r.output.trimmed();
+				m_git->enqueue({"ls-remote", "--tags", "origin",
+					QStringLiteral("refs/tags/release/%1-v*").arg(stem)},
+					vault,
+					[this, rel_path, pr_index, stem, vault, head_sha]
+					(const PdmGitWorker::Result &tags_result) {
+					int next_version = 1;
+					const QRegularExpression pattern(
+						QStringLiteral("refs/tags/release/%1-v(\\d+)")
+						.arg(QRegularExpression::escape(stem)));
+					auto matches = pattern.globalMatch(tags_result.output);
+					while (matches.hasNext()) {
+						next_version = qMax(next_version,
+							matches.next().captured(1).toInt() + 1);
 					}
+					const QString tag = QStringLiteral("release/%1-v%2")
+						.arg(stem).arg(next_version);
+					m_service->mergePullRequest(currentRepoFullName(),
+						pr_index,
+						[this, rel_path, stem, tag, vault]
+						(const PdmService::Reply &merge_reply) {
+						if (!merge_reply.ok) {
+							fail(tr("合併失敗(需有效核准,且僅"
+								"核准者有權發行)"),
+							     merge_reply.error);
+							return;
+						}
 					m_git->enqueue({"fetch", "origin", "--prune"},
 						vault, {});
 					m_git->enqueue({"checkout", DEFAULT_BRANCH},
@@ -1579,7 +1587,8 @@ void PdmDialog::approveAndRelease()
 						finishRelease(rel_path, stem, tag,
 							sha_result.output.trimmed());
 					});
-				});
+				}, 3, head_sha);
+			});
 			});
 		};
 		// 核准含核准者 commit 的最新 head

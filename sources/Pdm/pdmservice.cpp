@@ -248,22 +248,29 @@ void PdmService::submitReview(const QString &repo_full_name, int pr_index,
 }
 
 void PdmService::mergePullRequest(const QString &repo_full_name, int pr_index,
-				  Callback done, int max_retries)
+				  Callback done, int max_retries,
+				  const QString &head_commit_id)
 {
+	QJsonObject body{{QStringLiteral("Do"), QStringLiteral("merge")},
+			 {QStringLiteral("delete_branch_after_merge"), true}};
+	// 指定要合併的確切 head:Gitea 只在 PR head == 此 SHA 時才合併,否則
+	// 回錯(不會誤併舊 head)。用來保證合併的是剛推上去的「核准發行」commit,
+	// 消除「git push 已更新但 Gitea 尚未索引 PR head」的競態。
+	if (!head_commit_id.isEmpty())
+		body.insert(QStringLiteral("head_commit_id"), head_commit_id);
 	post(QStringLiteral("/repos/%1/pulls/%2/merge")
 		.arg(repo_full_name).arg(pr_index),
-	     {{QStringLiteral("Do"), QStringLiteral("merge")},
-	      {QStringLiteral("delete_branch_after_merge"), true}},
-	     [this, repo_full_name, pr_index, done, max_retries]
+	     body,
+	     [this, repo_full_name, pr_index, done, max_retries, head_commit_id]
 	     (const Reply &reply) {
 		if (!reply.ok && max_retries > 0) {
-			// §4 驗證:核准後可合併狀態有短暫延遲,等 1 秒重試
+			// 可合併狀態/ head 索引有短暫延遲,等 1 秒重試
 			QTimer::singleShot(1000, this,
 				[this, repo_full_name, pr_index, done,
-				 max_retries]() {
+				 max_retries, head_commit_id]() {
 					mergePullRequest(repo_full_name,
 						pr_index, done,
-						max_retries - 1);
+						max_retries - 1, head_commit_id);
 				});
 			return;
 		}
