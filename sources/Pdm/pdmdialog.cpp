@@ -21,10 +21,12 @@
 #include "pdmservice.h"
 #include "pdmsettings.h"
 
+#include <QColor>
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDialogButtonBox>
 #include <QDir>
+#include <QFont>
 #include <QDomDocument>
 #include <QFile>
 #include <QFileDialog>
@@ -167,8 +169,8 @@ void PdmDialog::setUpWidget()
 	m_tree->setAllColumnsShowFocus(true);
 
 	m_history_tree = new QTreeWidget(splitter);
-	m_history_tree->setHeaderLabels({tr("發行版"), tr("發行日期")});
-	m_history_tree->setRootIsDecorated(false);
+	m_history_tree->setHeaderLabels({tr("版本/日期"), tr("訊息")});
+	m_history_tree->setRootIsDecorated(true);   // 顯示發行版下的小版縮排
 	m_history_tree->setSelectionMode(QAbstractItemView::SingleSelection);
 
 	splitter->addWidget(m_folder_tree);
@@ -1539,32 +1541,76 @@ void PdmDialog::forceUnlock()
 void PdmDialog::loadReleaseHistory(const QString &rel_path)
 {
 	const QString stem = sanitizedStem(rel_path);
-	m_service->get(QStringLiteral("/repos/%1/releases?limit=50")
-		.arg(currentRepoFullName()),
-		[this, rel_path, stem](const PdmService::Reply &reply) {
+	const FileState st = m_files.value(rel_path);
+	// 進行中的圖檔看 work 分支(含未發行的最新 commit),否則看 main
+	const QString ref = st.has_work_branch
+		? QStringLiteral("origin/") + workBranchOf(rel_path)
+		: QStringLiteral("origin/") + QLatin1String(DEFAULT_BRANCH);
+	// 每列:subject <US> 日期 <US> refs(以 \x1f 分隔避免撞到訊息內容)
+	m_git->enqueue({QStringLiteral("log"),
+		QStringLiteral("--format=%s%x1f%cs%x1f%D"),
+		ref, QStringLiteral("--"), rel_path}, vaultDir(),
+		[this, rel_path, stem](const PdmGitWorker::Result &r) {
 		// 回呼期間可能已改選其他檔;確認仍是同一檔才填
 		const QTreeWidgetItem *current = selectedFileItem();
 		if (!current
 		    || current->data(0, Qt::UserRole).toString() != rel_path)
 			return;
 		m_history_tree->clear();
-		if (!reply.ok) return;
+		if (!r.ok) return;
 
-		const QJsonArray releases = reply.json.array();
-		const QString prefix = QStringLiteral("release/%1-v").arg(stem);
-		for (const QJsonValue &value : releases) {
-			const QJsonObject rel = value.toObject();
-			const QString tag = rel.value(
-				QStringLiteral("tag_name")).toString();
-			if (!tag.startsWith(prefix)) continue;
-			// created_at 例:2026-08-01T...,只取日期
-			const QString date = rel.value(
-				QStringLiteral("created_at")).toString().left(10);
-			new QTreeWidgetItem(m_history_tree, {tag, date});
+		const QString rel_prefix = QStringLiteral("release/%1-v").arg(stem);
+		const QColor highlight(255, 244, 214);   // 發行版底色(淡黃)
+
+		// 尚未發行的最新一批 commit 掛在「編輯中(未發行)」節點下
+		auto *pending = new QTreeWidgetItem(m_history_tree,
+			{tr("編輯中"), tr("(未發行)")});
+		QTreeWidgetItem *parent = pending;
+
+		const QStringList lines = r.output.split('\n', Qt::SkipEmptyParts);
+		for (const QString &line : lines) {
+			const QStringList f = line.split(QChar(0x1f));
+			if (f.size() < 3) continue;
+			const QString subject = f.at(0);
+			const QString date = f.at(1);
+			const QString refs = f.at(2);
+
+			// 這個 commit 是否帶發行 tag
+			QString rel_tag;
+			const QStringList tokens = refs.split(QLatin1Char(','));
+			for (const QString &token : tokens) {
+				const QString t = token.trimmed();
+				if (t.startsWith(QLatin1String("tag: "))) {
+					const QString tg = t.mid(5);
+					if (tg.startsWith(rel_prefix)) {
+						rel_tag = tg;
+						break;
+					}
+				}
+			}
+
+			if (!rel_tag.isEmpty()) {
+				// 發行版:★ + 底色 + 粗體,可雙擊唯讀開啟
+				const QString ver = rel_tag.mid(rel_prefix.length());
+				auto *item = new QTreeWidgetItem(m_history_tree,
+					{QStringLiteral("★ v") + ver,
+					 tr("發行 %1").arg(date)});
+				for (int c = 0; c < 2; ++c) {
+					item->setBackground(c, highlight);
+					QFont fnt = item->font(c);
+					fnt.setBold(true);
+					item->setFont(c, fnt);
+				}
+				item->setData(0, Qt::UserRole, rel_tag);
+				parent = item;
+			} else {
+				// 小版 commit:縮排在所屬發行版之下,顯示 commit 訊息
+				new QTreeWidgetItem(parent, {date, subject});
+			}
 		}
-		if (m_history_tree->topLevelItemCount() == 0)
-			new QTreeWidgetItem(m_history_tree,
-				{tr("(尚無發行版)"), QString()});
+		if (pending->childCount() == 0)
+			delete pending;   // 沒有未發行 commit 就不顯示該節點
+		m_history_tree->expandAll();
 	});
 }
 
