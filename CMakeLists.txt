@@ -17,7 +17,7 @@
 cmake_minimum_required(VERSION 3.5...4.2)
 
 project(qelectrotech
-  VERSION 2.0.40
+  VERSION 2.0.42
   DESCRIPTION "QET is a CAD/CAE editor focusing on schematics drawing features."
   HOMEPAGE_URL "https://qelectrotech.org/"
   LANGUAGES CXX)

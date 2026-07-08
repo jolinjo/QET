@@ -180,6 +180,9 @@ class PdmDialog : public QDialog
 			const QString &commit_message,
 			const std::function<void ()> &after_push);
 		void showBusy(bool busy, bool with_dialog = true);
+		/// 已有使用者操作進行中(進度框顯示中)則擋下新操作,回 true。
+		/// 防止兩個操作的 git(尤其 reset --hard)並行互相破壞 staging。
+		bool busyGuard();
 		/// 建立(僅一次)專用進度對話框
 		void ensureBusyDialog();
 		/// 把 git/子行程指令對應成使用者看得懂的階段說明

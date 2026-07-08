@@ -449,11 +449,13 @@ void PdmDialog::signoffOnWorkBranch(const QString &rel_path,
 			fail(tr("寫入圖框欄位失敗"), abs_path);
 			return;
 		}
-		m_git->enqueue({"add", "--", rel_path}, worktree, {});
-		// commit 成功才 push、才繼續(確認/發行)。commit 失敗(且非「無變更」)
+		// 直接 commit 指定檔案(git commit -- <file> 會把工作區該檔內容一併
+		// 提交,不需獨立 add,避免 add 與 commit 之間 staging 被清掉的問題)。
+		// commit 成功才 push、才繼續(確認/發行);commit 失敗(且非「無變更」)
 		// 一律中止——絕不用未戳記的內容繼續合併發行(舊 bug 就是這樣把編輯中
 		// 內容併進 main)。stale index.lock 由 git worker 自我修復重試。
-		m_git->enqueue({"commit", "-m", commit_message}, worktree,
+		m_git->enqueue({"commit", "-m", commit_message, "--", rel_path},
+			worktree,
 			[this, branch, worktree, after_push]
 			(const PdmGitWorker::Result &commit_r) {
 			if (!commit_r.ok && !commit_r.output.contains(
@@ -1030,6 +1032,7 @@ void PdmDialog::updateButtons()
 
 void PdmDialog::addNewDrawing()
 {
+	if (busyGuard()) return;
 	// 取目前開啟的圖檔:請編輯器存檔後以路徑回呼 addDrawingFromFile
 	emit requestAddCurrentDrawing();
 }
@@ -1136,6 +1139,7 @@ void PdmDialog::addDrawingFromFile(const QString &source)
 
 void PdmDialog::checkOut()
 {
+	if (busyGuard()) return;
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
 	const QString rel_path = item->data(0, Qt::UserRole).toString();
@@ -1209,6 +1213,7 @@ void PdmDialog::checkOut()
 
 void PdmDialog::checkIn()
 {
+	if (busyGuard()) return;
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
 	const QString rel_path = item->data(0, Qt::UserRole).toString();
@@ -1285,6 +1290,7 @@ void PdmDialog::checkIn()
 
 void PdmDialog::cancelCheckOut()
 {
+	if (busyGuard()) return;
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
 	const QString rel_path = item->data(0, Qt::UserRole).toString();
@@ -1311,6 +1317,7 @@ void PdmDialog::cancelCheckOut()
 
 void PdmDialog::submitForReview()
 {
+	if (busyGuard()) return;
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
 	const QString rel_path = item->data(0, Qt::UserRole).toString();
@@ -1450,6 +1457,7 @@ void PdmDialog::viewReleased()
 
 void PdmDialog::confirmDone()
 {
+	if (busyGuard()) return;
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
 	const QString rel_path = item->data(0, Qt::UserRole).toString();
@@ -1483,6 +1491,7 @@ void PdmDialog::confirmDone()
 
 void PdmDialog::rejectReview()
 {
+	if (busyGuard()) return;
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
 	const QString rel_path = item->data(0, Qt::UserRole).toString();
@@ -1523,6 +1532,7 @@ void PdmDialog::rejectReview()
 
 void PdmDialog::approveAndRelease()
 {
+	if (busyGuard()) return;
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
 	const QString rel_path = item->data(0, Qt::UserRole).toString();
@@ -1724,6 +1734,7 @@ void PdmDialog::forceUnlock()
 
 void PdmDialog::revertToRelease()
 {
+	if (busyGuard()) return;
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
 	const QString rel_path = item->data(0, Qt::UserRole).toString();
@@ -1769,6 +1780,7 @@ void PdmDialog::revertToRelease()
 void PdmDialog::mutateMain(const std::function<void ()> &change,
 			  const QString &commit_message)
 {
+	if (busyGuard()) return;
 	const QString vault = vaultDir();
 	showBusy(true);
 	// 準備:更新到 origin/main 最新且乾淨
@@ -2079,6 +2091,16 @@ void PdmDialog::ensureBusyDialog()
 	lay->addWidget(bar);
 }
 
+bool PdmDialog::busyGuard()
+{
+	if (m_busy_dialog && m_busy_dialog->isVisible()) {
+		QMessageBox::information(this, tr("圖檔管理"),
+			tr("目前有作業進行中,請等它完成後再操作。"));
+		return true;
+	}
+	return false;
+}
+
 void PdmDialog::showBusy(bool busy, bool with_dialog)
 {
 	// 一個使用者操作 = 一個進度對話框,從 showBusy(true) 一直開到
@@ -2270,6 +2292,7 @@ void PdmDialog::checkOutByPath(const QString &abs_path)
 
 void PdmDialog::browseLatestByPath(const QString &abs_path)
 {
+	if (busyGuard()) return;
 	// 一律抓伺服器最新版(origin/main),不打開本機舊快取。用 detached worktree
 	// 開啟(而非 git show 到 /tmp 的孤立單檔)——後者缺少圖庫上下文(元件庫、
 	// 圖框範本),QET 開檔時會跳整合/找不到資源的對話框。worktree 與審核/發行版
