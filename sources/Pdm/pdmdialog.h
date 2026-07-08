@@ -33,6 +33,7 @@ class QLabel;
 class QProgressBar;
 class QPushButton;
 class QShowEvent;
+class QTimer;
 class QTreeWidget;
 class QTreeWidgetItem;
 
@@ -141,6 +142,8 @@ class PdmDialog : public QDialog
 					    QMap<QString, QString>()) const;
 		/// 小版號進版:「主.次」的次版 +1;純整數 N→N.1;空/舊字母→0.1
 		static QString nextMinor(const QString &current);
+		/// 發行進版:進主版、次版歸零。「主.次」→(主+1).0;空/舊字母→1.0
+		static QString nextMajor(const QString &current);
 
 		void addNewDrawing();   ///< 新增一張圖檔到圖庫(建 work 分支、出庫編輯)
 		void checkOut();
@@ -178,7 +181,9 @@ class PdmDialog : public QDialog
 			const QString &status,
 			const QMap<QString, QString> &extra_fields,
 			const QString &commit_message,
-			const std::function<void ()> &after_push);
+			const std::function<void ()> &after_push,
+			bool set_revision = false,
+			const QString &revision = QString());
 		void showBusy(bool busy, bool with_dialog = true);
 		/// 已有使用者操作進行中(進度框顯示中)則擋下新操作,回 true。
 		/// 防止兩個操作的 git(尤其 reset --hard)並行互相破壞 staging。
@@ -233,6 +238,8 @@ class PdmDialog : public QDialog
 		// 專用的出入庫進度對話框(所有 PDM 造成的延遲都用它,不再借用主視窗)
 		QDialog *m_busy_dialog = nullptr;
 		QLabel *m_busy_label = nullptr;
+		QTimer *m_hide_timer = nullptr;   ///< 進度框收框防抖(佇列空 400ms 後收)
+		bool m_op_active = false;         ///< 使用者操作進行中(供 busyGuard)
 
 		QString m_username;
 		QString m_user_email;          ///< 登入者 email(比對 work 分支作者)

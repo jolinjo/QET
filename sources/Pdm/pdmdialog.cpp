@@ -42,6 +42,7 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QProgressBar>
+#include <QTimer>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSettings>
@@ -119,21 +120,39 @@ PdmDialog::PdmDialog(QWidget *parent) :
 	resize(1280, 580);
 	setUpWidget();
 
+	// 進度對話框由 git 活動驅動,收框用防抖:任何 git 步驟一開始就顯示同一個
+	// 框並更新說明;佇列清空後延遲 400ms 才收——期間若又有步驟(多階段/夾帶
+	// REST 的操作、或操作後的背景重整),會取消收框,所以整段只有「一個框
+	// 一直開著」,不會彈一堆、也看得出何時真的完成。
+	m_hide_timer = new QTimer(this);
+	m_hide_timer->setSingleShot(true);
+	m_hide_timer->setInterval(400);
+	connect(m_hide_timer, &QTimer::timeout, this, [this]() {
+		if (m_busy_dialog) m_busy_dialog->hide();
+		m_progress->hide();
+		m_refresh_button->setEnabled(true);
+		m_repo_combo->setEnabled(true);
+	});
 	connect(m_git, &PdmGitWorker::stepStarted, this,
 		[this](const QString &cmd) {
-			// 只更新階段說明,不負責顯示/隱藏。進度對話框由使用者操作
-			// 明確 showBusy(true)/showBusy(false) 控制,整個流程只有一個
-			// 對話框一直開著;背景讀取(重整/歷史)不彈框。
 			const QString text = friendlyStep(cmd);
 			m_status_label->setText(text);
-			if (m_busy_dialog && m_busy_dialog->isVisible())
-				m_busy_label->setText(text);
+			ensureBusyDialog();
+			m_busy_label->setText(text);
+			m_hide_timer->stop();
+			if (!m_busy_dialog->isVisible()) {
+				m_busy_dialog->show();
+				m_busy_dialog->raise();
+			}
+			m_progress->setRange(0, 0);
+			m_progress->show();
+			m_refresh_button->setEnabled(false);
+			m_repo_combo->setEnabled(false);
 		});
-	// git 佇列清空 → 一律收起進度對話框(可靠的收尾:任何操作結束、或其後的
-	// 背景讀取跑完,佇列一空就關,不會卡住)。因為 stepStarted 只更新文字、
-	// 不再自行彈框,背景讀取不會「彈出一堆框」,只會讓這個框多開一下下。
-	connect(m_git, &PdmGitWorker::allFinished, this,
-		[this]() { showBusy(false); });
+	connect(m_git, &PdmGitWorker::allFinished, this, [this]() {
+		m_op_active = false;
+		m_hide_timer->start();   // 防抖收框(有新步驟會取消)
+	});
 }
 
 // 視窗首次顯示才連線,避免程式一啟動就打伺服器
@@ -427,7 +446,8 @@ void PdmDialog::loadUserRoles()
 void PdmDialog::signoffOnWorkBranch(const QString &rel_path,
 	const QString &status, const QMap<QString, QString> &extra_fields,
 	const QString &commit_message,
-	const std::function<void ()> &after_push)
+	const std::function<void ()> &after_push,
+	bool set_revision, const QString &revision)
 {
 	const QString stem = sanitizedStem(rel_path);
 	const QString branch = workBranchOf(rel_path);
@@ -437,14 +457,15 @@ void PdmDialog::signoffOnWorkBranch(const QString &rel_path,
 
 	// 戳記→add→commit→push→after_push(工作區已在 origin/branch 最新狀態)
 	auto stamp_and_push = [this, rel_path, branch, worktree, abs_path,
-			       status, extra_fields, commit_message, after_push]
+			       status, extra_fields, commit_message, after_push,
+			       set_revision, revision]
 		(const PdmGitWorker::Result &prep) {
 		if (!prep.ok) {
 			fail(tr("準備簽核工作區失敗"), prep.output);
 			return;
 		}
 		setFileWritable(abs_path, true);
-		if (!stampDocFields(abs_path, status, QString(), false,
+		if (!stampDocFields(abs_path, status, revision, set_revision,
 				    extra_fields)) {
 			fail(tr("寫入圖框欄位失敗"), abs_path);
 			return;
@@ -876,6 +897,16 @@ QString PdmDialog::nextMinor(const QString &current)
 	bool int_ok = false;
 	const int n = current.trimmed().toInt(&int_ok);
 	return int_ok ? QStringLiteral("%1.1").arg(n) : QStringLiteral("0.1");
+}
+
+QString PdmDialog::nextMajor(const QString &current)
+{
+	// 發行進版:主版 +1、次版歸零。0.4→1.0、1.3→2.0;空/舊字母→1.0
+	const int dot = current.indexOf(QLatin1Char('.'));
+	bool ok = false;
+	const int maj = (dot >= 0 ? current.left(dot) : current).trimmed()
+		.toInt(&ok);
+	return QStringLiteral("%1.0").arg((ok ? maj : 0) + 1);
 }
 
 void PdmDialog::rebuildTree()
@@ -1628,7 +1659,8 @@ void PdmDialog::approveAndRelease()
 			}
 			merge_and_release();
 		});
-	});
+	// 發行進版:把版本推到下一個主版(0.x→1.0、1.x→2.0),再真正發行
+	}, true, nextMajor(state.revision));
 }
 
 /**
@@ -2093,7 +2125,9 @@ void PdmDialog::ensureBusyDialog()
 
 bool PdmDialog::busyGuard()
 {
-	if (m_busy_dialog && m_busy_dialog->isVisible()) {
+	// 只擋「使用者操作進行中」時的新操作(背景重整不算),避免兩個操作的
+	// git(尤其 reset --hard)並行互相破壞 staging。
+	if (m_op_active) {
 		QMessageBox::information(this, tr("圖檔管理"),
 			tr("目前有作業進行中,請等它完成後再操作。"));
 		return true;
@@ -2103,31 +2137,36 @@ bool PdmDialog::busyGuard()
 
 void PdmDialog::showBusy(bool busy, bool with_dialog)
 {
-	// 一個使用者操作 = 一個進度對話框,從 showBusy(true) 一直開到
-	// showBusy(false)(中間的 git 階段只更新說明,不重複彈框)。
-	// with_dialog=false:背景讀取(連線/重整清單)只用視窗內嵌進度條,
-	// 不彈模態框——否則每次操作後的重整都會讓框再跳一次。
+	// 進度對話框/收框由 git 活動驅動(stepStarted 顯示、allFinished 防抖收),
+	// 這裡只負責:(1) 標記使用者操作進行中(供 busyGuard),(2) 使用者操作
+	// 一按下就立刻顯示框(即時回饋,git 步驟接手後續)。
 	if (busy) {
 		if (with_dialog) {
+			m_op_active = true;
 			ensureBusyDialog();
 			m_busy_label->setText(tr("處理中…"));
+			m_hide_timer->stop();
 			m_busy_dialog->show();
 			m_busy_dialog->raise();
+			m_progress->setRange(0, 0);
+			m_progress->show();
+			m_refresh_button->setEnabled(false);
+			m_repo_combo->setEnabled(false);
 		}
-		m_progress->setRange(0, 0);
-		m_progress->show();
 	} else {
-		if (m_busy_dialog) m_busy_dialog->hide();
-		m_progress->hide();
+		m_op_active = false;   // 收框交給防抖計時器,這裡不強制隱藏
 	}
-	m_refresh_button->setEnabled(!busy);
-	m_repo_combo->setEnabled(!busy);
 }
 
 void PdmDialog::fail(const QString &title, const QString &log)
 {
+	// 失敗:立刻收框(不等防抖)並恢復按鈕
+	if (m_hide_timer) m_hide_timer->stop();
 	if (m_busy_dialog) m_busy_dialog->hide();
-	showBusy(false);
+	m_progress->hide();
+	m_op_active = false;
+	m_refresh_button->setEnabled(true);
+	m_repo_combo->setEnabled(true);
 	m_status_label->setText(title);
 	QMessageBox::warning(this, title, log.right(1500));
 }
