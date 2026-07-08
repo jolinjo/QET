@@ -2089,9 +2089,36 @@ bool PdmDialog::isManagedPath(const QString &abs_path)
 	const QString root = PdmSettings::workRoot();
 	if (!root.isEmpty() && abs_path.startsWith(root + '/'))
 		return true;
-	// 檢視發行版是匯出到暫存目錄的唯讀 .qet(檔名 pdm-released-<圖號>.qet)
-	return QFileInfo(abs_path).fileName().startsWith(
-		QStringLiteral("pdm-released-"));
+	// 唯讀檢視匯出到暫存目錄的唯讀 .qet:發行版 pdm-released-、最新版 pdm-latest-
+	const QString name = QFileInfo(abs_path).fileName();
+	return name.startsWith(QStringLiteral("pdm-released-"))
+	    || name.startsWith(QStringLiteral("pdm-latest-"));
+}
+
+QString PdmDialog::drawingRelPath(const QString &abs_path) const
+{
+	// 1) 工作區內:找 /checkouts/ 或 /reviews/ 之後的 <stem 或 pr-N>/<rel_path>,
+	//    取 rel_path。不依賴 repo 下拉(啟動早期尚未載入),用路徑標記即可。
+	for (const QString &marker : {QStringLiteral("/checkouts/"),
+				      QStringLiteral("/reviews/")}) {
+		const int idx = abs_path.indexOf(marker);
+		if (idx < 0) continue;
+		const QString rest = abs_path.mid(idx + marker.length());
+		const int slash = rest.indexOf(QLatin1Char('/'));
+		if (slash >= 0) return rest.mid(slash + 1);
+	}
+	// 2) 唯讀檢視暫存(pdm-released-/pdm-latest-<檔名>.qet):以檔名比對圖庫清單,
+	//    比對到才回傳完整相對路徑(供選取/抓取用);比不到回空。
+	QString name = QFileInfo(abs_path).fileName();
+	for (const QString &prefix : {QStringLiteral("pdm-released-"),
+				      QStringLiteral("pdm-latest-")}) {
+		if (name.startsWith(prefix)) { name = name.mid(prefix.length()); break; }
+	}
+	for (auto it = m_files.constBegin(); it != m_files.constEnd(); ++it) {
+		if (QFileInfo(it.key()).fileName() == name)
+			return it.key();
+	}
+	return QString();
 }
 
 bool PdmDialog::isCheckedOutByMe(const QString &abs_path) const
@@ -2152,26 +2179,51 @@ void PdmDialog::checkOutByPath(const QString &abs_path)
 	raise();
 	activateWindow();
 
-	const QString rel = relPathForOpen(abs_path);
+	const QString rel = drawingRelPath(abs_path);
 	if (!rel.isEmpty() && selectFileInUi(rel)) {
 		checkOut();
 		return;
 	}
-	// 清單尚未載入,或路徑不在工作區內(如發行版暫存檢視):
+	// 清單尚未載入,或無法解析(如已從圖庫刪除的圖):
 	// 重整清單讓使用者在清單中出庫。
 	refresh();
 }
 
-void PdmDialog::openReadOnlyByPath(const QString &abs_path)
+void PdmDialog::browseLatestByPath(const QString &abs_path)
 {
-	if (!QFile::exists(abs_path)) {
-		QMessageBox::warning(this, tr("圖檔管理"),
-			tr("檔案不存在(可能是已清除的暫存檢視):\n%1")
-				.arg(abs_path));
+	// 一律抓伺服器最新版(origin/main),不打開本機舊快取/暫存。
+	const QString rel = drawingRelPath(abs_path);
+	if (rel.isEmpty()) {
+		show(); raise(); activateWindow(); refresh();
 		return;
 	}
-	setFileWritable(abs_path, false);
-	emit requestOpenFile(abs_path);
+	show(); raise();   // 讓 fetch 階段的進度條/說明可見
+	const QString vault = vaultDir();
+	showBusy(true);
+	m_git->enqueue({"fetch", "origin", "--prune"}, vault, {});
+	const QString ref = QStringLiteral("origin/") + QLatin1String(DEFAULT_BRANCH)
+		+ QLatin1Char(':') + rel;
+	m_git->enqueue({"show", ref}, vault,
+		[this, rel](const PdmGitWorker::Result &r) {
+		showBusy(false);
+		if (!r.ok) {
+			fail(tr("無法瀏覽最新版"),
+			     tr("此圖可能尚未發行到 %1。\n%2")
+				.arg(QLatin1String(DEFAULT_BRANCH), r.output));
+			return;
+		}
+		const QString tmp = QDir::tempPath() + QStringLiteral("/pdm-latest-")
+			+ QFileInfo(rel).fileName();
+		QFile f(tmp);
+		if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+			fail(tr("無法建立暫存檔"), tmp);
+			return;
+		}
+		f.write(r.output.toUtf8());
+		f.close();
+		setFileWritable(tmp, false);
+		emit requestOpenFile(tmp);
+	});
 }
 
 void PdmDialog::cancelByPath(const QString &abs_path)

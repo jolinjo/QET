@@ -57,8 +57,11 @@ class PdmDialog : public QDialog
 		bool isReleaser() const  { return m_is_releaser; }
 		/// 該 abs_path 是否為「我出庫中(已鎖定、尚未入庫)」的檔
 		bool isCheckedOutByMe(const QString &abs_path) const;
-		/// 該 .qet 是否由圖檔管理開啟(在 PDM 工作根目錄下,或發行版暫存匯出)
+		/// 該 .qet 是否由圖檔管理開啟(在 PDM 工作根目錄下,或唯讀檢視暫存匯出)
 		static bool isManagedPath(const QString &abs_path);
+		/// 由本機開檔路徑反推圖檔在圖庫的相對路徑(專案資料夾/檔名);
+		/// 工作區內直接反推,發行版/最新版暫存則以檔名比對清單。空=無法解析。
+		QString drawingRelPath(const QString &abs_path) const;
 
 	signals:
 		/// 要求編輯器開啟一個 .qet 檔(出庫/審核檢視時發出)
@@ -82,8 +85,9 @@ class PdmDialog : public QDialog
 		void checkInByPath(const QString &abs_path);
 		/// 出庫並編輯該檔;清單未載入或非工作區路徑時改開圖檔管理視窗
 		void checkOutByPath(const QString &abs_path);
-		/// 唯讀開啟該檔(不上鎖、不進版):把磁碟檔設唯讀後請編輯器開啟
-		void openReadOnlyByPath(const QString &abs_path);
+		/// 唯讀瀏覽該圖的「伺服器最新版」:fetch 後取 origin/main 內容存暫存
+		/// 唯讀開啟,不會打開本機舊快取(清單未載入時改開圖檔管理視窗)
+		void browseLatestByPath(const QString &abs_path);
 		void cancelByPath(const QString &abs_path);
 		void confirmByPath(const QString &abs_path);
 		void releaseByPath(const QString &abs_path);

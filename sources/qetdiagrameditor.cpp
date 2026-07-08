@@ -19,7 +19,6 @@
 
 #include <QListWidget>
 #include <QMessageBox>
-#include <QProgressDialog>
 #include <QPushButton>
 #include <QStyledItemDelegate>
 #include <QSettings>
@@ -246,7 +245,8 @@ namespace
 		static const int HEADER_HEIGHT = 40;
 		enum { PathRole = Qt::UserRole,
 		       HeaderRole = Qt::UserRole + 1,
-		       DateRole = Qt::UserRole + 2 };
+		       DateRole = Qt::UserRole + 2,
+		       SubtitleRole = Qt::UserRole + 3 };  ///< 副標顯示字串(空則用 PathRole)
 
 		void paint(QPainter *painter,
 			   const QStyleOptionViewItem &option,
@@ -331,10 +331,15 @@ namespace
 			QColor grey = option.palette.text().color();
 			grey.setAlpha(140);
 			painter->setPen(grey);
+			// 副標:圖檔管理項目顯示「專案資料夾/檔名」(SubtitleRole),
+			// 本地檔案顯示完整路徑(PathRole)
+			QString subtitle = index.data(SubtitleRole).toString();
+			if (subtitle.isEmpty())
+				subtitle = index.data(PathRole).toString();
 			painter->drawText(path_rect,
 					  Qt::AlignLeft | Qt::AlignVCenter,
 					  QFontMetrics(path_font).elidedText(
-						  index.data(Qt::UserRole).toString(),
+						  subtitle,
 						  Qt::ElideMiddle,
 						  path_rect.width()));
 			painter->restore();
@@ -391,24 +396,12 @@ void QETDiagramEditor::setUpWelcomeWidget()
 			box.addButton(QMessageBox::Cancel);
 			box.setDefaultButton(checkout);
 			box.exec();
-			if (box.clickedButton() == checkout) {
-				// 出庫走 PdmDialog(其進度條/階段說明會顯示)
+			// 兩種開法都經 PdmDialog 向伺服器抓最新(不打開本機舊快取),
+			// 進度條/階段說明由 PdmDialog 顯示
+			if (box.clickedButton() == checkout)
 				m_pdm_dialog->checkOutByPath(path);
-			} else if (box.clickedButton() == browse) {
-				// 唯讀開檔是同步作業(解析 .qet 會卡一下),先顯示
-				// 忙碌指示,免得使用者以為當掉
-				QProgressDialog prog(
-					tr("正在開啟圖檔(唯讀)…"),
-					QString(), 0, 0, this);
-				prog.setWindowTitle(tr("圖檔管理"));
-				prog.setWindowModality(Qt::ApplicationModal);
-				prog.setMinimumDuration(0);
-				prog.setCancelButton(nullptr);
-				prog.show();
-				QCoreApplication::processEvents();
-				m_pdm_dialog->openReadOnlyByPath(path);
-				prog.close();
-			}
+			else if (box.clickedButton() == browse)
+				m_pdm_dialog->browseLatestByPath(path);
 			return;
 		}
 		openRecentFile(path);
@@ -473,7 +466,8 @@ void QETDiagramEditor::updateWelcomeWidget()
 		int total_height = 8;
 		const auto add_section =
 			[&](const QString &label,
-			    const QList<QPair<QDateTime, QString>> &list) {
+			    const QList<QPair<QDateTime, QString>> &list,
+			    bool is_pdm) {
 			if (list.isEmpty()) return;
 			auto *header = new QListWidgetItem(label, m_welcome_list);
 			header->setFlags(Qt::NoItemFlags);
@@ -494,18 +488,46 @@ void QETDiagramEditor::updateWelcomeWidget()
 					date_text = date.toString(
 						QStringLiteral("yyyy/M/d"));
 				}
-				auto *item = new QListWidgetItem(
-					QFileInfo(entry.second).completeBaseName(),
-					m_welcome_list);
+				// 圖檔管理項目:標題與副標只秀圖庫內的「專案資料夾/檔名」,
+				// 本機快取路徑不重要(開啟時一律向伺服器抓最新)。
+				QString title = QFileInfo(entry.second).completeBaseName();
+				QString subtitle;
+				if (is_pdm) {
+					const QString rel = m_pdm_dialog
+						? m_pdm_dialog->drawingRelPath(entry.second)
+						: QString();
+					if (!rel.isEmpty()) {
+						title = QFileInfo(rel).completeBaseName();
+						subtitle = rel;
+					} else {
+						// 解析不到完整相對路徑(暫存檢視、清單未載入):
+						// 去掉暫存前綴,至少秀乾淨檔名,不秀本機路徑
+						QString name = QFileInfo(entry.second).fileName();
+						for (const QString &p :
+						     {QStringLiteral("pdm-released-"),
+						      QStringLiteral("pdm-latest-")}) {
+							if (name.startsWith(p)) {
+								name = name.mid(p.length());
+								break;
+							}
+						}
+						title = QFileInfo(name).completeBaseName();
+						subtitle = name;
+					}
+				}
+				auto *item = new QListWidgetItem(title, m_welcome_list);
 				item->setData(RecentFileDelegate::PathRole,
 					      entry.second);
+				item->setData(RecentFileDelegate::SubtitleRole,
+					      subtitle);
 				item->setData(RecentFileDelegate::DateRole, date_text);
-				item->setToolTip(entry.second);
+				item->setToolTip(subtitle.isEmpty()
+						 ? entry.second : subtitle);
 				total_height += RecentFileDelegate::ROW_HEIGHT;
 			}
 		};
-		add_section(tr("圖檔管理 PDM", "welcome view"), pdm_entries);
-		add_section(tr("本地檔案 Local", "welcome view"), local_entries);
+		add_section(tr("圖檔管理 PDM", "welcome view"), pdm_entries, true);
+		add_section(tr("本地檔案 Local", "welcome view"), local_entries, false);
 
 		m_welcome_list->setFixedHeight(qMin(
 			total_height,
@@ -686,6 +708,9 @@ void QETDiagramEditor::ensurePdmDialog()
 	connect(m_pdm_dialog, &PdmDialog::connectionReady, this,
 		[this](bool ok) {
 			if (m_pdm_action) m_pdm_action->setEnabled(ok);
+			// 連上後 m_files 就緒,重建歡迎頁讓 PDM 項目顯示正確的
+			// 專案資料夾/檔名(啟動早期建的清單解析不到)
+			if (ok) updateWelcomeWidget();
 		});
 	applyInterfaceFonts();
 }
