@@ -108,6 +108,7 @@ class PdmDialog : public QDialog
 		/// 小版號進版:「主.次」的次版 +1;純整數 N→N.1;空/舊字母→0.1
 		static QString nextMinor(const QString &current);
 
+		void addNewDrawing();   ///< 新增一張圖檔到圖庫(建 work 分支、出庫編輯)
 		void checkOut();
 		void checkIn();
 		void cancelCheckOut();
@@ -148,6 +149,7 @@ class PdmDialog : public QDialog
 		PdmGitWorker *m_git = nullptr;
 
 		QLabel *m_account_label = nullptr;
+		QPushButton *m_add_button = nullptr;   ///< 新增圖檔
 		QComboBox *m_repo_combo = nullptr;
 		QTreeWidget *m_folder_tree = nullptr;   ///< 左:資料夾樹
 		QTreeWidget *m_tree = nullptr;          ///< 中:所選資料夾的圖檔清單

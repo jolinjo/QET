@@ -23,12 +23,16 @@
 
 #include <QComboBox>
 #include <QCoreApplication>
+#include <QDialogButtonBox>
 #include <QDir>
 #include <QDomDocument>
 #include <QFile>
+#include <QFileDialog>
 #include <QFileInfo>
+#include <QFormLayout>
 #include <QHBoxLayout>
 #include <QInputDialog>
+#include <QLineEdit>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QLabel>
@@ -138,8 +142,10 @@ void PdmDialog::setUpWidget()
 
 	auto *top_row = new QHBoxLayout();
 	m_account_label = new QLabel(tr("尚未連線"), content);
+	m_add_button = new QPushButton(tr("新增圖檔…"), content);
 	m_refresh_button = new QPushButton(tr("重新整理"), content);
 	top_row->addWidget(m_account_label, 1);
+	top_row->addWidget(m_add_button);
 	top_row->addWidget(m_refresh_button);
 	layout->addLayout(top_row);
 
@@ -219,6 +225,8 @@ void PdmDialog::setUpWidget()
 
 	connect(m_refresh_button, &QPushButton::clicked,
 		this, &PdmDialog::refresh);
+	connect(m_add_button, &QPushButton::clicked,
+		this, &PdmDialog::addNewDrawing);
 	connect(m_repo_combo, &QComboBox::currentIndexChanged, this,
 		[this](int index) {
 			if (index < 0) return;
@@ -835,6 +843,112 @@ void PdmDialog::updateButtons()
 	m_release_button->setEnabled(in_review && not_author && m_is_releaser);
 	m_force_unlock_button->setVisible(locked_by_other);
 	m_force_unlock_button->setEnabled(locked_by_other);
+}
+
+void PdmDialog::addNewDrawing()
+{
+	if (currentRepoFullName().isEmpty()) return;
+
+	// 1. 選來源 .qet(使用者已畫好、存在本機的新圖)
+	const QString source = QFileDialog::getOpenFileName(this,
+		tr("選擇要加入圖庫的圖檔"), QString(),
+		tr("QElectroTech 圖檔 (*.qet)"));
+	if (source.isEmpty()) return;
+
+	// 2. 選專案資料夾 + 圖號
+	QDialog dlg(this);
+	dlg.setWindowTitle(tr("新增圖檔到圖庫"));
+	auto *form = new QFormLayout(&dlg);
+	auto *folder_cb = new QComboBox(&dlg);
+	folder_cb->setEditable(true);
+	QStringList folders;
+	for (const QString &p : m_files.keys()) {
+		const QString d = QFileInfo(p).path();
+		if (d != QLatin1String(".") && !folders.contains(d)) folders << d;
+	}
+	folders.sort();
+	folder_cb->addItems(folders);
+	auto *num_le = new QLineEdit(QFileInfo(source).completeBaseName(), &dlg);
+	form->addRow(tr("專案資料夾:"), folder_cb);
+	form->addRow(tr("圖號(檔名):"), num_le);
+	auto *hint = new QLabel(tr("圖號需全庫唯一、勿含空白。"), &dlg);
+	hint->setWordWrap(true);
+	form->addRow(hint);
+	auto *buttons = new QDialogButtonBox(
+		QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+	form->addRow(buttons);
+	connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+	connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+	if (dlg.exec() != QDialog::Accepted) return;
+
+	const QString folder = folder_cb->currentText().trimmed();
+	QString number = num_le->text().trimmed();
+	number.replace(QLatin1Char(' '), QLatin1Char('-'));
+	if (number.isEmpty()) {
+		QMessageBox::warning(this, tr("新增圖檔"), tr("圖號不可空白。"));
+		return;
+	}
+	const QString rel_path = (folder.isEmpty() ? number
+					: folder + QLatin1Char('/') + number)
+				 + QStringLiteral(".qet");
+	const QString stem = sanitizedStem(rel_path);
+	// 圖號(stem)全庫唯一:分支/tag 以 stem 為鍵,不同資料夾也不可同名
+	for (const QString &p : m_files.keys()) {
+		if (p == rel_path || sanitizedStem(p) == stem) {
+			QMessageBox::warning(this, tr("新增圖檔"),
+				tr("圖號「%1」已存在於圖庫,請換一個。").arg(stem));
+			return;
+		}
+	}
+
+	const QString branch = workBranchOf(rel_path);
+	const QString worktree = worktreeDir(stem);
+	const QString vault = vaultDir();
+	const QString abs_path = worktree + '/' + rel_path;
+
+	showBusy(true);
+	m_git->enqueue({"fetch", "origin", "--prune"}, vault, {});
+	// 從 main 開一個新 work 分支的工作區,把來源圖檔放進去
+	m_git->enqueue({"worktree", "add", "-b", branch, worktree,
+		QStringLiteral("origin/") + DEFAULT_BRANCH}, vault,
+		[this, source, rel_path, abs_path, branch, worktree, vault]
+		(const PdmGitWorker::Result &r) {
+		if (!r.ok) { fail(tr("建立工作區失敗"), r.output); return; }
+
+		QDir().mkpath(QFileInfo(abs_path).absolutePath());
+		QFile::remove(abs_path);
+		if (!QFile::copy(source, abs_path)) {
+			fail(tr("複製圖檔失敗"), abs_path);
+			return;
+		}
+		setFileWritable(abs_path, true);
+		// 初版 0.1、編輯中、清空確認/核准欄位
+		stampDocFields(abs_path, QString::fromUtf8(DOC_STATUS_EDITING),
+			nextMinor(QString()), true,
+			{{QStringLiteral("checked-by"), QString()},
+			 {QStringLiteral("approved-by"), QString()}});
+
+		m_git->enqueue({"add", "--", rel_path}, worktree, {});
+		m_git->enqueue({"commit", "-m",
+			tr("新增圖檔：%1").arg(rel_path)}, worktree, {});
+		m_git->enqueue({"push", "-u", "origin", branch}, worktree,
+			[this, rel_path, abs_path, worktree]
+			(const PdmGitWorker::Result &push_r) {
+			if (!push_r.ok) {
+				fail(tr("推送失敗"), push_r.output);
+				return;
+			}
+			// 上鎖(從工作區,該檔在此分支存在)
+			m_git->enqueue({"lfs", "lock", rel_path}, worktree,
+				[this, abs_path](const PdmGitWorker::Result &lock_r) {
+				if (!lock_r.ok)
+					fail(tr("上鎖失敗(仍可編輯,請稍後於清單重試)"),
+					     lock_r.output);
+				emit requestOpenFile(abs_path);
+				refresh();
+			});
+		});
+	});
 }
 
 void PdmDialog::checkOut()
