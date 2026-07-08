@@ -3327,7 +3327,11 @@ void QETDiagramEditor::applyReadOnlyView(bool read_only)
 
 	// 專案面板(qdw_pa,含專案/頁面樹):有開圖就顯示,審核/瀏覽時也要能翻頁;
 	// 元件庫/模組面板(m_qdw_elmt_collection)只在可編輯時顯示。
-	if (qdw_pa) qdw_pa->setVisible(has_project);
+	if (qdw_pa) {
+		qdw_pa->setVisible(has_project);
+		// 唯讀時「復原」無用,把專案面板帶到前面(它常與復原面板疊在同一分頁)
+		if (read_only && has_project) qdw_pa->raise();
+	}
 	if (m_qdw_elmt_collection) m_qdw_elmt_collection->setVisible(editable);
 	if (m_add_item_tool_bar) m_add_item_tool_bar->setVisible(editable);
 	if (m_depth_tool_bar) m_depth_tool_bar->setVisible(editable);
