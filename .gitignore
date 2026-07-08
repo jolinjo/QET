@@ -9,6 +9,8 @@ QElectroTech.tag
 !doc/doc-utils
 !doc/windows-msvc-build-pitfalls.md
 !doc/pdm-gitea-dev-plan.md
+!doc/pdm-gitea-admin-guide.md
+!doc/pdm-user-tutorial.md
 
 # Local-only fonts: proprietary (YaHei/PingFang/LiHei/Monaco) or unused
 # experiments. Kept out of the public repo. The committed custom fonts are

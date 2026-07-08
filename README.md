@@ -23,7 +23,68 @@
 ## 主要分支
 
 - `QT6-MCP`:本 fork 的開發主線(預設分支)
+- `qet-pdm`:圖檔管理(PDM,串接 Gitea)功能開發線
 - `qt6_cmake_joshua`:上游 Qt6 移植線(同步基準)
+
+## 圖檔管理(PDM)— 串接 Gitea 的圖文管理
+
+`qet-pdm` 分支(版本 1.0.23 起)在 QET 內建了一套完整的圖檔生命週期
+管理,後端只用內網 Gitea 的原生機制(LFS 檔案鎖、Pull Request、
+branch protection、tag/Release),不需要另架任何伺服器或資料庫。
+
+### 解決什麼問題
+
+- **兩人同時改同一張圖互相覆蓋**:出庫 = 獨佔鎖定,同一時間只有一個人
+  能編輯;其他人看得到「誰鎖定中」。
+- **版本混亂、不知道哪份是正式版**:所有歷史都在 Git;正式版一律走
+  「送審 → 確認 → 發行」產生 tag 與 PDF,發行版不可再改。
+- **簽核無紀錄**:確認者在 QET 內以唯讀模式看圖後核准/退回,
+  Gitea 記錄帳號、時間與核准的確切版本(commit SHA),可完整稽核。
+
+### 流程與角色
+
+```text
+製圖者:出庫(鎖定) → 編輯 → 入庫(推送) → 送審(開 PR)
+確認者:審核檢視(唯讀開圖) → 核准 或 退回(附意見)
+放行者:發行(合入 main + tag + 自動產 PDF 附件)
+```
+
+三種角色對應 Gitea 的三個 Team(`pdm-drafters` / `pdm-checkers` /
+`pdm-releasers`),帳號與權限完全由 Gitea 管理,QET 不自建帳號系統。
+同一人可兼多個角色,但**不能核准自己送審的圖**(Gitea 原生強制)。
+
+### 主要機制
+
+- **出庫/入庫**:`git lfs lock` 獨佔鎖 + 每張圖一條 `work/<圖號>` 分支;
+  本機採 vault(主 clone)+ git worktree(每張出庫圖獨立工作區)模型,
+  使用者全程不需要懂 git。
+- **審核**:抓 PR head 的固定 commit 到獨立唯讀工作區開圖——審的
+  永遠是送審那一版;核准前會再比對 SHA,送審後偷改會被擋下。
+- **發行**:版次自動遞增(`release/<圖號>-vN`),PDF 由內建 headless CLI
+  (`--cli-export-pdf`)從庫內容渲染,不收任何人本機自產的檔案。
+- **狀態即時**:面板顯示每張圖「可出庫/編輯中/出庫中/已入庫未送審/
+  審核中/已確認待發行」,全部即時從 Gitea 推導,無本機快取狀態。
+
+### 使用與部署文件
+
+| 文件 | 對象 |
+| --- | --- |
+| [doc/pdm-user-tutorial.md](doc/pdm-user-tutorial.md) | 一般使用者:三種角色的操作教學 |
+| [doc/pdm-gitea-admin-guide.md](doc/pdm-gitea-admin-guide.md) | 管理員:Gitea 伺服器設定與帳號管理 |
+| [doc/pdm-gitea-dev-plan.md](doc/pdm-gitea-dev-plan.md) | 開發者:架構、分期、驗證紀錄 |
+
+QET 端設定只有三格:偏好設定 →「圖檔管理」→ 填 Gitea 伺服器網址、
+access token、本機工作區路徑,按「驗證連線」成功即可使用左側
+「圖檔管理」面板。
+
+### 已知限制(v1.0.24)
+
+- headless CLI 的 CI 自動檢查(PR 觸發 validate)需要內網 Gitea Actions
+  runner,尚未部署;目前由審核者在 QET 內實際開圖把關。
+- Windows 免安裝包尚未內建 git/git-lfs(部署前要補);token 加密儲存
+  目前僅 macOS(鑰匙圈),Windows DPAPI 待做。
+- Gitea 的強制解鎖只需 write 權限(原生行為),靠確認對話框與稽核
+  紀錄防呆,詳見管理員文件。
 
 ## macOS 建置
 
