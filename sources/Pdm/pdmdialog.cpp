@@ -141,12 +141,20 @@ PdmDialog::PdmDialog(QWidget *parent) :
 			m_busy_label->setText(text);
 			m_hide_timer->stop();
 			if (!m_busy_dialog->isVisible()) {
+				// 背景讀取自行彈框:無預期步數,改用漸進逼近
+				m_op_total = 0;
+				m_op_done = 0;
 				m_busy_dialog->show();
 				m_busy_dialog->raise();
-				m_busy_bar->setValue(8);   // 新一輪從低點開始
+				m_busy_bar->setValue(8);
+			} else if (m_op_total > 0) {
+				// 已知步數:以 已完成/預期 顯示;超出預期的尾段(背景
+				// 重整)不再前進,維持在接近滿的位置,直到 allFinished 補滿
+				if (m_op_done < m_op_total) ++m_op_done;
+				m_busy_bar->setValue(
+					qMin(99, m_op_done * 100 / m_op_total));
 			} else {
-				// 步數未知:每步逼近 92%(補 1/3 剩餘距離),越後越慢,
-				// 完成時再補到 100%,看起來持續在跑、不會一出現就滿格
+				// 未知步數:每步補 1/3 剩餘距離(逼近 92%)
 				const int v = m_busy_bar->value();
 				m_busy_bar->setValue(v + (92 - v) / 3);
 			}
@@ -157,6 +165,7 @@ PdmDialog::PdmDialog(QWidget *parent) :
 		});
 	connect(m_git, &PdmGitWorker::allFinished, this, [this]() {
 		m_op_active = false;
+		m_op_total = 0;
 		if (m_busy_bar) m_busy_bar->setValue(100);   // 完成:補滿再收框
 		m_hide_timer->start();   // 防抖收框(有新步驟會取消)
 	});
@@ -454,7 +463,7 @@ void PdmDialog::signoffOnWorkBranch(const QString &rel_path,
 	const QString &status, const QMap<QString, QString> &extra_fields,
 	const QString &commit_message,
 	const std::function<void ()> &after_push,
-	bool set_revision, const QString &revision)
+	bool set_revision, const QString &revision, int progress_steps)
 {
 	const QString stem = sanitizedStem(rel_path);
 	const QString branch = workBranchOf(rel_path);
@@ -504,7 +513,7 @@ void PdmDialog::signoffOnWorkBranch(const QString &rel_path,
 		});
 	};
 
-	showBusy(true);
+	showBusy(true, true, progress_steps);
 	m_git->enqueue({"fetch", "origin", "--prune"}, vault, {});
 	if (QDir(worktree).exists()) {
 		m_git->enqueue({"checkout", branch}, worktree, {});
@@ -1130,7 +1139,7 @@ void PdmDialog::addDrawingFromFile(const QString &source)
 	const QString vault = vaultDir();
 	const QString abs_path = worktree + '/' + rel_path;
 
-	showBusy(true);
+	showBusy(true, true, 5);
 	m_git->enqueue({"fetch", "origin", "--prune"}, vault, {});
 	// 從 main 開一個新 work 分支的工作區,把來源圖檔放進去
 	m_git->enqueue({"worktree", "add", "-b", branch, worktree,
@@ -1198,7 +1207,7 @@ void PdmDialog::checkOut()
 		// 工作區不在了(換機器)→ 走下面的正常流程重建工作區
 	}
 
-	showBusy(true);
+	showBusy(true, true, 2);
 	// 鎖定成功才有編輯權;任何後續失敗都不影響「鎖是我的」這個事實
 	m_git->enqueue({"lfs", "lock", rel_path}, vault,
 		[this, rel_path, state, vault, branch, worktree]
@@ -1279,7 +1288,7 @@ void PdmDialog::checkIn()
 	// git 才抓得到最新編輯內容。
 	emit requestSaveFile(worktree + '/' + rel_path);
 
-	showBusy(true);
+	showBusy(true, true, 3);
 	// 版本已在出庫時寫入圖框、入庫直接沿用,不再進版。存檔後直接提交。
 	m_git->enqueue({"add", "--", rel_path}, worktree, {});
 	m_git->enqueue({"commit", "-m", message.trimmed()}, worktree,
@@ -1339,7 +1348,7 @@ void PdmDialog::cancelCheckOut()
 			.arg(rel_path));
 	if (answer != QMessageBox::Yes) return;
 
-	showBusy(true);
+	showBusy(true, true, 3);
 	if (QDir(worktree).exists()) {
 		m_git->enqueue({"checkout", "--", "."}, worktree, {});
 	}
@@ -1371,7 +1380,7 @@ void PdmDialog::submitForReview()
 		return;
 	}
 
-	showBusy(true);
+	showBusy(true, true, 3);
 
 	const QString branch = workBranchOf(rel_path);
 	const QString worktree = worktreeDir(sanitizedStem(rel_path));
@@ -1429,7 +1438,7 @@ void PdmDialog::openReviewView()
 	const QString review_ref = QStringLiteral("refs/pdm/pr-%1")
 		.arg(state.pr_index);
 
-	showBusy(true);
+	showBusy(true, true, 2);
 	// 審的必須是 PR head 的固定 commit;獨立 worktree,與任何編輯
 	// 工作區隔離。檔案未被鎖定,lockable 會讓它在磁碟上保持唯讀,
 	// QETProject 開啟時自然進入唯讀模式(見開發計畫附錄 A)。
@@ -1468,7 +1477,7 @@ void PdmDialog::viewReleased()
 	const QString out = QDir::tempPath() + QStringLiteral("/pdm-released-")
 		+ sanitizedStem(rel_path) + QStringLiteral(".qet");
 
-	showBusy(true);
+	showBusy(true, true, 2);
 	m_git->enqueue({"show", QStringLiteral("origin/") + DEFAULT_BRANCH
 			+ ':' + rel_path}, vault,
 		[this, rel_path, out](const PdmGitWorker::Result &result) {
@@ -1666,8 +1675,9 @@ void PdmDialog::approveAndRelease()
 			}
 			merge_and_release();
 		});
-	// 發行進版:把版本推到下一個主版(0.x→1.0、1.x→2.0),再真正發行
-	}, true, nextMajor(state.revision));
+	// 發行進版:把版本推到下一個主版(0.x→1.0、1.x→2.0),再真正發行。
+	// 發行步驟多(簽核+合併+渲染 PDF+建 Release+清理),預期步數給大一點。
+	}, true, nextMajor(state.revision), 15);
 }
 
 /**
@@ -1757,7 +1767,7 @@ void PdmDialog::forceUnlock()
 		QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
 	if (answer != QMessageBox::Yes) return;
 
-	showBusy(true);
+	showBusy(true, true, 2);
 	m_git->enqueue({"lfs", "unlock", "--force", rel_path}, vaultDir(),
 		[this, rel_path](const PdmGitWorker::Result &result) {
 			if (!result.ok) {
@@ -1790,7 +1800,7 @@ void PdmDialog::revertToRelease()
 	box.setDefaultButton(QMessageBox::No);
 	if (box.exec() != QMessageBox::Yes) return;
 
-	showBusy(true);
+	showBusy(true, true, 4);
 	// 1. 解鎖(若有鎖):自己的一般解鎖,他人的強制解鎖(核准者才會走到)
 	if (state.lock_owner == m_username && !m_username.isEmpty())
 		m_git->enqueue({"lfs", "unlock", rel_path}, vault, {});
@@ -1821,7 +1831,7 @@ void PdmDialog::mutateMain(const std::function<void ()> &change,
 {
 	if (busyGuard()) return;
 	const QString vault = vaultDir();
-	showBusy(true);
+	showBusy(true, true, 5);
 	// 準備:更新到 origin/main 最新且乾淨
 	m_git->enqueue({"fetch", "origin", "--prune"}, vault, {});
 	m_git->enqueue({"checkout", DEFAULT_BRANCH}, vault, {});
@@ -2044,7 +2054,7 @@ void PdmDialog::openReleaseRevision(const QString &tag, const QString &rel_path)
 	const QString view_dir = PdmSettings::workRoot() + '/'
 		+ currentRepoFullName()
 		+ QStringLiteral("/releases-view/") + dir_name;
-	showBusy(true);
+	showBusy(true, true, 2);
 	m_git->enqueue({"fetch", "origin", "--tags"}, vault, {});
 	auto open_view = [this, rel_path, view_dir]
 		(const PdmGitWorker::Result &result) {
@@ -2145,17 +2155,19 @@ bool PdmDialog::busyGuard()
 	return false;
 }
 
-void PdmDialog::showBusy(bool busy, bool with_dialog)
+void PdmDialog::showBusy(bool busy, bool with_dialog, int op_steps)
 {
-	// 進度對話框/收框由 git 活動驅動(stepStarted 顯示、allFinished 防抖收),
+	// 進度對話框/收框由 git 活動驅動(stepStarted 前進、allFinished 防抖收),
 	// 這裡只負責:(1) 標記使用者操作進行中(供 busyGuard),(2) 使用者操作
-	// 一按下就立刻顯示框(即時回饋,git 步驟接手後續)。
+	// 一按下就立刻顯示框並設定預期步數(進度條以 已完成/預期 前進)。
 	if (busy) {
 		if (with_dialog) {
 			m_op_active = true;
+			m_op_total = op_steps;
+			m_op_done = 0;
 			ensureBusyDialog();
 			m_busy_label->setText(tr("處理中…"));
-			m_busy_bar->setValue(8);   // 從低點開始,不顯示上一輪的滿格
+			m_busy_bar->setValue(0);
 			m_hide_timer->stop();
 			m_busy_dialog->show();
 			m_busy_dialog->raise();
@@ -2355,7 +2367,7 @@ void PdmDialog::browseLatestByPath(const QString &abs_path)
 	const QString vault = vaultDir();
 	const QString view_dir = PdmSettings::workRoot() + '/' + currentRepoFullName()
 		+ QStringLiteral("/latest-view");
-	showBusy(true);
+	showBusy(true, true, 3);
 	m_git->enqueue({"fetch", "origin", "--prune"}, vault, {});
 	// 每次重建 detached worktree 到最新 origin/main(移除舊的以免唯讀檔擋 checkout)
 	if (QDir(view_dir).exists())

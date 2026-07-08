@@ -183,8 +183,11 @@ class PdmDialog : public QDialog
 			const QString &commit_message,
 			const std::function<void ()> &after_push,
 			bool set_revision = false,
-			const QString &revision = QString());
-		void showBusy(bool busy, bool with_dialog = true);
+			const QString &revision = QString(),
+			int progress_steps = 5);
+		/// op_steps=該操作預期的 git 步數(進度條以 已完成/預期 顯示;超出預期
+		/// 的尾段背景重整維持 100%)。0=背景讀取,用漸進逼近。
+		void showBusy(bool busy, bool with_dialog = true, int op_steps = 0);
 		/// 已有使用者操作進行中(進度框顯示中)則擋下新操作,回 true。
 		/// 防止兩個操作的 git(尤其 reset --hard)並行互相破壞 staging。
 		bool busyGuard();
@@ -241,6 +244,8 @@ class PdmDialog : public QDialog
 		QProgressBar *m_busy_bar = nullptr;   ///< 進度框的進度條(漸進式)
 		QTimer *m_hide_timer = nullptr;   ///< 進度框收框防抖(佇列空 400ms 後收)
 		bool m_op_active = false;         ///< 使用者操作進行中(供 busyGuard)
+		int m_op_total = 0;               ///< 本次操作預期 git 步數(0=漸進)
+		int m_op_done = 0;                ///< 已完成步數
 
 		QString m_username;
 		QString m_user_email;          ///< 登入者 email(比對 work 分支作者)
