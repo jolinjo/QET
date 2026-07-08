@@ -238,6 +238,7 @@ class PdmDialog : public QDialog
 		// 專用的出入庫進度對話框(所有 PDM 造成的延遲都用它,不再借用主視窗)
 		QDialog *m_busy_dialog = nullptr;
 		QLabel *m_busy_label = nullptr;
+		QProgressBar *m_busy_bar = nullptr;   ///< 進度框的進度條(漸進式)
 		QTimer *m_hide_timer = nullptr;   ///< 進度框收框防抖(佇列空 400ms 後收)
 		bool m_op_active = false;         ///< 使用者操作進行中(供 busyGuard)
 

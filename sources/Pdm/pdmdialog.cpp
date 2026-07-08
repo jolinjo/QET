@@ -143,6 +143,12 @@ PdmDialog::PdmDialog(QWidget *parent) :
 			if (!m_busy_dialog->isVisible()) {
 				m_busy_dialog->show();
 				m_busy_dialog->raise();
+				m_busy_bar->setValue(8);   // 新一輪從低點開始
+			} else {
+				// 步數未知:每步逼近 92%(補 1/3 剩餘距離),越後越慢,
+				// 完成時再補到 100%,看起來持續在跑、不會一出現就滿格
+				const int v = m_busy_bar->value();
+				m_busy_bar->setValue(v + (92 - v) / 3);
 			}
 			m_progress->setRange(0, 0);
 			m_progress->show();
@@ -151,6 +157,7 @@ PdmDialog::PdmDialog(QWidget *parent) :
 		});
 	connect(m_git, &PdmGitWorker::allFinished, this, [this]() {
 		m_op_active = false;
+		if (m_busy_bar) m_busy_bar->setValue(100);   // 完成:補滿再收框
 		m_hide_timer->start();   // 防抖收框(有新步驟會取消)
 	});
 }
@@ -2116,11 +2123,14 @@ void PdmDialog::ensureBusyDialog()
 	m_busy_label->setAlignment(Qt::AlignHCenter);
 	lay->addWidget(m_busy_label);
 
-	auto *bar = new QProgressBar(m_busy_dialog);
-	bar->setRange(0, 0);          // 忙碌動畫(不確定進度)
-	bar->setTextVisible(false);
-	bar->setFixedHeight(6);
-	lay->addWidget(bar);
+	// 漸進式進度條:每個 git 步驟往前逼近(見 stepStarted),完成時到 100%。
+	// 不用忙碌動畫(range 0,0)——它在此樣式下常渲染成滿格,看不出在跑。
+	m_busy_bar = new QProgressBar(m_busy_dialog);
+	m_busy_bar->setRange(0, 100);
+	m_busy_bar->setValue(0);
+	m_busy_bar->setTextVisible(false);
+	m_busy_bar->setFixedHeight(6);
+	lay->addWidget(m_busy_bar);
 }
 
 bool PdmDialog::busyGuard()
@@ -2145,6 +2155,7 @@ void PdmDialog::showBusy(bool busy, bool with_dialog)
 			m_op_active = true;
 			ensureBusyDialog();
 			m_busy_label->setText(tr("處理中…"));
+			m_busy_bar->setValue(8);   // 從低點開始,不顯示上一輪的滿格
 			m_hide_timer->stop();
 			m_busy_dialog->show();
 			m_busy_dialog->raise();
