@@ -371,8 +371,8 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/ElementsCollection/elementscollectionwidget.h
   ${QET_DIR}/sources/Pdm/pdmconfigpage.cpp
   ${QET_DIR}/sources/Pdm/pdmconfigpage.h
-  ${QET_DIR}/sources/Pdm/pdmdockwidget.cpp
-  ${QET_DIR}/sources/Pdm/pdmdockwidget.h
+  ${QET_DIR}/sources/Pdm/pdmdialog.cpp
+  ${QET_DIR}/sources/Pdm/pdmdialog.h
   ${QET_DIR}/sources/Pdm/pdmgitworker.cpp
   ${QET_DIR}/sources/Pdm/pdmgitworker.h
   ${QET_DIR}/sources/Pdm/pdmservice.cpp

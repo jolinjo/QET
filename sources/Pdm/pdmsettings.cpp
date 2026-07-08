@@ -28,9 +28,12 @@ namespace
 	const char *KEY_USERNAME   = "pdm/username";
 	const char *KEY_TOKEN      = "pdm/token";
 	const char *KEY_WORK_ROOT  = "pdm/work-root";
+	const char *KEY_REPO       = "pdm/repo";
 
 	// 內網 Gitea 預設主機:沿用 OTA 更新器既有的伺服器(ota/repo-url)。
 	const char *DEFAULT_SERVER = "http://hc-server:3000";
+	// 公司圖庫:圖檔管理固定連此 repo,不提供選擇。
+	const char *DEFAULT_REPO   = "HC-Git/HC_Electrical-Schematics";
 
 #ifdef Q_OS_MACOS
 	const char *KEYCHAIN_SERVICE = "qelectrotech-pdm-gitea";
@@ -87,9 +90,9 @@ void PdmSettings::setUsername(const QString &name)
 QString PdmSettings::token()
 {
 #ifdef Q_OS_MACOS
-	const QString account = username().isEmpty() ? QStringLiteral("default")
-						     : username();
-	return keychainRead(account);
+	// 固定帳號鍵:token 不隨 username 變動(登入填 email、連線後改成 login,
+	// 若以 username 當鍵會在中途讀不到已存的 token)。
+	return keychainRead(QStringLiteral("token"));
 #else
 	// TODO(Windows):改用 DPAPI(CryptProtectData)。base64 只是避免
 	// 設定檔被肉眼直讀,不是加密;內網環境暫時接受,正式部署前要換掉。
@@ -101,9 +104,7 @@ QString PdmSettings::token()
 void PdmSettings::setToken(const QString &token)
 {
 #ifdef Q_OS_MACOS
-	const QString account = username().isEmpty() ? QStringLiteral("default")
-						     : username();
-	keychainWrite(account, token);
+	keychainWrite(QStringLiteral("token"), token);
 #else
 	if (token.isEmpty()) {
 		QSettings().remove(KEY_TOKEN);
@@ -127,4 +128,16 @@ QString PdmSettings::workRoot()
 void PdmSettings::setWorkRoot(const QString &dir)
 {
 	QSettings().setValue(KEY_WORK_ROOT, QDir::cleanPath(dir));
+}
+
+QString PdmSettings::repo()
+{
+	QSettings settings;
+	const QString value = settings.value(KEY_REPO).toString().trimmed();
+	return value.isEmpty() ? QString::fromUtf8(DEFAULT_REPO) : value;
+}
+
+void PdmSettings::setRepo(const QString &full_name)
+{
+	QSettings().setValue(KEY_REPO, full_name.trimmed());
 }

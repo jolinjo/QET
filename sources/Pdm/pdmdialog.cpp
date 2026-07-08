@@ -15,7 +15,7 @@
 	You should have received a copy of the GNU General Public License
 	along with QElectroTech.  If not, see <http://www.gnu.org/licenses/>.
 */
-#include "pdmdockwidget.h"
+#include "pdmdialog.h"
 
 #include "pdmgitworker.h"
 #include "pdmservice.h"
@@ -86,12 +86,14 @@ namespace
 	}
 }
 
-PdmDockWidget::PdmDockWidget(QWidget *parent) :
-	QDockWidget(tr("圖檔管理"), parent),
+PdmDialog::PdmDialog(QWidget *parent) :
+	QDialog(parent),
 	m_service(new PdmService(this)),
 	m_git(new PdmGitWorker(this))
 {
-	setObjectName("pdm_dock_widget");
+	setObjectName("pdm_dialog");
+	setWindowTitle(tr("圖檔管理"));
+	resize(560, 520);
 	setUpWidget();
 
 	connect(m_git, &PdmGitWorker::stepStarted, this,
@@ -100,17 +102,19 @@ PdmDockWidget::PdmDockWidget(QWidget *parent) :
 		});
 	connect(m_git, &PdmGitWorker::allFinished, this,
 		[this]() { showBusy(false); });
-
-	// 面板首次顯示才連線,避免程式一啟動就打伺服器
-	connect(this, &QDockWidget::visibilityChanged, this, [this](bool visible) {
-		if (visible && !m_auto_refreshed) {
-			m_auto_refreshed = true;
-			refresh();
-		}
-	});
 }
 
-void PdmDockWidget::setUpWidget()
+// 視窗首次顯示才連線,避免程式一啟動就打伺服器
+void PdmDialog::showEvent(QShowEvent *event)
+{
+	QDialog::showEvent(event);
+	if (!m_auto_refreshed) {
+		m_auto_refreshed = true;
+		refresh();
+	}
+}
+
+void PdmDialog::setUpWidget()
 {
 	auto *content = new QWidget(this);
 	auto *layout = new QVBoxLayout(content);
@@ -173,10 +177,12 @@ void PdmDockWidget::setUpWidget()
 	m_progress->hide();
 	layout->addWidget(m_progress);
 
-	setWidget(content);
+	auto *outer = new QVBoxLayout(this);
+	outer->setContentsMargins(0, 0, 0, 0);
+	outer->addWidget(content);
 
 	connect(m_refresh_button, &QPushButton::clicked,
-		this, &PdmDockWidget::refresh);
+		this, &PdmDialog::refresh);
 	connect(m_repo_combo, &QComboBox::currentIndexChanged, this,
 		[this](int index) {
 			if (index < 0) return;
@@ -184,32 +190,32 @@ void PdmDockWidget::setUpWidget()
 			syncRepository();
 		});
 	connect(m_tree, &QTreeWidget::itemSelectionChanged,
-		this, &PdmDockWidget::updateButtons);
+		this, &PdmDialog::updateButtons);
 	connect(m_checkout_button, &QPushButton::clicked,
-		this, &PdmDockWidget::checkOut);
+		this, &PdmDialog::checkOut);
 	connect(m_checkin_button, &QPushButton::clicked,
-		this, &PdmDockWidget::checkIn);
+		this, &PdmDialog::checkIn);
 	connect(m_cancel_button, &QPushButton::clicked,
-		this, &PdmDockWidget::cancelCheckOut);
+		this, &PdmDialog::cancelCheckOut);
 	connect(m_submit_button, &QPushButton::clicked,
-		this, &PdmDockWidget::submitForReview);
+		this, &PdmDialog::submitForReview);
 	connect(m_review_button, &QPushButton::clicked,
-		this, &PdmDockWidget::openReviewView);
+		this, &PdmDialog::openReviewView);
 	connect(m_approve_button, &QPushButton::clicked,
-		this, &PdmDockWidget::approve);
+		this, &PdmDialog::approve);
 	connect(m_reject_button, &QPushButton::clicked,
-		this, &PdmDockWidget::reject);
+		this, &PdmDialog::rejectReview);
 	connect(m_release_button, &QPushButton::clicked,
-		this, &PdmDockWidget::releaseApproved);
+		this, &PdmDialog::releaseApproved);
 	connect(m_force_unlock_button, &QPushButton::clicked,
-		this, &PdmDockWidget::forceUnlock);
+		this, &PdmDialog::forceUnlock);
 	connect(m_history_button, &QPushButton::clicked,
-		this, &PdmDockWidget::showReleaseHistory);
+		this, &PdmDialog::showReleaseHistory);
 
 	updateButtons();
 }
 
-void PdmDockWidget::refresh()
+void PdmDialog::refresh()
 {
 	if (PdmSettings::token().isEmpty()) {
 		m_account_label->setText(
@@ -233,8 +239,21 @@ void PdmDockWidget::refresh()
 	});
 }
 
-void PdmDockWidget::connectionRefreshed()
+void PdmDialog::connectionRefreshed()
 {
+	// 固定圖庫模式:偏好設定指定了 repo,直接連該 repo,不列出其他也不給選。
+	const QString fixed_repo = PdmSettings::repo();
+	if (!fixed_repo.isEmpty()) {
+		const QSignalBlocker blocker(m_repo_combo);
+		m_repo_combo->clear();
+		m_repo_combo->addItem(fixed_repo);
+		m_repo_combo->setCurrentIndex(0);
+		m_repo_combo->hide();
+		syncRepository();
+		return;
+	}
+
+	m_repo_combo->show();
 	m_service->listRepositories([this](const PdmService::Reply &reply) {
 		if (!reply.ok) {
 			m_account_label->setText(reply.error);
@@ -256,7 +275,7 @@ void PdmDockWidget::connectionRefreshed()
 	});
 }
 
-void PdmDockWidget::syncRepository()
+void PdmDialog::syncRepository()
 {
 	const QString repo = currentRepoFullName();
 	if (repo.isEmpty()) return;
@@ -289,7 +308,7 @@ void PdmDockWidget::syncRepository()
 	}
 }
 
-void PdmDockWidget::loadFileStates()
+void PdmDialog::loadFileStates()
 {
 	const QString vault = vaultDir();
 	m_files.clear();
@@ -341,7 +360,7 @@ void PdmDockWidget::loadFileStates()
 		});
 }
 
-void PdmDockWidget::loadPullRequests()
+void PdmDialog::loadPullRequests()
 {
 	m_service->listOpenPullRequests(currentRepoFullName(),
 		[this](const PdmService::Reply &reply) {
@@ -417,7 +436,7 @@ void PdmDockWidget::loadPullRequests()
 		});
 }
 
-void PdmDockWidget::rebuildTree()
+void PdmDialog::rebuildTree()
 {
 	const QString selected = m_tree->currentItem()
 		? m_tree->currentItem()->text(0) : QString();
@@ -449,7 +468,7 @@ void PdmDockWidget::rebuildTree()
 	updateButtons();
 }
 
-void PdmDockWidget::updateButtons()
+void PdmDialog::updateButtons()
 {
 	const QTreeWidgetItem *item = selectedFileItem();
 	const FileState state = item ? m_files.value(item->text(0)) : FileState();
@@ -481,7 +500,7 @@ void PdmDockWidget::updateButtons()
 	m_history_button->setEnabled(has_selection);
 }
 
-void PdmDockWidget::checkOut()
+void PdmDialog::checkOut()
 {
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
@@ -532,7 +551,7 @@ void PdmDockWidget::checkOut()
 		});
 }
 
-void PdmDockWidget::checkIn()
+void PdmDialog::checkIn()
 {
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
@@ -598,7 +617,7 @@ void PdmDockWidget::checkIn()
 		});
 }
 
-void PdmDockWidget::cancelCheckOut()
+void PdmDialog::cancelCheckOut()
 {
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
@@ -622,7 +641,7 @@ void PdmDockWidget::cancelCheckOut()
 		});
 }
 
-void PdmDockWidget::submitForReview()
+void PdmDialog::submitForReview()
 {
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
@@ -657,7 +676,7 @@ void PdmDockWidget::submitForReview()
 		});
 }
 
-void PdmDockWidget::openReviewView()
+void PdmDialog::openReviewView()
 {
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
@@ -697,7 +716,7 @@ void PdmDockWidget::openReviewView()
 	}
 }
 
-void PdmDockWidget::approve()
+void PdmDialog::approve()
 {
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
@@ -742,7 +761,7 @@ void PdmDockWidget::approve()
 		});
 }
 
-void PdmDockWidget::reject()
+void PdmDialog::rejectReview()
 {
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
@@ -774,7 +793,7 @@ void PdmDockWidget::reject()
 		});
 }
 
-void PdmDockWidget::releaseApproved()
+void PdmDialog::releaseApproved()
 {
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
@@ -844,7 +863,7 @@ void PdmDockWidget::releaseApproved()
 	清理 work 分支與 worktree。渲染一律出自 vault(= tag 內容),
 	不用任何人的工作區(開發計畫 §3.6)。
 */
-void PdmDockWidget::finishRelease(const QString &rel_path, const QString &stem,
+void PdmDialog::finishRelease(const QString &rel_path, const QString &stem,
 				  const QString &tag, const QString &sha)
 {
 	const QString vault = vaultDir();
@@ -912,7 +931,7 @@ void PdmDockWidget::finishRelease(const QString &rel_path, const QString &stem,
 	});
 }
 
-void PdmDockWidget::forceUnlock()
+void PdmDialog::forceUnlock()
 {
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
@@ -940,7 +959,7 @@ void PdmDockWidget::forceUnlock()
 		});
 }
 
-void PdmDockWidget::showReleaseHistory()
+void PdmDialog::showReleaseHistory()
 {
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
@@ -1003,7 +1022,7 @@ void PdmDockWidget::showReleaseHistory()
 	});
 }
 
-void PdmDockWidget::showBusy(bool busy)
+void PdmDialog::showBusy(bool busy)
 {
 	if (busy) {
 		m_progress->setRange(0, 0);
@@ -1015,37 +1034,37 @@ void PdmDockWidget::showBusy(bool busy)
 	m_repo_combo->setEnabled(!busy);
 }
 
-void PdmDockWidget::fail(const QString &title, const QString &log)
+void PdmDialog::fail(const QString &title, const QString &log)
 {
 	showBusy(false);
 	m_status_label->setText(title);
 	QMessageBox::warning(this, title, log.right(1500));
 }
 
-QString PdmDockWidget::currentRepoFullName() const
+QString PdmDialog::currentRepoFullName() const
 {
 	return m_repo_combo->currentText();
 }
 
-QString PdmDockWidget::vaultDir() const
+QString PdmDialog::vaultDir() const
 {
 	return PdmSettings::workRoot() + '/' + currentRepoFullName()
 		+ QStringLiteral("/vault");
 }
 
-QString PdmDockWidget::worktreeDir(const QString &stem) const
+QString PdmDialog::worktreeDir(const QString &stem) const
 {
 	return PdmSettings::workRoot() + '/' + currentRepoFullName()
 		+ QStringLiteral("/checkouts/") + stem;
 }
 
-QString PdmDockWidget::reviewDir(int pr_index) const
+QString PdmDialog::reviewDir(int pr_index) const
 {
 	return PdmSettings::workRoot() + '/' + currentRepoFullName()
 		+ QStringLiteral("/reviews/pr-%1").arg(pr_index);
 }
 
-QString PdmDockWidget::remoteUrlWithCredentials() const
+QString PdmDialog::remoteUrlWithCredentials() const
 {
 	// TODO:token 會留在 vault 的 .git/config;內網暫可接受,
 	// 之後改 git credential helper(見開發計畫注意事項 8)。
@@ -1056,12 +1075,12 @@ QString PdmDockWidget::remoteUrlWithCredentials() const
 	return url.toString(QUrl::FullyEncoded);
 }
 
-QTreeWidgetItem *PdmDockWidget::selectedFileItem() const
+QTreeWidgetItem *PdmDialog::selectedFileItem() const
 {
 	return m_tree->currentItem();
 }
 
-PdmDockWidget::FileState PdmDockWidget::selectedState() const
+PdmDialog::FileState PdmDialog::selectedState() const
 {
 	const QTreeWidgetItem *item = selectedFileItem();
 	return item ? m_files.value(item->text(0)) : FileState();

@@ -40,9 +40,28 @@ PdmConfigPage::PdmConfigPage(QWidget *parent) :
 	m_server_edit->setPlaceholderText(QStringLiteral("http://hc-server:3000"));
 	form->addRow(tr("Gitea 伺服器:"), m_server_edit);
 
+	// 帳密登入:填帳號密碼後按「登入」自動產生 token,免去手動貼上。
+	m_user_edit = new QLineEdit(PdmSettings::username(), this);
+	m_user_edit->setPlaceholderText(tr("帳號或 email"));
+	form->addRow(tr("帳號:"), m_user_edit);
+
+	auto *pass_row = new QHBoxLayout();
+	m_pass_edit = new QLineEdit(this);
+	m_pass_edit->setEchoMode(QLineEdit::Password);
+	m_pass_edit->setPlaceholderText(tr("登入後自動取得 token,密碼不會儲存"));
+	auto *login_button = new QPushButton(tr("登入取得 token"), this);
+	pass_row->addWidget(m_pass_edit, 1);
+	pass_row->addWidget(login_button);
+	form->addRow(tr("密碼:"), pass_row);
+
 	m_token_edit = new QLineEdit(PdmSettings::token(), this);
 	m_token_edit->setEchoMode(QLineEdit::Password);
 	form->addRow(tr("Access token:"), m_token_edit);
+
+	m_repo_edit = new QLineEdit(PdmSettings::repo(), this);
+	m_repo_edit->setPlaceholderText(
+		QStringLiteral("HC-Git/HC_Electrical-Schematics"));
+	form->addRow(tr("圖庫 Repo:"), m_repo_edit);
 
 	auto *workroot_row = new QHBoxLayout();
 	m_workroot_edit = new QLineEdit(PdmSettings::workRoot(), this);
@@ -71,14 +90,54 @@ PdmConfigPage::PdmConfigPage(QWidget *parent) :
 			this, tr("選擇本機工作區"), m_workroot_edit->text());
 		if (!dir.isEmpty()) m_workroot_edit->setText(dir);
 	});
+	connect(login_button, &QPushButton::clicked,
+		this, &PdmConfigPage::loginWithPassword);
 	connect(test_button, &QPushButton::clicked,
 		this, &PdmConfigPage::testConnection);
+}
+
+void PdmConfigPage::loginWithPassword()
+{
+	// 伺服器網址要先有,才能連去產 token
+	PdmSettings::setServerUrl(m_server_edit->text());
+	if (PdmSettings::serverUrl().isEmpty()) {
+		m_test_result->setText(tr("✗ 請先填 Gitea 伺服器網址。"));
+		return;
+	}
+
+	const QString username = m_user_edit->text().trimmed();
+	const QString password = m_pass_edit->text();
+	if (username.isEmpty() || password.isEmpty()) {
+		m_test_result->setText(tr("✗ 帳號與密碼皆不可空白。"));
+		return;
+	}
+
+	m_test_result->setText(tr("登入中…"));
+	auto *service = new PdmService(this);
+	service->createTokenWithPassword(username, password,
+		[this, service, username](bool ok, const QString &token_or_error) {
+			if (ok) {
+				m_token_edit->setText(token_or_error);
+				PdmSettings::setToken(token_or_error);
+				PdmSettings::setUsername(username);
+				// 密碼用完即清,不留在畫面也不儲存
+				m_pass_edit->clear();
+				m_test_result->setText(
+					tr("✓ 登入成功,已自動產生並填入 token。"));
+			} else {
+				m_test_result->setText(
+					tr("✗ %1").arg(token_or_error));
+			}
+			service->deleteLater();
+		});
 }
 
 void PdmConfigPage::applyConf()
 {
 	PdmSettings::setServerUrl(m_server_edit->text());
+	PdmSettings::setUsername(m_user_edit->text().trimmed());
 	PdmSettings::setToken(m_token_edit->text().trimmed());
+	PdmSettings::setRepo(m_repo_edit->text());
 	PdmSettings::setWorkRoot(m_workroot_edit->text());
 }
 

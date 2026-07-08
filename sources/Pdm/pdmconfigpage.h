@@ -39,9 +39,13 @@ class PdmConfigPage : public ConfigPage
 
 	private:
 		void testConnection();
+		void loginWithPassword();
 
 		QLineEdit *m_server_edit = nullptr,
+			  *m_user_edit = nullptr,
+			  *m_pass_edit = nullptr,
 			  *m_token_edit = nullptr,
+			  *m_repo_edit = nullptr,
 			  *m_workroot_edit = nullptr;
 		QLabel *m_test_result = nullptr;
 };

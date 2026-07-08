@@ -50,6 +50,16 @@ class PdmService : public QObject
 		void verifyConnection(const std::function<void (bool ok,
 			const QString &login_or_error)> &done);
 
+		/**
+			POST /api/v1/users/{user}/tokens (Basic Auth)。
+			用帳號密碼替使用者自動產生一組 access token,回傳 token 字串;
+			使用者不必自行到 Gitea 網頁產生。密碼僅用於本次呼叫,不儲存。
+		*/
+		void createTokenWithPassword(const QString &username,
+			const QString &password,
+			const std::function<void (bool ok,
+				const QString &token_or_error)> &done);
+
 		/// GET /api/v1/repos/search — 列出 token 可存取的 repo
 		void listRepositories(Callback done);
 

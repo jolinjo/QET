@@ -87,7 +87,7 @@ public:
 #include "ElementsCollection/elementscollectionwidget.h"
 #include "QWidgetAnimation/qwidgetanimation.h"
 #include "autoNum/ui/autonumberingdockwidget.h"
-#include "Pdm/pdmdockwidget.h"
+#include "Pdm/pdmdialog.h"
 #include "conductornumexport.h"
 #include "diagramcommands.h"
 #include "diagramevent/diagrameventaddimage.h"
@@ -178,7 +178,6 @@ QETDiagramEditor::QETDiagramEditor(const QStringList &files, QWidget *parent) :
 	setUpUndoStack();
 	setUpSelectionPropertiesEditor();
 	setUpAutonumberingWidget();
-	setUpPdmDock();
 
 	setUpActions();
 	setUpToolBar();
@@ -598,22 +597,24 @@ void QETDiagramEditor::setUpAutonumberingWidget()
 }
 
 /**
-	@brief QETDiagramEditor::setUpPdmDock
-	Setup the PDM (圖檔管理) dock: Gitea-backed check-out / check-in panel.
+	@brief QETDiagramEditor::showPdmDialog
+	Show the PDM (圖檔管理) dialog: Gitea-backed check-out / check-in panel.
+	The dialog is created lazily on first use.
 */
-void QETDiagramEditor::setUpPdmDock()
+void QETDiagramEditor::showPdmDialog()
 {
-	m_pdm_dock = new PdmDockWidget(this);
-	m_pdm_dock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
-	m_pdm_dock->setFeatures(QDockWidget::DockWidgetClosable
-				| QDockWidget::DockWidgetMovable
-				| QDockWidget::DockWidgetFloatable);
-	addDockWidget(Qt::LeftDockWidgetArea, m_pdm_dock);
-
-	connect(m_pdm_dock, &PdmDockWidget::requestOpenFile, this,
-		[this](const QString &file_path) {
-			openAndAddProject(file_path, false);
-		});
+	if (!m_pdm_dialog)
+	{
+		m_pdm_dialog = new PdmDialog(this);
+		connect(m_pdm_dialog, &PdmDialog::requestOpenFile, this,
+			[this](const QString &file_path) {
+				openAndAddProject(file_path, false);
+			});
+		applyInterfaceFonts();
+	}
+	m_pdm_dialog->show();
+	m_pdm_dialog->raise();
+	m_pdm_dialog->activateWindow();
 }
 
 /**
@@ -676,7 +677,17 @@ void QETDiagramEditor::applyInterfaceFonts()
 	applyToDock(qdw_pa, "fontsize_projectpanel");
 	applyToDock(m_selection_properties_editor, "fontsize_properties");
 	applyToDock(m_autonumbering_dock, "fontsize_properties");
-	applyToDock(m_pdm_dock, "fontsize_projectpanel");
+
+	// 圖檔管理彈出視窗沿用專案面板的字級設定
+	if (m_pdm_dialog) {
+		const QFont f = regionFont("fontsize_projectpanel");
+		m_pdm_dialog->setFont(f);
+		const QList<QWidget *> kids =
+				m_pdm_dialog->findChildren<QWidget *>();
+		for (QWidget *k : kids) {
+			k->setFont(f);
+		}
+	}
 
 	// The folio (page) tabs and the project title live in the central MDI area,
 	// not in a dock, so they are not reached by applyToDock. Make them follow the
@@ -737,6 +748,12 @@ void QETDiagramEditor::setUpActions()
 			ProjectPrintWindow::launchDialog(project, QPrinter::PdfFormat, this);
 		}
 	});
+
+		//圖檔管理(PDM)
+	m_pdm_action = new QAction(QET::Icons::ObjectLocked, tr("圖檔管理"), this);
+	m_pdm_action->setStatusTip(tr("開啟圖檔管理視窗(出庫/入庫/送審/發行)"));
+	connect(m_pdm_action, &QAction::triggered,
+		this, &QETDiagramEditor::showPdmDialog);
 
 		//Quit editor
 	m_quit_editor = new QAction(QET::Icons::ApplicationExit, tr("&Quitter"),  this);
@@ -1194,6 +1211,8 @@ void QETDiagramEditor::setUpToolBar()
 	// 列印按鈕自工具列移除(仍保留「檔案」選單項與 ⌘P 快捷鍵)
 	main_tool_bar -> addAction(m_export_to_pdf);
 	main_tool_bar -> addSeparator();
+	main_tool_bar -> addAction(m_pdm_action);
+	main_tool_bar -> addSeparator();
 	main_tool_bar -> addAction(m_project_add_diagram);
 	main_tool_bar -> addAction(m_remove_diagram_from_project);
 	main_tool_bar -> addSeparator();
@@ -1379,7 +1398,6 @@ void QETDiagramEditor::setUpMenu()
 	diagram_tool_bar      -> toggleViewAction() -> setStatusTip(tr("Affiche ou non la barre d'outils Schéma"));
 	qdw_pa           -> toggleViewAction() -> setStatusTip(tr("Affiche ou non le panel d'appareils"));
 	qdw_undo         -> toggleViewAction() -> setStatusTip(tr("Affiche ou non la liste des modifications"));
-	m_pdm_dock       -> toggleViewAction() -> setStatusTip(tr("顯示或隱藏圖檔管理面板"));
 
 
 	// menu Affichage

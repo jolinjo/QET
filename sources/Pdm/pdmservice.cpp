@@ -19,6 +19,7 @@
 
 #include "pdmsettings.h"
 
+#include <QDateTime>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -104,6 +105,106 @@ void PdmService::verifyConnection(
 		const QString login = reply.json.object()
 			.value(QStringLiteral("login")).toString();
 		if (done) done(!login.isEmpty(), login);
+	});
+}
+
+void PdmService::createTokenWithPassword(
+	const QString &username, const QString &password,
+	const std::function<void (bool, const QString &)> &done)
+{
+	// 帳密只進 Basic 認證標頭,不進 URL 或 log;產出 token 後即棄用密碼。
+	const QByteArray auth_header = "Basic "
+		+ (username + ':' + password).toUtf8().toBase64();
+
+	// 產 token 的端點吃「帳號名(login)」而非 email,故先用帳密查真正的
+	// login,再拿它去建 token;使用者填帳號或 email 皆可。
+	QNetworkRequest whoami_req(QUrl(PdmSettings::serverUrl()
+					+ QStringLiteral("/api/v1/user")));
+	whoami_req.setRawHeader("Authorization", auth_header);
+	whoami_req.setTransferTimeout(30000);
+
+	QNetworkReply *whoami = m_network->get(whoami_req);
+	connect(whoami, &QNetworkReply::finished, this,
+		[this, whoami, auth_header, done]() {
+		const int status = whoami->attribute(
+			QNetworkRequest::HttpStatusCodeAttribute).toInt();
+		const QJsonDocument json =
+			QJsonDocument::fromJson(whoami->readAll());
+		const QNetworkReply::NetworkError net_error = whoami->error();
+		const QString net_string = whoami->errorString();
+		whoami->deleteLater();
+
+		if (status == 401) {
+			if (done) done(false, tr("帳號或密碼錯誤"
+				"(若已啟用兩階段驗證,請改用手動貼上 token)。"));
+			return;
+		}
+		if (net_error != QNetworkReply::NoError && status == 0) {
+			if (done) done(false,
+				tr("無法連線伺服器:%1").arg(net_string));
+			return;
+		}
+		const QString login = json.object()
+			.value(QStringLiteral("login")).toString();
+		if (status < 200 || status >= 300 || login.isEmpty()) {
+			const QString detail = json.object()
+				.value(QStringLiteral("message")).toString();
+			if (done) done(false, tr("登入失敗:http %1%2")
+				.arg(status)
+				.arg(detail.isEmpty() ? QString()
+						      : ':' + detail));
+			return;
+		}
+
+		// 第二步:用真正的 login 建立 token
+		QNetworkRequest token_req(QUrl(PdmSettings::serverUrl()
+			+ QStringLiteral("/api/v1/users/") + login
+			+ QStringLiteral("/tokens")));
+		token_req.setRawHeader("Authorization", auth_header);
+		token_req.setHeader(QNetworkRequest::ContentTypeHeader,
+				    "application/json");
+		token_req.setTransferTimeout(30000);
+
+		// token 名稱在同帳號下需唯一,附上時戳避免與既有 token 撞名。
+		const QString token_name = QStringLiteral("qet-pdm-%1")
+			.arg(QDateTime::currentSecsSinceEpoch());
+		// read:user:連線驗證 GET /user 需要;write:repository:涵蓋圖檔
+		// 內容、PR、Release、LFS 鎖。
+		const QJsonObject body{
+			{QStringLiteral("name"), token_name},
+			{QStringLiteral("scopes"),
+			 QJsonArray{QStringLiteral("write:repository"),
+				    QStringLiteral("read:user")}}};
+
+		QNetworkReply *reply = m_network->post(token_req,
+			QJsonDocument(body).toJson(QJsonDocument::Compact));
+		connect(reply, &QNetworkReply::finished, this,
+			[reply, done]() {
+			const int status = reply->attribute(
+				QNetworkRequest::HttpStatusCodeAttribute).toInt();
+			const QJsonDocument json =
+				QJsonDocument::fromJson(reply->readAll());
+			reply->deleteLater();
+
+			if (status == 200 || status == 201) {
+				const QString token = json.object()
+					.value(QStringLiteral("sha1")).toString();
+				if (token.isEmpty()) {
+					if (done) done(false,
+						tr("伺服器未回傳 token。"));
+				} else if (done) {
+					done(true, token);
+				}
+			} else {
+				const QString detail = json.object()
+					.value(QStringLiteral("message"))
+					.toString();
+				if (done) done(false, tr("產生 token 失敗:"
+					"http %1%2").arg(status)
+					.arg(detail.isEmpty() ? QString()
+							      : ':' + detail));
+			}
+		});
 	});
 }
 

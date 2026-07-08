@@ -15,10 +15,10 @@
 	You should have received a copy of the GNU General Public License
 	along with QElectroTech.  If not, see <http://www.gnu.org/licenses/>.
 */
-#ifndef PDMDOCKWIDGET_H
-#define PDMDOCKWIDGET_H
+#ifndef PDMDIALOG_H
+#define PDMDIALOG_H
 
-#include <QDockWidget>
+#include <QDialog>
 #include <QHash>
 
 class PdmGitWorker;
@@ -27,22 +27,23 @@ class QComboBox;
 class QLabel;
 class QProgressBar;
 class QPushButton;
+class QShowEvent;
 class QTreeWidget;
 class QTreeWidgetItem;
 
 /**
-	@brief 「圖檔管理」面板(PDM)。
+	@brief 「圖檔管理」彈出視窗(PDM)。
 	串接 Gitea 實作完整圖檔生命週期:
 	出庫(獨佔鎖) → 入庫(推送 work 分支) → 送審(開 PR) →
 	審核(唯讀開圖+核准/退回) → 發行(merge+tag+Release+PDF 附件)。
 	本機採 vault + worktree 模型,見 doc/pdm-gitea-dev-plan.md §3.4。
 */
-class PdmDockWidget : public QDockWidget
+class PdmDialog : public QDialog
 {
 	Q_OBJECT
 
 	public:
-		explicit PdmDockWidget(QWidget *parent = nullptr);
+		explicit PdmDialog(QWidget *parent = nullptr);
 
 	signals:
 		/// 要求編輯器開啟一個 .qet 檔(出庫/審核檢視時發出)
@@ -50,6 +51,9 @@ class PdmDockWidget : public QDockWidget
 
 	public slots:
 		void refresh();
+
+	protected:
+		void showEvent(QShowEvent *event) override;
 
 	private:
 		struct FileState {
@@ -76,7 +80,7 @@ class PdmDockWidget : public QDockWidget
 		void submitForReview();
 		void openReviewView();
 		void approve();
-		void reject();
+		void rejectReview();
 		void releaseApproved();
 		void finishRelease(const QString &rel_path, const QString &stem,
 				   const QString &tag, const QString &sha);
@@ -119,4 +123,4 @@ class PdmDockWidget : public QDockWidget
 		QHash<QString, FileState> m_files;   ///< key = rel_path
 };
 
-#endif // PDMDOCKWIDGET_H
+#endif // PDMDIALOG_H

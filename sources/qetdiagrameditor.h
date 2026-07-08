@@ -43,7 +43,7 @@ class RecentFiles;
 class DiagramPropertiesEditorDockWidget;
 class ElementsCollectionWidget;
 class AutoNumberingDockWidget;
-class PdmDockWidget;
+class PdmDialog;
 class TerminalNumberingDialog;
 
 #ifdef BUILD_WITHOUT_KF5
@@ -92,7 +92,7 @@ class QETDiagramEditor : public QETMainWindow
 		void setUpUndoStack     ();
 		void setUpSelectionPropertiesEditor();
 		void setUpAutonumberingWidget();
-		void setUpPdmDock       ();
+		void showPdmDialog      ();
 		void setUpActions       ();
 		void setUpToolBar       ();
 		void setUpMenu          ();
@@ -193,6 +193,7 @@ class QETDiagramEditor : public QETMainWindow
 		*m_mode_visualise,		///< Set visualisation mode
 		*m_export_to_images,		///< Export diagrams of the current project as imagess
 		*m_export_to_pdf = nullptr, ///< Export project to pdf.
+		*m_pdm_action = nullptr,	///< 開啟圖檔管理視窗
 		*m_print,			///< Print diagrams of the current project
 		*m_quit_editor,			///< Quit the diagram editor
 		*undo,				///< Cancel the latest action
@@ -261,7 +262,7 @@ class QETDiagramEditor : public QETMainWindow
 		
 		QUndoGroup undo_group;
 		AutoNumberingDockWidget *m_autonumbering_dock;
-		PdmDockWidget *m_pdm_dock = nullptr;
+		PdmDialog *m_pdm_dialog = nullptr;
 		int activeSubWindowIndex;
 		bool m_first_show = true;
 		SearchAndReplaceWidget m_search_and_replace_widget;

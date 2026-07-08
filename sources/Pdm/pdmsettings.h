@@ -38,6 +38,10 @@ namespace PdmSettings
 
 	QString workRoot();
 	void setWorkRoot(const QString &dir);
+
+	/// 固定圖庫(owner/repo);非空時圖檔管理只連此 repo,不列出其他。
+	QString repo();
+	void setRepo(const QString &full_name);
 }
 
 #endif // PDMSETTINGS_H
