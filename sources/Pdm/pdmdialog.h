@@ -21,6 +21,9 @@
 #include <QDialog>
 #include <QHash>
 #include <QMap>
+#include <QStringList>
+
+#include <functional>
 
 class PdmGitWorker;
 class PdmService;
@@ -131,6 +134,15 @@ class PdmDialog : public QDialog
 		/// 退回上一發行版:捨棄進行中的 work 分支,還原為 main 最後發行版
 		void revertToRelease();
 
+		// 結構性維運(直接改 main,限核准者且 main 開放其推送):
+		void addFolder();       ///< 新增專案資料夾(.gitkeep 佔位)
+		void deleteFolder();    ///< 刪除選取資料夾及其下所有圖檔
+		void deleteDrawing();   ///< 刪除選取圖檔
+		/// 在 vault 的 main 上做結構性變更:準備→change(內含 git add/rm)→
+		/// commit(訊息)→push→重整
+		void mutateMain(const std::function<void ()> &change,
+				const QString &commit_message);
+
 		/// 查登入者所屬 team,設定 m_is_confirmer / m_is_releaser
 		void loadUserRoles();
 		/**
@@ -164,6 +176,7 @@ class PdmDialog : public QDialog
 		QTreeWidget *m_tree = nullptr;          ///< 中:所選資料夾的圖檔清單
 		QTreeWidget *m_history_tree = nullptr;  ///< 右:所選圖檔的發行歷史
 		QString m_current_folder;               ///< 目前選取的資料夾(相對路徑)
+		QStringList m_extra_folders;            ///< 有 .gitkeep 的空資料夾
 		QPushButton *m_checkout_button = nullptr,
 			    *m_checkin_button = nullptr,
 			    *m_cancel_button = nullptr,

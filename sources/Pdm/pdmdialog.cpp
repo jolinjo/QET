@@ -38,6 +38,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QLabel>
+#include <QMenu>
 #include <QMessageBox>
 #include <QProgressBar>
 #include <QPushButton>
@@ -260,6 +261,33 @@ void PdmDialog::setUpWidget()
 			populateFileList();
 			updateButtons();
 		});
+
+	// 結構性維運右鍵選單:限核准者(pdm-releasers)才顯示
+	m_folder_tree->setContextMenuPolicy(Qt::CustomContextMenu);
+	connect(m_folder_tree, &QTreeWidget::customContextMenuRequested, this,
+		[this](const QPoint &pos) {
+			if (!m_is_releaser) return;
+			QTreeWidgetItem *it = m_folder_tree->itemAt(pos);
+			if (it) m_folder_tree->setCurrentItem(it);
+			QMenu menu(this);
+			menu.addAction(tr("新增資料夾…"), this, &PdmDialog::addFolder);
+			if (it && it->text(0) != tr("(根目錄)"))
+				menu.addAction(tr("刪除此資料夾…"),
+					this, &PdmDialog::deleteFolder);
+			menu.exec(m_folder_tree->viewport()->mapToGlobal(pos));
+		});
+	m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
+	connect(m_tree, &QTreeWidget::customContextMenuRequested, this,
+		[this](const QPoint &pos) {
+			if (!m_is_releaser) return;
+			QTreeWidgetItem *it = m_tree->itemAt(pos);
+			if (!it) return;
+			m_tree->setCurrentItem(it);
+			QMenu menu(this);
+			menu.addAction(tr("刪除此圖檔…"),
+				this, &PdmDialog::deleteDrawing);
+			menu.exec(m_tree->viewport()->mapToGlobal(pos));
+		});
 	connect(m_checkout_button, &QPushButton::clicked,
 		this, &PdmDialog::checkOut);
 	connect(m_checkin_button, &QPushButton::clicked,
@@ -474,6 +502,20 @@ void PdmDialog::loadFileStates()
 {
 	const QString vault = vaultDir();
 	m_files.clear();
+	m_extra_folders.clear();
+
+	// 以 .gitkeep 佔位的空資料夾(新增資料夾後尚無 .qet 時仍要顯示)
+	m_git->enqueue({"ls-files", "--", "*.gitkeep"}, vault,
+		[this](const PdmGitWorker::Result &result) {
+			const QStringList lines = result.output.split('\n',
+				Qt::SkipEmptyParts);
+			for (const QString &line : lines) {
+				const QString dir = QFileInfo(line.trimmed()).path();
+				if (dir != QLatin1String(".")
+				    && !m_extra_folders.contains(dir))
+					m_extra_folders << dir;
+			}
+		});
 
 	m_git->enqueue({"ls-files", "--", "*.qet"}, vault,
 		[this, vault](const PdmGitWorker::Result &result) {
@@ -775,6 +817,9 @@ void PdmDialog::rebuildFolderTree()
 			? tr("(根目錄)") : dir;
 		if (!folders.contains(folder)) folders << folder;
 	}
+	// 加入以 .gitkeep 佔位、尚無圖檔的空資料夾
+	for (const QString &dir : m_extra_folders)
+		if (!folders.contains(dir)) folders << dir;
 	folders.sort();
 
 	QTreeWidgetItem *to_select = nullptr;
@@ -1589,6 +1634,117 @@ void PdmDialog::revertToRelease()
 				tr("「%1」已退回上一發行版").arg(rel_path));
 			refresh();
 		});
+}
+
+void PdmDialog::mutateMain(const std::function<void ()> &change,
+			  const QString &commit_message)
+{
+	const QString vault = vaultDir();
+	showBusy(true);
+	// 準備:更新到 origin/main 最新且乾淨
+	m_git->enqueue({"fetch", "origin", "--prune"}, vault, {});
+	m_git->enqueue({"checkout", DEFAULT_BRANCH}, vault, {});
+	m_git->enqueue({"reset", "--hard",
+		QStringLiteral("origin/") + DEFAULT_BRANCH}, vault,
+		[this, change, commit_message, vault]
+		(const PdmGitWorker::Result &r) {
+		if (!r.ok) { fail(tr("準備圖庫失敗"), r.output); return; }
+		change();   // 呼叫端做檔案異動 + git add/rm(以 enqueue 排入)
+		m_git->enqueue({"commit", "-m", commit_message}, vault, {});
+		m_git->enqueue({"push", "origin", DEFAULT_BRANCH}, vault,
+			[this](const PdmGitWorker::Result &pr) {
+			if (!pr.ok) {
+				fail(tr("推送 main 失敗(核准者需在 main 分支保護的"
+					"可推送白名單內)"), pr.output);
+				return;
+			}
+			m_status_label->setText(tr("圖庫已更新"));
+			refresh();
+		});
+	});
+}
+
+void PdmDialog::addFolder()
+{
+	if (!m_is_releaser) return;
+	bool ok = false;
+	QString name = QInputDialog::getText(this, tr("新增資料夾"),
+		tr("資料夾名稱(勿含空白):"), QLineEdit::Normal, QString(), &ok);
+	if (!ok) return;
+	name = name.trimmed();
+	name.replace(QLatin1Char(' '), QLatin1Char('-'));
+	if (name.isEmpty()) return;
+	if (m_extra_folders.contains(name)) {
+		QMessageBox::warning(this, tr("新增資料夾"),
+			tr("資料夾「%1」已存在。").arg(name));
+		return;
+	}
+	const QString vault = vaultDir();
+	const QString keep = name + QStringLiteral("/.gitkeep");
+	mutateMain([this, vault, name, keep]() {
+		QDir(vault).mkpath(name);
+		QFile f(vault + '/' + keep);
+		if (f.open(QIODevice::WriteOnly)) f.close();
+		m_git->enqueue({"add", "--", keep}, vault, {});
+	}, tr("新增資料夾：%1").arg(name));
+}
+
+void PdmDialog::deleteFolder()
+{
+	if (!m_is_releaser) return;
+	QTreeWidgetItem *item = m_folder_tree->currentItem();
+	if (!item) return;
+	const QString folder = item->text(0);
+	if (folder == tr("(根目錄)")) return;
+
+	// 資料夾內若有進行中的圖檔則擋下
+	for (auto it = m_files.constBegin(); it != m_files.constEnd(); ++it) {
+		if (QFileInfo(it.key()).path() != folder) continue;
+		if (!it->lock_owner.isEmpty() || it->has_work_branch
+		    || it->pr_index > 0) {
+			QMessageBox::warning(this, tr("刪除資料夾"),
+				tr("資料夾內有進行中的圖檔(出庫/送審),"
+				   "請先處理完再刪除。"));
+			return;
+		}
+	}
+	if (QMessageBox::warning(this, tr("刪除資料夾"),
+		tr("將永久刪除資料夾「%1」及其下所有圖檔,確定?").arg(folder),
+		QMessageBox::Yes | QMessageBox::No, QMessageBox::No)
+	    != QMessageBox::Yes)
+		return;
+
+	const QString vault = vaultDir();
+	mutateMain([this, vault, folder]() {
+		m_git->enqueue({"rm", "-r", "--", folder}, vault, {});
+	}, tr("刪除資料夾：%1").arg(folder));
+}
+
+void PdmDialog::deleteDrawing()
+{
+	if (!m_is_releaser) return;
+	const QTreeWidgetItem *item = selectedFileItem();
+	if (!item) return;
+	const QString rel_path = item->data(0, Qt::UserRole).toString();
+	const FileState state = m_files.value(rel_path);
+	if (!state.lock_owner.isEmpty() || state.has_work_branch
+	    || state.pr_index > 0) {
+		QMessageBox::warning(this, tr("刪除圖檔"),
+			tr("「%1」有進行中的出庫/送審,請先「退回上一發行版」"
+			   "再刪除。").arg(rel_path));
+		return;
+	}
+	if (QMessageBox::warning(this, tr("刪除圖檔"),
+		tr("將從圖庫刪除「%1」(git 歷史與發行 tag 仍保留),確定?")
+			.arg(rel_path),
+		QMessageBox::Yes | QMessageBox::No, QMessageBox::No)
+	    != QMessageBox::Yes)
+		return;
+
+	const QString vault = vaultDir();
+	mutateMain([this, vault, rel_path]() {
+		m_git->enqueue({"rm", "--", rel_path}, vault, {});
+	}, tr("刪除圖檔：%1").arg(rel_path));
 }
 
 void PdmDialog::loadReleaseHistory(const QString &rel_path)
