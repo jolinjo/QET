@@ -18,6 +18,8 @@
 #include "qetdiagrameditor.h"
 
 #include <QListWidget>
+#include <QMessageBox>
+#include <QPushButton>
 #include <QStyledItemDelegate>
 #include <QSettings>
 #include <QToolBar>
@@ -373,7 +375,28 @@ void QETDiagramEditor::setUpWelcomeWidget()
 	m_welcome_list->setCursor(Qt::PointingHandCursor);
 	connect(m_welcome_list, &QListWidget::itemClicked, this,
 		[this](QListWidgetItem *item) {
-		openRecentFile(item->data(Qt::UserRole).toString());
+		const QString path = item->data(Qt::UserRole).toString();
+		// 圖檔管理的檔:先問要出庫編輯還是唯讀瀏覽
+		if (PdmDialog::isManagedPath(path)) {
+			ensurePdmDialog();
+			QMessageBox box(this);
+			box.setIcon(QMessageBox::Question);
+			box.setWindowTitle(tr("圖檔管理"));
+			box.setText(tr("這是圖檔管理的圖檔,要如何開啟?"));
+			QPushButton *checkout = box.addButton(
+				tr("出庫編輯"), QMessageBox::AcceptRole);
+			QPushButton *browse = box.addButton(
+				tr("唯讀瀏覽"), QMessageBox::ActionRole);
+			box.addButton(QMessageBox::Cancel);
+			box.setDefaultButton(checkout);
+			box.exec();
+			if (box.clickedButton() == checkout)
+				m_pdm_dialog->checkOutByPath(path);
+			else if (box.clickedButton() == browse)
+				m_pdm_dialog->openReadOnlyByPath(path);
+			return;
+		}
+		openRecentFile(path);
 	});
 
 	auto *layout = new QVBoxLayout(m_welcome_widget);

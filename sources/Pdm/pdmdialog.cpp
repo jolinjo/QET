@@ -2112,6 +2112,33 @@ void PdmDialog::checkInByPath(const QString &abs_path)
 	if (selectFileInUi(relPathForOpen(abs_path))) checkIn();
 }
 
+void PdmDialog::checkOutByPath(const QString &abs_path)
+{
+	const QString rel = relPathForOpen(abs_path);
+	if (!rel.isEmpty() && selectFileInUi(rel)) {
+		checkOut();
+		return;
+	}
+	// 清單尚未載入,或路徑不在工作區內(如發行版暫存檢視):
+	// 開啟圖檔管理視窗讓使用者在清單中出庫。
+	show();
+	raise();
+	activateWindow();
+	refresh();
+}
+
+void PdmDialog::openReadOnlyByPath(const QString &abs_path)
+{
+	if (!QFile::exists(abs_path)) {
+		QMessageBox::warning(this, tr("圖檔管理"),
+			tr("檔案不存在(可能是已清除的暫存檢視):\n%1")
+				.arg(abs_path));
+		return;
+	}
+	setFileWritable(abs_path, false);
+	emit requestOpenFile(abs_path);
+}
+
 void PdmDialog::cancelByPath(const QString &abs_path)
 {
 	if (selectFileInUi(relPathForOpen(abs_path))) cancelCheckOut();
