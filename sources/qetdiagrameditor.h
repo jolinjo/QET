@@ -95,6 +95,8 @@ class QETDiagramEditor : public QETMainWindow
 		void ensurePdmDialog    ();
 		void setUpPdmBackgroundConnect();
 		void showPdmDialog      ();
+		/// 依目前作用中專案的圖檔管理開檔情境,切換工具列(儲存/入庫/確認等)
+		void updatePdmToolbar   ();
 		void setUpActions       ();
 		void setUpToolBar       ();
 		void setUpMenu          ();
@@ -197,6 +199,10 @@ class QETDiagramEditor : public QETMainWindow
 		*m_export_to_images,		///< Export diagrams of the current project as imagess
 		*m_export_to_pdf = nullptr, ///< Export project to pdf.
 		*m_pdm_action = nullptr,	///< 開啟圖檔管理視窗
+		*m_pdm_checkin = nullptr,	///< 入庫(圖檔管理開啟的檔)
+		*m_pdm_cancel = nullptr,	///< 取消出庫
+		*m_pdm_confirm = nullptr,	///< 確認完畢(審核檢視)
+		*m_pdm_release = nullptr,	///< 核准發行(審核檢視)
 		*m_print,			///< Print diagrams of the current project
 		*m_quit_editor,			///< Quit the diagram editor
 		*undo,				///< Cancel the latest action

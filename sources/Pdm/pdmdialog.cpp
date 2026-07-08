@@ -2021,3 +2021,71 @@ PdmDialog::FileState PdmDialog::selectedState() const
 	const QTreeWidgetItem *item = selectedFileItem();
 	return item ? m_files.value(item->data(0, Qt::UserRole).toString()) : FileState();
 }
+
+PdmDialog::OpenContext PdmDialog::openContext(const QString &abs_path) const
+{
+	const QString base = PdmSettings::workRoot() + '/' + currentRepoFullName();
+	if (abs_path.startsWith(base + QStringLiteral("/checkouts/")))
+		return CheckoutEdit;
+	if (abs_path.startsWith(base + QStringLiteral("/reviews/")))
+		return ReviewReadOnly;
+	return NotManaged;
+}
+
+QString PdmDialog::relPathForOpen(const QString &abs_path) const
+{
+	const QString base = PdmSettings::workRoot() + '/' + currentRepoFullName();
+	QString rest;
+	if (abs_path.startsWith(base + QStringLiteral("/checkouts/")))
+		rest = abs_path.mid((base + QStringLiteral("/checkouts/")).length());
+	else if (abs_path.startsWith(base + QStringLiteral("/reviews/")))
+		rest = abs_path.mid((base + QStringLiteral("/reviews/")).length());
+	else
+		return QString();
+	// rest = <stem 或 pr-N>/<rel_path>,去掉第一段
+	const int slash = rest.indexOf(QLatin1Char('/'));
+	return slash >= 0 ? rest.mid(slash + 1) : QString();
+}
+
+bool PdmDialog::selectFileInUi(const QString &rel_path)
+{
+	if (rel_path.isEmpty() || !m_files.contains(rel_path)) return false;
+	const QString dir = QFileInfo(rel_path).path();
+	const QString folder = (dir == QLatin1String("."))
+		? tr("(根目錄)") : dir;
+	for (int i = 0; i < m_folder_tree->topLevelItemCount(); ++i) {
+		if (m_folder_tree->topLevelItem(i)->text(0) == folder) {
+			m_folder_tree->setCurrentItem(m_folder_tree->topLevelItem(i));
+			break;
+		}
+	}
+	// 選資料夾會同步觸發 populateFileList,清單重建後再選檔
+	for (int i = 0; i < m_tree->topLevelItemCount(); ++i) {
+		if (m_tree->topLevelItem(i)->data(0, Qt::UserRole).toString()
+		    == rel_path) {
+			m_tree->setCurrentItem(m_tree->topLevelItem(i));
+			return true;
+		}
+	}
+	return false;
+}
+
+void PdmDialog::checkInByPath(const QString &abs_path)
+{
+	if (selectFileInUi(relPathForOpen(abs_path))) checkIn();
+}
+
+void PdmDialog::cancelByPath(const QString &abs_path)
+{
+	if (selectFileInUi(relPathForOpen(abs_path))) cancelCheckOut();
+}
+
+void PdmDialog::confirmByPath(const QString &abs_path)
+{
+	if (selectFileInUi(relPathForOpen(abs_path))) confirmDone();
+}
+
+void PdmDialog::releaseByPath(const QString &abs_path)
+{
+	if (selectFileInUi(relPathForOpen(abs_path))) approveAndRelease();
+}

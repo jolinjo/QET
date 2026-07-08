@@ -50,6 +50,12 @@ class PdmDialog : public QDialog
 	public:
 		explicit PdmDialog(QWidget *parent = nullptr);
 
+		/// 某開啟中的 .qet 是以何種圖檔管理情境開啟(供工具列切換)
+		enum OpenContext { NotManaged, CheckoutEdit, ReviewReadOnly };
+		OpenContext openContext(const QString &abs_path) const;
+		bool isConfirmer() const { return m_is_confirmer; }
+		bool isReleaser() const  { return m_is_releaser; }
+
 	signals:
 		/// 要求編輯器開啟一個 .qet 檔(出庫/審核檢視時發出)
 		void requestOpenFile(const QString &file_path);
@@ -68,6 +74,11 @@ class PdmDialog : public QDialog
 		void startBackgroundConnect();
 		/// 把指定來源 .qet 加入圖庫(由編輯器提供目前開啟檔的路徑後呼叫)
 		void addDrawingFromFile(const QString &source_path);
+		// 由工具列針對「某開啟中的檔」直接執行動作(先在清單選到該檔再動作)
+		void checkInByPath(const QString &abs_path);
+		void cancelByPath(const QString &abs_path);
+		void confirmByPath(const QString &abs_path);
+		void releaseByPath(const QString &abs_path);
 
 	protected:
 		void showEvent(QShowEvent *event) override;
@@ -166,6 +177,10 @@ class PdmDialog : public QDialog
 		QString remoteUrlWithCredentials() const;
 		QTreeWidgetItem *selectedFileItem() const;
 		FileState selectedState() const;
+		/// 由 abs_path 反推 rel_path(去掉 workRoot/repo/checkouts|reviews/前綴)
+		QString relPathForOpen(const QString &abs_path) const;
+		/// 在資料夾樹+清單選到某 rel_path(供 *ByPath 動作定位)
+		bool selectFileInUi(const QString &rel_path);
 
 		PdmService *m_service = nullptr;
 		PdmGitWorker *m_git = nullptr;

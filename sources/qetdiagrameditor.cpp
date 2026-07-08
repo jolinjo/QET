@@ -187,6 +187,7 @@ QETDiagramEditor::QETDiagramEditor(const QStringList &files, QWidget *parent) :
 
 	// 啟動後背景預連圖檔管理伺服器,依結果啟用/禁用工具列按鈕
 	setUpPdmBackgroundConnect();
+	updatePdmToolbar();   // 初始:無受管檔開啟→隱藏入庫/確認等動作
 
 	tabifyDockWidget(qdw_undo, qdw_pa);
 
@@ -673,6 +674,36 @@ void QETDiagramEditor::showPdmDialog()
 	m_pdm_dialog->activateWindow();
 }
 
+void QETDiagramEditor::updatePdmToolbar()
+{
+	PdmDialog::OpenContext ctx = PdmDialog::NotManaged;
+	if (m_pdm_dialog)
+		if (ProjectView *pv = currentProjectView())
+			if (QETProject *proj = pv->project())
+				ctx = m_pdm_dialog->openContext(proj->filePath());
+
+	const bool checkout = (ctx == PdmDialog::CheckoutEdit);
+	const bool review   = (ctx == PdmDialog::ReviewReadOnly);
+
+	// 出庫編輯的檔:隱藏儲存/另存(改走入庫),顯示入庫/取消出庫
+	if (m_save_file)    m_save_file->setVisible(!checkout);
+	if (m_save_file_as) m_save_file_as->setVisible(!checkout);
+	if (m_pdm_checkin)  m_pdm_checkin->setVisible(checkout);
+	if (m_pdm_cancel)   m_pdm_cancel->setVisible(checkout);
+
+	// 審核檢視的檔:顯示確認完畢/核准發行,依角色決定可否按
+	if (m_pdm_confirm) {
+		m_pdm_confirm->setVisible(review);
+		m_pdm_confirm->setEnabled(review && m_pdm_dialog
+					  && m_pdm_dialog->isConfirmer());
+	}
+	if (m_pdm_release) {
+		m_pdm_release->setVisible(review);
+		m_pdm_release->setEnabled(review && m_pdm_dialog
+					  && m_pdm_dialog->isReleaser());
+	}
+}
+
 /**
 	@brief QETDiagramEditor::applyInterfaceFonts
 	Apply the per-region interface font sizes from the settings to the menu bar,
@@ -810,6 +841,37 @@ void QETDiagramEditor::setUpActions()
 	m_pdm_action->setStatusTip(tr("開啟圖檔管理視窗(出庫/入庫/送審/發行)"));
 	connect(m_pdm_action, &QAction::triggered,
 		this, &QETDiagramEditor::showPdmDialog);
+
+	// 依開檔情境出現的圖檔管理工具列動作(對「目前作用中專案的檔」操作)
+	auto active_qet_path = [this]() -> QString {
+		if (ProjectView *pv = currentProjectView())
+			if (pv->project()) return pv->project()->filePath();
+		return QString();
+	};
+	m_pdm_checkin = new QAction(QET::Icons::DocumentSave, tr("入庫"), this);
+	m_pdm_checkin->setStatusTip(tr("把目前圖檔入庫(存檔並提交到圖庫)"));
+	connect(m_pdm_checkin, &QAction::triggered, this, [this, active_qet_path]() {
+		ensurePdmDialog();
+		m_pdm_dialog->checkInByPath(active_qet_path());
+	});
+	m_pdm_cancel = new QAction(QET::Icons::DocumentClose, tr("取消出庫"), this);
+	m_pdm_cancel->setStatusTip(tr("捨棄未入庫修改並解除鎖定"));
+	connect(m_pdm_cancel, &QAction::triggered, this, [this, active_qet_path]() {
+		ensurePdmDialog();
+		m_pdm_dialog->cancelByPath(active_qet_path());
+	});
+	m_pdm_confirm = new QAction(QET::Icons::PartSelect, tr("確認完畢"), this);
+	m_pdm_confirm->setStatusTip(tr("確認者:確認完畢(寫確認者並記錄)"));
+	connect(m_pdm_confirm, &QAction::triggered, this, [this, active_qet_path]() {
+		ensurePdmDialog();
+		m_pdm_dialog->confirmByPath(active_qet_path());
+	});
+	m_pdm_release = new QAction(QET::Icons::QETLogo, tr("核准發行"), this);
+	m_pdm_release->setStatusTip(tr("核准者:核准並發行"));
+	connect(m_pdm_release, &QAction::triggered, this, [this, active_qet_path]() {
+		ensurePdmDialog();
+		m_pdm_dialog->releaseByPath(active_qet_path());
+	});
 
 		//Quit editor
 	m_quit_editor = new QAction(QET::Icons::ApplicationExit, tr("&Quitter"),  this);
@@ -1268,6 +1330,11 @@ void QETDiagramEditor::setUpToolBar()
 	main_tool_bar -> addAction(m_export_to_pdf);
 	main_tool_bar -> addSeparator();
 	main_tool_bar -> addAction(m_pdm_action);
+	// 圖檔管理右側:依開檔情境顯示的動作(預設隱藏,由 updatePdmToolbar 控制)
+	main_tool_bar -> addAction(m_pdm_checkin);
+	main_tool_bar -> addAction(m_pdm_cancel);
+	main_tool_bar -> addAction(m_pdm_confirm);
+	main_tool_bar -> addAction(m_pdm_release);
 	main_tool_bar -> addSeparator();
 	main_tool_bar -> addAction(m_project_add_diagram);
 	main_tool_bar -> addAction(m_remove_diagram_from_project);
@@ -3075,6 +3142,7 @@ void QETDiagramEditor::subWindowActivated(QMdiSubWindow *subWindows)
 			read_only = proj->isReadOnly()
 				    && !proj->filePath().isEmpty();
 	applyReadOnlyView(read_only);
+	updatePdmToolbar();
 }
 
 /**
