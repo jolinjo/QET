@@ -121,25 +121,19 @@ PdmDialog::PdmDialog(QWidget *parent) :
 
 	connect(m_git, &PdmGitWorker::stepStarted, this,
 		[this](const QString &cmd) {
-			// 不顯示原始 git 指令(對使用者是雜訊),改對應成看得懂的
-			// 階段說明。任何 git 步驟一開始就顯示專用進度對話框並更新
-			// 說明——不論從工具列或本視窗觸發、有沒有呼叫 showBusy,
-			// 都有一致的進度回饋。
+			// 只更新階段說明,不負責顯示/隱藏。進度對話框由使用者操作
+			// 明確 showBusy(true)/showBusy(false) 控制,整個流程只有一個
+			// 對話框一直開著;背景讀取(重整/歷史)不彈框。
 			const QString text = friendlyStep(cmd);
 			m_status_label->setText(text);
-			ensureBusyDialog();
-			m_busy_label->setText(text);
-			if (!m_busy_dialog->isVisible()) {
-				m_busy_dialog->show();
-				m_busy_dialog->raise();
-			}
+			if (m_busy_dialog && m_busy_dialog->isVisible())
+				m_busy_label->setText(text);
 		});
+	// git 佇列清空 → 一律收起進度對話框(可靠的收尾:任何操作結束、或其後的
+	// 背景讀取跑完,佇列一空就關,不會卡住)。因為 stepStarted 只更新文字、
+	// 不再自行彈框,背景讀取不會「彈出一堆框」,只會讓這個框多開一下下。
 	connect(m_git, &PdmGitWorker::allFinished, this,
-		[this]() {
-			// git 佇列清空 → 收起進度對話框(成功或失敗都會走到)
-			if (m_busy_dialog) m_busy_dialog->hide();
-			showBusy(false);
-		});
+		[this]() { showBusy(false); });
 }
 
 // 視窗首次顯示才連線,避免程式一啟動就打伺服器
@@ -367,6 +361,9 @@ void PdmDialog::startBackgroundConnect()
 
 void PdmDialog::refresh()
 {
+	// 重整是「操作結束後的背景讀取」邊界:先收起進度對話框,之後的
+	// 背景 git(讀清單/歷史)就不會再彈框。
+	showBusy(false);
 	if (PdmSettings::token().isEmpty()) {
 		emit connectionReady(false);
 		m_account_label->setText(
@@ -453,16 +450,28 @@ void PdmDialog::signoffOnWorkBranch(const QString &rel_path,
 			return;
 		}
 		m_git->enqueue({"add", "--", rel_path}, worktree, {});
-		m_git->enqueue({"commit", "-m", commit_message}, worktree, {});
-		m_git->enqueue({"push", "origin", branch}, worktree,
-			[this, after_push](const PdmGitWorker::Result &push_result) {
-				if (!push_result.ok) {
-					fail(tr("推送簽核 commit 失敗"),
-					     push_result.output);
-					return;
-				}
-				after_push();
-			});
+		// commit 成功才 push、才繼續(確認/發行)。commit 失敗(且非「無變更」)
+		// 一律中止——絕不用未戳記的內容繼續合併發行(舊 bug 就是這樣把編輯中
+		// 內容併進 main)。stale index.lock 由 git worker 自我修復重試。
+		m_git->enqueue({"commit", "-m", commit_message}, worktree,
+			[this, branch, worktree, after_push]
+			(const PdmGitWorker::Result &commit_r) {
+			if (!commit_r.ok && !commit_r.output.contains(
+				    QLatin1String("nothing to commit"))) {
+				fail(tr("簽核 commit 失敗"), commit_r.output);
+				return;
+			}
+			m_git->enqueue({"push", "origin", branch}, worktree,
+				[this, after_push]
+				(const PdmGitWorker::Result &push_result) {
+					if (!push_result.ok) {
+						fail(tr("推送簽核 commit 失敗"),
+						     push_result.output);
+						return;
+					}
+					after_push();
+				});
+		});
 	};
 
 	showBusy(true);
@@ -519,7 +528,7 @@ void PdmDialog::syncRepository()
 {
 	const QString repo = currentRepoFullName();
 	if (repo.isEmpty()) return;
-	showBusy(true);
+	showBusy(true, false);   // 背景同步:只用內嵌進度條,不彈模態框
 
 	const QString vault = vaultDir();
 	if (QDir(vault + QStringLiteral("/.git")).exists()) {
@@ -2070,14 +2079,23 @@ void PdmDialog::ensureBusyDialog()
 	lay->addWidget(bar);
 }
 
-void PdmDialog::showBusy(bool busy)
+void PdmDialog::showBusy(bool busy, bool with_dialog)
 {
-	// 進度對話框改由 git 佇列生命週期(stepStarted/allFinished)驅動,
-	// 這裡只管主視窗內嵌進度條與按鈕啟用。
+	// 一個使用者操作 = 一個進度對話框,從 showBusy(true) 一直開到
+	// showBusy(false)(中間的 git 階段只更新說明,不重複彈框)。
+	// with_dialog=false:背景讀取(連線/重整清單)只用視窗內嵌進度條,
+	// 不彈模態框——否則每次操作後的重整都會讓框再跳一次。
 	if (busy) {
+		if (with_dialog) {
+			ensureBusyDialog();
+			m_busy_label->setText(tr("處理中…"));
+			m_busy_dialog->show();
+			m_busy_dialog->raise();
+		}
 		m_progress->setRange(0, 0);
 		m_progress->show();
 	} else {
+		if (m_busy_dialog) m_busy_dialog->hide();
 		m_progress->hide();
 	}
 	m_refresh_button->setEnabled(!busy);
@@ -2278,6 +2296,7 @@ void PdmDialog::browseLatestByPath(const QString &abs_path)
 		}
 		setFileWritable(view_dir + '/' + rel, false);
 		emit requestOpenFile(view_dir + '/' + rel);
+		showBusy(false);
 	});
 }
 

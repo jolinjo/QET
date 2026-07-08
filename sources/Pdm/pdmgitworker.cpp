@@ -19,9 +19,11 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QRegularExpression>
 
 PdmGitWorker::PdmGitWorker(QObject *parent) :
 	QObject(parent)
@@ -103,6 +105,24 @@ void PdmGitWorker::startNext()
 			result.output = QString::fromUtf8(process->readAll());
 			process->deleteLater();
 			m_process = nullptr;
+			// 自我修復:git 一次只跑一個行程(佇列序列化),因此撞到的
+			// index.lock 一定是先前被中斷的行程留下的 stale lock(例如
+			// 操作中途關程式)。移除它並把同一個工作重試一次。
+			if (!result.ok && !job.lock_retried
+			    && result.output.contains(QLatin1String("index.lock"))
+			    && result.output.contains(QLatin1String("File exists"))) {
+				const QRegularExpression re(
+					QStringLiteral("'([^']*index\\.lock)'"));
+				const auto m = re.match(result.output);
+				if (m.hasMatch() && QFile::exists(m.captured(1))
+				    && QFile::remove(m.captured(1))) {
+					Job retry = job;
+					retry.lock_retried = true;
+					m_queue.prepend(retry);
+					startNext();
+					return;
+				}
+			}
 			if (job.done) job.done(result);
 			startNext();
 		});

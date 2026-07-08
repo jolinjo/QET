@@ -179,7 +179,7 @@ class PdmDialog : public QDialog
 			const QMap<QString, QString> &extra_fields,
 			const QString &commit_message,
 			const std::function<void ()> &after_push);
-		void showBusy(bool busy);
+		void showBusy(bool busy, bool with_dialog = true);
 		/// 建立(僅一次)專用進度對話框
 		void ensureBusyDialog();
 		/// 把 git/子行程指令對應成使用者看得懂的階段說明
