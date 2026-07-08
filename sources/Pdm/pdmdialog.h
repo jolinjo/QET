@@ -53,9 +53,13 @@ class PdmDialog : public QDialog
 		void requestCloseFile(const QString &file_path);
 		/// 要求編輯器存檔某 .qet(入庫前自動存檔,免使用者手動 Cmd+S)
 		void requestSaveFile(const QString &file_path);
+		/// 背景連線結果:ok=已連上並取回資料(供工具列按鈕 enable/disable)
+		void connectionReady(bool ok);
 
 	public slots:
 		void refresh();
+		/// 程式啟動後背景先連一次(不需開視窗),結果由 connectionReady 發出
+		void startBackgroundConnect();
 
 	protected:
 		void showEvent(QShowEvent *event) override;
@@ -101,8 +105,8 @@ class PdmDialog : public QDialog
 				    const QString &revision, bool set_revision,
 				    const QMap<QString, QString> &extra_fields =
 					    QMap<QString, QString>()) const;
-		/// 修訂索引進位(數字制):數字 +1;空/非數字(舊字母)歸 1
-		static QString nextRevision(const QString &current);
+		/// 小版號進版:「主.次」的次版 +1;純整數 N→N.1;空/舊字母→0.1
+		static QString nextMinor(const QString &current);
 
 		void checkOut();
 		void checkIn();

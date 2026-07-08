@@ -185,6 +185,9 @@ QETDiagramEditor::QETDiagramEditor(const QStringList &files, QWidget *parent) :
 
 	applyInterfaceFonts();
 
+	// 啟動後背景預連圖檔管理伺服器,依結果啟用/禁用工具列按鈕
+	setUpPdmBackgroundConnect();
+
 	tabifyDockWidget(qdw_undo, qdw_pa);
 
 		//By default the windows is maximised
@@ -601,35 +604,55 @@ void QETDiagramEditor::setUpAutonumberingWidget()
 	Show the PDM (圖檔管理) dialog: Gitea-backed check-out / check-in panel.
 	The dialog is created lazily on first use.
 */
+void QETDiagramEditor::ensurePdmDialog()
+{
+	if (m_pdm_dialog) return;
+
+	m_pdm_dialog = new PdmDialog(this);
+	connect(m_pdm_dialog, &PdmDialog::requestOpenFile, this,
+		[this](const QString &file_path) {
+			openAndAddProject(file_path, false);
+		});
+	// 入庫前自動存檔(同步),免使用者手動 Cmd+S,git 才抓得到最新編輯。
+	connect(m_pdm_dialog, &PdmDialog::requestSaveFile, this,
+		[this](const QString &file_path) {
+			if (ProjectView *pv = viewForFile(file_path))
+				pv->save();
+		});
+	// 入庫/取消出庫後強制關閉該檔(不提示存檔:磁碟上已 commit 的
+	// 版本才是正本),避免編輯器留著舊內容、下次出庫開到舊版。
+	connect(m_pdm_dialog, &PdmDialog::requestCloseFile, this,
+		[this](const QString &file_path) {
+			ProjectView *pv = viewForFile(file_path);
+			if (!pv) return;
+			if (QETProject *proj = pv->project()) {
+				proj->undoStack()->setClean();
+				proj->setModified(false);
+			}
+			closeProject(pv);
+		});
+	// 背景連線結果決定工具列「圖檔管理」按鈕啟用與否:連上並取回資料才啟用。
+	connect(m_pdm_dialog, &PdmDialog::connectionReady, this,
+		[this](bool ok) {
+			if (m_pdm_action) m_pdm_action->setEnabled(ok);
+		});
+	applyInterfaceFonts();
+}
+
+/**
+	程式啟動後在背景先試連一次:先禁用「圖檔管理」按鈕,連上並取回資料後
+	由 connectionReady 啟用;連不上就維持禁用(也省去開視窗才連線的等待)。
+*/
+void QETDiagramEditor::setUpPdmBackgroundConnect()
+{
+	if (m_pdm_action) m_pdm_action->setEnabled(false);
+	ensurePdmDialog();
+	m_pdm_dialog->startBackgroundConnect();
+}
+
 void QETDiagramEditor::showPdmDialog()
 {
-	if (!m_pdm_dialog)
-	{
-		m_pdm_dialog = new PdmDialog(this);
-		connect(m_pdm_dialog, &PdmDialog::requestOpenFile, this,
-			[this](const QString &file_path) {
-				openAndAddProject(file_path, false);
-			});
-		// 入庫前自動存檔(同步),免使用者手動 Cmd+S,git 才抓得到最新編輯。
-		connect(m_pdm_dialog, &PdmDialog::requestSaveFile, this,
-			[this](const QString &file_path) {
-				if (ProjectView *pv = viewForFile(file_path))
-					pv->save();
-			});
-		// 入庫/取消出庫後強制關閉該檔(不提示存檔:磁碟上已 commit 的
-		// 版本才是正本),避免編輯器留著舊內容、下次出庫開到舊版。
-		connect(m_pdm_dialog, &PdmDialog::requestCloseFile, this,
-			[this](const QString &file_path) {
-				ProjectView *pv = viewForFile(file_path);
-				if (!pv) return;
-				if (QETProject *proj = pv->project()) {
-					proj->undoStack()->setClean();
-					proj->setModified(false);
-				}
-				closeProject(pv);
-			});
-		applyInterfaceFonts();
-	}
+	ensurePdmDialog();
 	m_pdm_dialog->show();
 	m_pdm_dialog->raise();
 	m_pdm_dialog->activateWindow();

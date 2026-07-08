@@ -92,6 +92,8 @@ class QETDiagramEditor : public QETMainWindow
 		void setUpUndoStack     ();
 		void setUpSelectionPropertiesEditor();
 		void setUpAutonumberingWidget();
+		void ensurePdmDialog    ();
+		void setUpPdmBackgroundConnect();
 		void showPdmDialog      ();
 		void setUpActions       ();
 		void setUpToolBar       ();

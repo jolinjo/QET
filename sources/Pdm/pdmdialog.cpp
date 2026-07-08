@@ -272,9 +272,18 @@ void PdmDialog::setUpWidget()
 	updateButtons();
 }
 
+void PdmDialog::startBackgroundConnect()
+{
+	// 只在尚未連過時背景連一次(showEvent 首次顯示的連線由此取代)
+	if (m_auto_refreshed) return;
+	m_auto_refreshed = true;
+	refresh();
+}
+
 void PdmDialog::refresh()
 {
 	if (PdmSettings::token().isEmpty()) {
+		emit connectionReady(false);
 		m_account_label->setText(
 			tr("尚未設定:請至偏好設定→圖檔管理填入伺服器與 token"));
 		m_repo_combo->clear();
@@ -287,6 +296,7 @@ void PdmDialog::refresh()
 	m_account_label->setText(tr("連線中…"));
 	m_service->verifyConnection([this](bool ok, const QString &login_or_error) {
 		if (!ok) {
+			emit connectionReady(false);
 			m_account_label->setText(tr("連線失敗:%1").arg(login_or_error));
 			return;
 		}
@@ -683,12 +693,20 @@ bool PdmDialog::stampDocFields(const QString &abs_path, const QString &status,
 	return true;
 }
 
-QString PdmDialog::nextRevision(const QString &current)
+QString PdmDialog::nextMinor(const QString &current)
 {
-	// 數字制:既有數字 +1;空或舊字母(A/B…)一律從 1 起算
-	bool is_num = false;
-	const int n = current.trimmed().toInt(&is_num);
-	return is_num ? QString::number(n + 1) : QStringLiteral("1");
+	// 「主.次」→ 次版 +1;純整數 N(已發行版)→ N.1;空/舊字母 → 0.1
+	const QStringList parts = current.trimmed().split(QLatin1Char('.'));
+	if (parts.size() >= 2) {
+		bool maj_ok = false, min_ok = false;
+		const int maj = parts.at(0).toInt(&maj_ok);
+		const int min = parts.at(1).toInt(&min_ok);
+		if (maj_ok && min_ok)
+			return QStringLiteral("%1.%2").arg(maj).arg(min + 1);
+	}
+	bool int_ok = false;
+	const int n = current.trimmed().toInt(&int_ok);
+	return int_ok ? QStringLiteral("%1.1").arg(n) : QStringLiteral("0.1");
 }
 
 void PdmDialog::rebuildTree()
@@ -697,6 +715,7 @@ void PdmDialog::rebuildTree()
 	populateFileList();
 	m_status_label->setText(tr("共 %1 個圖檔").arg(m_files.size()));
 	updateButtons();
+	emit connectionReady(true);   // 已連上並取回資料
 }
 
 void PdmDialog::rebuildFolderTree()
@@ -846,12 +865,14 @@ void PdmDialog::checkOut()
 					return;
 				}
 				setFileWritable(abs_path, true);
-				// 出庫=開始編輯:標記「編輯中」、清空版本,並清掉上一輪的
-				// 確認者/核准者(新修訂週期舊簽核作廢)。隨入庫 commit;
-				// 取消出庫會還原。
+				// 出庫=開始編輯:產生新小版號寫入圖框(入庫沿用、
+				// 取消出庫會還原),標記「編輯中」,並清掉上一輪的
+				// 確認者/核准者(新版次舊簽核作廢)。
+				FileState fs;
+				readDocFields(abs_path, &fs);
 				stampDocFields(abs_path,
 					QString::fromUtf8(DOC_STATUS_EDITING),
-					QString(), true,
+					nextMinor(fs.revision), true,
 					{{QStringLiteral("checked-by"), QString()},
 					 {QStringLiteral("approved-by"), QString()}});
 				emit requestOpenFile(abs_path);
@@ -907,23 +928,7 @@ void PdmDialog::checkIn()
 	emit requestSaveFile(worktree + '/' + rel_path);
 
 	showBusy(true);
-	// 入庫給版本:讀 work 分支 HEAD 的舊修訂索引→進位(數字)→寫回檔案。
-	// 出庫時已清空版本,故基準取自 HEAD(main 首次為舊字母→歸 1)。
-	m_git->enqueue({"show", QStringLiteral("HEAD:") + rel_path}, worktree,
-		[this, rel_path, worktree](const PdmGitWorker::Result &show_result) {
-			QString base;
-			QDomDocument doc;
-			if (doc.setContent(show_result.output)) {
-				base = doc.documentElement()
-					.firstChildElement(QStringLiteral("diagram"))
-					.attribute(QStringLiteral("indexrev"));
-			}
-			const QString abs_path = worktree + '/' + rel_path;
-			setFileWritable(abs_path, true);
-			// 只設版本、保留「編輯中」狀態
-			stampDocFields(abs_path, QString(),
-				       nextRevision(base), true);
-		});
+	// 版本已在出庫時寫入圖框、入庫直接沿用,不再進版。存檔後直接提交。
 	m_git->enqueue({"add", "--", rel_path}, worktree, {});
 	m_git->enqueue({"commit", "-m", message.trimmed()}, worktree,
 		[this, rel_path, branch, worktree, vault]
