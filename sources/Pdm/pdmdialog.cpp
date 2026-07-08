@@ -2252,37 +2252,32 @@ void PdmDialog::checkOutByPath(const QString &abs_path)
 
 void PdmDialog::browseLatestByPath(const QString &abs_path)
 {
-	// 一律抓伺服器最新版(origin/main),不打開本機舊快取/暫存。
+	// 一律抓伺服器最新版(origin/main),不打開本機舊快取。用 detached worktree
+	// 開啟(而非 git show 到 /tmp 的孤立單檔)——後者缺少圖庫上下文(元件庫、
+	// 圖框範本),QET 開檔時會跳整合/找不到資源的對話框。worktree 與審核/發行版
+	// 檢視一致,含完整倉庫內容,開檔乾淨無提示。
 	const QString rel = drawingRelPath(abs_path);
 	if (rel.isEmpty()) {
 		show(); raise(); activateWindow(); refresh();
 		return;
 	}
 	const QString vault = vaultDir();
-	showBusy(true);   // 進度由專用對話框顯示(fetch→git show)
+	const QString view_dir = PdmSettings::workRoot() + '/' + currentRepoFullName()
+		+ QStringLiteral("/latest-view");
+	showBusy(true);
 	m_git->enqueue({"fetch", "origin", "--prune"}, vault, {});
-	const QString ref = QStringLiteral("origin/") + QLatin1String(DEFAULT_BRANCH)
-		+ QLatin1Char(':') + rel;
-	m_git->enqueue({"show", ref}, vault,
-		[this, rel](const PdmGitWorker::Result &r) {
-		showBusy(false);
+	// 每次重建 detached worktree 到最新 origin/main(移除舊的以免唯讀檔擋 checkout)
+	if (QDir(view_dir).exists())
+		m_git->enqueue({"worktree", "remove", "--force", view_dir}, vault, {});
+	m_git->enqueue({"worktree", "add", "--detach", view_dir,
+		QStringLiteral("origin/") + QLatin1String(DEFAULT_BRANCH)}, vault,
+		[this, rel, view_dir](const PdmGitWorker::Result &r) {
 		if (!r.ok) {
-			fail(tr("無法瀏覽最新版"),
-			     tr("此圖可能尚未發行到 %1。\n%2")
-				.arg(QLatin1String(DEFAULT_BRANCH), r.output));
+			fail(tr("無法瀏覽最新版(此圖可能尚未發行到 main)"), r.output);
 			return;
 		}
-		const QString tmp = QDir::tempPath() + QStringLiteral("/pdm-latest-")
-			+ QFileInfo(rel).fileName();
-		QFile f(tmp);
-		if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-			fail(tr("無法建立暫存檔"), tmp);
-			return;
-		}
-		f.write(r.output.toUtf8());
-		f.close();
-		setFileWritable(tmp, false);
-		emit requestOpenFile(tmp);
+		setFileWritable(view_dir + '/' + rel, false);
+		emit requestOpenFile(view_dir + '/' + rel);
 	});
 }
 
