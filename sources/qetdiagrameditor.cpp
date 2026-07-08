@@ -3050,6 +3050,35 @@ void QETDiagramEditor::subWindowActivated(QMdiSubWindow *subWindows)
 	slot_updateWindowsMenu();
 	emit syncElementsPanel();
 	updateWelcomeWidget();
+
+	// 唯讀專案(檢視發行版/審核檢視)自動進瀏覽模式、隱藏編輯 UI
+	bool read_only = false;
+	if (ProjectView *pv = currentProjectView())
+		if (QETProject *proj = pv->project())
+			read_only = proj->isReadOnly();
+	applyReadOnlyView(read_only);
+}
+
+/**
+	@brief QETDiagramEditor::applyReadOnlyView
+	唯讀檢視時切瀏覽模式並隱藏會動到版面的 UI(元件庫面板、繪圖/深度/圖框
+	工具列);可編輯時還原顯示。供 subWindowActivated 依專案唯讀狀態呼叫。
+*/
+void QETDiagramEditor::applyReadOnlyView(bool read_only)
+{
+	if (read_only) {
+		// 全部 folio 切為瀏覽(唯讀)模式,禁止切回選取/編輯模式
+		if (ProjectView *pv = currentProjectView())
+			for (DiagramView *dv : pv->diagram_views())
+				dv->setVisualisationMode();
+		if (m_mode_visualise) m_mode_visualise->setChecked(true);
+	}
+	if (m_mode_selection) m_mode_selection->setEnabled(!read_only);
+
+	if (qdw_pa) qdw_pa->setVisible(!read_only);
+	if (m_add_item_tool_bar) m_add_item_tool_bar->setVisible(!read_only);
+	if (m_depth_tool_bar) m_depth_tool_bar->setVisible(!read_only);
+	if (diagram_tool_bar) diagram_tool_bar->setVisible(!read_only);
 }
 
 /**

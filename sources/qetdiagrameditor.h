@@ -162,6 +162,7 @@ class QETDiagramEditor : public QETMainWindow
 		void showError(const QETResult &);
 		void showError(const QString &);
 		void subWindowActivated(QMdiSubWindow *subWindows);
+		void applyReadOnlyView(bool read_only);
 
 	private slots:
 		void selectionChanged();
