@@ -59,6 +59,10 @@ namespace
 	const char *DOC_STATUS_RELEASED  = "正式發行 Released";
 	const char *STATUS_FIELD_NAME    = "doc-status";
 
+	// 角色 team(Gitea 組織團隊):確認者 / 核准者。
+	const char *TEAM_CONFIRMERS = "pdm-confirmers";
+	const char *TEAM_RELEASERS  = "pdm-releasers";
+
 	QString sanitizedStem(const QString &rel_path)
 	{
 		// 圖號即檔名;分支/tag 名不能有空白
@@ -104,7 +108,7 @@ PdmDialog::PdmDialog(QWidget *parent) :
 {
 	setObjectName("pdm_dialog");
 	setWindowTitle(tr("圖檔管理"));
-	resize(560, 520);
+	resize(1080, 560);
 	setUpWidget();
 
 	connect(m_git, &PdmGitWorker::stepStarted, this,
@@ -142,7 +146,7 @@ void PdmDialog::setUpWidget()
 	m_repo_combo = new QComboBox(content);
 	layout->addWidget(m_repo_combo);
 
-	// 左:資料夾樹(目前單層,結構可容多層) 右:所選資料夾的圖檔清單
+	// 三欄:資料夾樹 | 圖檔清單 | 所選圖檔的發行歷史
 	auto *splitter = new QSplitter(Qt::Horizontal, content);
 
 	m_folder_tree = new QTreeWidget(splitter);
@@ -150,15 +154,23 @@ void PdmDialog::setUpWidget()
 	m_folder_tree->setSelectionMode(QAbstractItemView::SingleSelection);
 
 	m_tree = new QTreeWidget(splitter);
-	m_tree->setHeaderLabels({tr("圖檔"), tr("狀態"), tr("鎖定者"), tr("版本")});
+	m_tree->setHeaderLabels({tr("圖檔"), tr("狀態"), tr("繪製者"),
+				 tr("確認者"), tr("核准者"), tr("版本")});
 	m_tree->setRootIsDecorated(false);
 	m_tree->setSelectionMode(QAbstractItemView::SingleSelection);
 	m_tree->setAllColumnsShowFocus(true);
 
+	m_history_tree = new QTreeWidget(splitter);
+	m_history_tree->setHeaderLabels({tr("發行版"), tr("發行日期")});
+	m_history_tree->setRootIsDecorated(false);
+	m_history_tree->setSelectionMode(QAbstractItemView::SingleSelection);
+
 	splitter->addWidget(m_folder_tree);
 	splitter->addWidget(m_tree);
+	splitter->addWidget(m_history_tree);
 	splitter->setStretchFactor(0, 1);
-	splitter->setStretchFactor(1, 3);
+	splitter->setStretchFactor(1, 4);
+	splitter->setStretchFactor(2, 2);
 	layout->addWidget(splitter, 1);
 
 	// 三排動作鈕:依選取圖檔的狀態顯示/隱藏
@@ -176,7 +188,7 @@ void PdmDialog::setUpWidget()
 	auto *review_row = new QHBoxLayout();
 	m_submit_button = new QPushButton(tr("送審…"), content);
 	m_review_button = new QPushButton(tr("審核檢視(唯讀)"), content);
-	m_approve_button = new QPushButton(tr("核准"), content);
+	m_approve_button = new QPushButton(tr("確認完畢…"), content);
 	m_reject_button = new QPushButton(tr("退回…"), content);
 	review_row->addWidget(m_submit_button);
 	review_row->addWidget(m_review_button);
@@ -184,13 +196,12 @@ void PdmDialog::setUpWidget()
 	review_row->addWidget(m_reject_button);
 	layout->addLayout(review_row);
 
+	// 發行歷史改為右側面板自動顯示(選檔即載入),不再需要按鈕
 	auto *release_row = new QHBoxLayout();
-	m_release_button = new QPushButton(tr("發行…"), content);
+	m_release_button = new QPushButton(tr("核准發行…"), content);
 	m_force_unlock_button = new QPushButton(tr("強制解鎖…"), content);
-	m_history_button = new QPushButton(tr("發行歷史…"), content);
 	release_row->addWidget(m_release_button);
 	release_row->addWidget(m_force_unlock_button);
-	release_row->addWidget(m_history_button);
 	layout->addLayout(release_row);
 
 	// 進度顯示沿用元件庫「更新公司庫」模式:按鈕下方內嵌,不跳對話框
@@ -214,8 +225,22 @@ void PdmDialog::setUpWidget()
 			QSettings().setValue(LAST_REPO_KEY, currentRepoFullName());
 			syncRepository();
 		});
-	connect(m_tree, &QTreeWidget::itemSelectionChanged,
-		this, &PdmDialog::updateButtons);
+	connect(m_tree, &QTreeWidget::itemSelectionChanged, this, [this]() {
+		updateButtons();
+		// 選檔即在右側面板載入該檔發行歷史
+		const QTreeWidgetItem *item = selectedFileItem();
+		m_history_tree->clear();
+		if (item)
+			loadReleaseHistory(item->data(0, Qt::UserRole).toString());
+	});
+	// 雙擊發行歷史某版本→唯讀開啟
+	connect(m_history_tree, &QTreeWidget::itemDoubleClicked, this,
+		[this](QTreeWidgetItem *hist_item) {
+			const QTreeWidgetItem *file_item = selectedFileItem();
+			if (!file_item || !hist_item) return;
+			openReleaseRevision(hist_item->text(0),
+				file_item->data(0, Qt::UserRole).toString());
+		});
 	connect(m_folder_tree, &QTreeWidget::itemSelectionChanged, this,
 		[this]() {
 			QTreeWidgetItem *item = m_folder_tree->currentItem();
@@ -236,15 +261,13 @@ void PdmDialog::setUpWidget()
 	connect(m_review_button, &QPushButton::clicked,
 		this, &PdmDialog::openReviewView);
 	connect(m_approve_button, &QPushButton::clicked,
-		this, &PdmDialog::approve);
+		this, &PdmDialog::confirmDone);
 	connect(m_reject_button, &QPushButton::clicked,
 		this, &PdmDialog::rejectReview);
 	connect(m_release_button, &QPushButton::clicked,
-		this, &PdmDialog::releaseApproved);
+		this, &PdmDialog::approveAndRelease);
 	connect(m_force_unlock_button, &QPushButton::clicked,
 		this, &PdmDialog::forceUnlock);
-	connect(m_history_button, &QPushButton::clicked,
-		this, &PdmDialog::showReleaseHistory);
 
 	updateButtons();
 }
@@ -270,8 +293,88 @@ void PdmDialog::refresh()
 		m_username = login_or_error;
 		PdmSettings::setUsername(m_username);
 		m_account_label->setText(tr("帳號:%1").arg(m_username));
+		loadUserRoles();
 		connectionRefreshed();
 	});
+}
+
+void PdmDialog::loadUserRoles()
+{
+	m_is_confirmer = false;
+	m_is_releaser = false;
+	// 本 repo 所屬組織(owner)底下的 team 才算數
+	const QString org = currentRepoFullName().section('/', 0, 0);
+	m_service->get(QStringLiteral("/user/teams?limit=50"),
+		[this, org](const PdmService::Reply &reply) {
+			if (!reply.ok) { updateButtons(); return; }
+			const QJsonArray teams = reply.json.array();
+			for (const QJsonValue &value : teams) {
+				const QJsonObject team = value.toObject();
+				const QString team_org = team.value(
+					QStringLiteral("organization")).toObject()
+					.value(QStringLiteral("username")).toString();
+				if (team_org != org) continue;
+				const QString name = team.value(
+					QStringLiteral("name")).toString();
+				if (name == QLatin1String(TEAM_CONFIRMERS))
+					m_is_confirmer = true;
+				else if (name == QLatin1String(TEAM_RELEASERS))
+					m_is_releaser = true;
+			}
+			updateButtons();
+		});
+}
+
+void PdmDialog::signoffOnWorkBranch(const QString &rel_path,
+	const QString &status, const QMap<QString, QString> &extra_fields,
+	const QString &commit_message,
+	const std::function<void ()> &after_push)
+{
+	const QString stem = sanitizedStem(rel_path);
+	const QString branch = workBranchOf(rel_path);
+	const QString worktree = worktreeDir(stem);
+	const QString vault = vaultDir();
+	const QString abs_path = worktree + '/' + rel_path;
+
+	// 戳記→add→commit→push→after_push(工作區已在 origin/branch 最新狀態)
+	auto stamp_and_push = [this, rel_path, branch, worktree, abs_path,
+			       status, extra_fields, commit_message, after_push]
+		(const PdmGitWorker::Result &prep) {
+		if (!prep.ok) {
+			fail(tr("準備簽核工作區失敗"), prep.output);
+			return;
+		}
+		setFileWritable(abs_path, true);
+		if (!stampDocFields(abs_path, status, QString(), false,
+				    extra_fields)) {
+			fail(tr("寫入圖框欄位失敗"), abs_path);
+			return;
+		}
+		m_git->enqueue({"add", "--", rel_path}, worktree, {});
+		m_git->enqueue({"commit", "-m", commit_message}, worktree, {});
+		m_git->enqueue({"push", "origin", branch}, worktree,
+			[this, after_push](const PdmGitWorker::Result &push_result) {
+				if (!push_result.ok) {
+					fail(tr("推送簽核 commit 失敗"),
+					     push_result.output);
+					return;
+				}
+				after_push();
+			});
+	};
+
+	showBusy(true);
+	m_git->enqueue({"fetch", "origin", "--prune"}, vault, {});
+	if (QDir(worktree).exists()) {
+		m_git->enqueue({"checkout", branch}, worktree, {});
+		m_git->enqueue({"reset", "--hard",
+			QStringLiteral("origin/") + branch}, worktree,
+			stamp_and_push);
+	} else {
+		m_git->enqueue({"worktree", "add", "--track", "-b", branch,
+			worktree, QStringLiteral("origin/") + branch},
+			vault, stamp_and_push);
+	}
 }
 
 void PdmDialog::connectionRefreshed()
@@ -355,9 +458,8 @@ void PdmDialog::loadFileStates()
 			for (const QString &line : lines) {
 				FileState state;
 				state.rel_path = line.trimmed();
-				// 版本/文件狀態讀自 vault 內的 .qet 首頁圖框
-				readDocFields(vault + '/' + state.rel_path,
-					      &state.revision, &state.doc_status);
+				// 版本/狀態/繪製者/審核者/核准者讀自 vault 的 .qet 首頁圖框
+				readDocFields(vault + '/' + state.rel_path, &state);
 				m_files.insert(state.rel_path, state);
 			}
 		});
@@ -474,11 +576,9 @@ void PdmDialog::loadPullRequests()
 		});
 }
 
-void PdmDialog::readDocFields(const QString &abs_path,
-			     QString *revision, QString *status) const
+void PdmDialog::readDocFields(const QString &abs_path, FileState *state) const
 {
-	if (revision) revision->clear();
-	if (status) status->clear();
+	if (!state) return;
 
 	QFile file(abs_path);
 	if (!file.open(QIODevice::ReadOnly)) return;
@@ -490,31 +590,72 @@ void PdmDialog::readDocFields(const QString &abs_path,
 	const QDomElement diagram =
 		doc.documentElement().firstChildElement(QStringLiteral("diagram"));
 	if (diagram.isNull()) return;
-	if (revision) *revision = diagram.attribute(QStringLiteral("indexrev"));
-	if (status) {
-		const QDomElement properties = diagram.firstChildElement(
-			QStringLiteral("properties"));
-		for (QDomElement p = properties.firstChildElement(
-			QStringLiteral("property"));
-		     !p.isNull();
-		     p = p.nextSiblingElement(QStringLiteral("property"))) {
-			if (p.attribute(QStringLiteral("name"))
-			    == QLatin1String(STATUS_FIELD_NAME)) {
-				*status = p.text();
-				break;
-			}
-		}
+
+	state->revision = diagram.attribute(QStringLiteral("indexrev"));
+	state->drawn_by = diagram.attribute(QStringLiteral("author"));
+
+	// 附加欄位:文件狀態、審核者、核准者
+	const QDomElement properties = diagram.firstChildElement(
+		QStringLiteral("properties"));
+	for (QDomElement p = properties.firstChildElement(
+		QStringLiteral("property"));
+	     !p.isNull();
+	     p = p.nextSiblingElement(QStringLiteral("property"))) {
+		const QString name = p.attribute(QStringLiteral("name"));
+		if (name == QLatin1String(STATUS_FIELD_NAME))
+			state->doc_status = p.text();
+		else if (name == QLatin1String("checked-by"))
+			state->checked_by = p.text();
+		else if (name == QLatin1String("approved-by"))
+			state->approved_by = p.text();
 	}
 }
 
 bool PdmDialog::stampDocFields(const QString &abs_path, const QString &status,
-			      const QString &revision, bool set_revision) const
+			      const QString &revision, bool set_revision,
+			      const QMap<QString, QString> &extra_fields) const
 {
 	QFile file(abs_path);
 	if (!file.open(QIODevice::ReadOnly)) return false;
 	QDomDocument doc;
 	if (!doc.setContent(&file)) { file.close(); return false; }
 	file.close();
+
+	// 要寫入的附加欄位:文件狀態(若有)＋額外欄位
+	QMap<QString, QString> props = extra_fields;
+	if (!status.isEmpty())
+		props.insert(QLatin1String(STATUS_FIELD_NAME), status);
+
+	// 在單一 <diagram> 內找/建名為 name 的 <property> 並設定文字
+	auto setProperty = [&doc](QDomElement &diagram, const QString &name,
+				  const QString &value) {
+		QDomElement properties = diagram.firstChildElement(
+			QStringLiteral("properties"));
+		if (properties.isNull()) {
+			properties = doc.createElement(
+				QStringLiteral("properties"));
+			diagram.appendChild(properties);
+		}
+		QDomElement target;
+		for (QDomElement p = properties.firstChildElement(
+			QStringLiteral("property"));
+		     !p.isNull();
+		     p = p.nextSiblingElement(QStringLiteral("property"))) {
+			if (p.attribute(QStringLiteral("name")) == name) {
+				target = p;
+				break;
+			}
+		}
+		if (target.isNull()) {
+			target = doc.createElement(QStringLiteral("property"));
+			target.setAttribute(QStringLiteral("name"), name);
+			target.setAttribute(QStringLiteral("show"), "1");
+			properties.appendChild(target);
+		}
+		while (target.hasChildNodes())
+			target.removeChild(target.firstChild());
+		target.appendChild(doc.createTextNode(value));
+	};
 
 	QDomElement root = doc.documentElement();
 	bool changed = false;
@@ -527,36 +668,8 @@ bool PdmDialog::stampDocFields(const QString &abs_path, const QString &status,
 			diagram.setAttribute(QStringLiteral("indexrev"), revision);
 			changed = true;
 		}
-		if (!status.isEmpty()) {
-			QDomElement properties = diagram.firstChildElement(
-				QStringLiteral("properties"));
-			if (properties.isNull()) {
-				properties = doc.createElement(
-					QStringLiteral("properties"));
-				diagram.appendChild(properties);
-			}
-			QDomElement target;
-			for (QDomElement p = properties.firstChildElement(
-				QStringLiteral("property"));
-			     !p.isNull();
-			     p = p.nextSiblingElement(QStringLiteral("property"))) {
-				if (p.attribute(QStringLiteral("name"))
-				    == QLatin1String(STATUS_FIELD_NAME)) {
-					target = p;
-					break;
-				}
-			}
-			if (target.isNull()) {
-				target = doc.createElement(
-					QStringLiteral("property"));
-				target.setAttribute(QStringLiteral("name"),
-						    QLatin1String(STATUS_FIELD_NAME));
-				target.setAttribute(QStringLiteral("show"), "1");
-				properties.appendChild(target);
-			}
-			while (target.hasChildNodes())
-				target.removeChild(target.firstChild());
-			target.appendChild(doc.createTextNode(status));
+		for (auto it = props.constBegin(); it != props.constEnd(); ++it) {
+			setProperty(diagram, it.key(), it.value());
 			changed = true;
 		}
 	}
@@ -654,7 +767,9 @@ void PdmDialog::populateFileList()
 		auto *item = new QTreeWidgetItem(m_tree,
 			{QFileInfo(path).fileName(),
 			 status,
-			 state.lock_owner,
+			 state.drawn_by,
+			 state.checked_by,
+			 state.approved_by,
 			 state.revision});
 		item->setData(0, Qt::UserRole, path);
 		if (path == selected) m_tree->setCurrentItem(item);
@@ -683,16 +798,18 @@ void PdmDialog::updateButtons()
 	// 送審:已入庫(work 分支存在)、未鎖定、尚無 PR
 	m_submit_button->setEnabled(has_selection && state.has_work_branch
 				    && state.lock_owner.isEmpty() && !in_review);
-	// 審核動作:有 PR 即可檢視;核准/退回限非作者(伺服器也會擋)
+	// 審核檢視:有 PR 即可(唯讀)
 	m_review_button->setEnabled(in_review);
-	m_approve_button->setEnabled(in_review && state.pr_author != m_username);
-	m_reject_button->setEnabled(in_review && state.pr_author != m_username);
-
-	// 發行:PR 已有有效核准(是否有權限由伺服器判定)
-	m_release_button->setEnabled(in_review && state.pr_approved);
+	// 確認完畢:限確認者(pdm-confirmers)、非製圖者本人
+	const bool not_author = state.pr_author != m_username;
+	m_approve_button->setEnabled(in_review && not_author && m_is_confirmer);
+	// 退回:確認者或核准者、非製圖者本人
+	m_reject_button->setEnabled(in_review && not_author
+				    && (m_is_confirmer || m_is_releaser));
+	// 核准發行:限核准者(pdm-releasers);合併權另由 main 分支保護把關
+	m_release_button->setEnabled(in_review && not_author && m_is_releaser);
 	m_force_unlock_button->setVisible(locked_by_other);
 	m_force_unlock_button->setEnabled(locked_by_other);
-	m_history_button->setEnabled(has_selection);
 }
 
 void PdmDialog::checkOut()
@@ -723,11 +840,14 @@ void PdmDialog::checkOut()
 					return;
 				}
 				setFileWritable(abs_path, true);
-				// 出庫=開始編輯:標記「編輯中」並清空版本(編輯中不顯示
-				// 版本,入庫時才給號)。隨入庫 commit;取消出庫會還原。
+				// 出庫=開始編輯:標記「編輯中」、清空版本,並清掉上一輪的
+				// 確認者/核准者(新修訂週期舊簽核作廢)。隨入庫 commit;
+				// 取消出庫會還原。
 				stampDocFields(abs_path,
 					QLatin1String(DOC_STATUS_EDITING),
-					QString(), true);
+					QString(), true,
+					{{QStringLiteral("checked-by"), QString()},
+					 {QStringLiteral("approved-by"), QString()}});
 				emit requestOpenFile(abs_path);
 				refresh();
 			};
@@ -997,7 +1117,7 @@ void PdmDialog::viewReleased()
 		});
 }
 
-void PdmDialog::approve()
+void PdmDialog::confirmDone()
 {
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
@@ -1005,40 +1125,25 @@ void PdmDialog::approve()
 	const FileState state = m_files.value(rel_path);
 	if (state.pr_index <= 0) return;
 
-	const auto answer = QMessageBox::question(this, tr("核准"),
-		tr("確認核准「%1」(#%2)?\n請先以「審核檢視」檢視過圖面。")
-			.arg(rel_path).arg(state.pr_index));
-	if (answer != QMessageBox::Yes) return;
+	bool accepted = false;
+	const QString note = QInputDialog::getMultiLineText(this,
+		tr("確認完畢"), tr("簽核訊息(必填,會寫入 commit):"),
+		QString(), &accepted);
+	if (!accepted) return;
+	if (note.trimmed().isEmpty()) {
+		QMessageBox::warning(this, tr("確認完畢"), tr("簽核訊息不可空白。"));
+		return;
+	}
 
-	showBusy(true);
-	// 核准前先確認 PR head 沒有在審核期間被更新過
-	m_service->get(QStringLiteral("/repos/%1/pulls/%2")
-		.arg(currentRepoFullName()).arg(state.pr_index),
-		[this, rel_path, state](const PdmService::Reply &reply) {
-			const QString current_sha = reply.json.object()
-				.value(QStringLiteral("head")).toObject()
-				.value(QStringLiteral("sha")).toString();
-			if (!reply.ok || current_sha != state.pr_head_sha) {
-				showBusy(false);
-				QMessageBox::warning(this, tr("核准"),
-					tr("送審內容已被更新,清單已重新整理,"
-					   "請重新開啟審核檢視後再核准。"));
-				refresh();
-				return;
-			}
-			m_service->submitReview(currentRepoFullName(),
-				state.pr_index, QStringLiteral("APPROVED"),
-				tr("圖面確認無誤(QET 審核模式)"),
-				[this, rel_path](const PdmService::Reply &r) {
-					showBusy(false);
-					if (!r.ok) {
-						fail(tr("核准失敗"), r.error);
-						return;
-					}
-					m_status_label->setText(
-						tr("「%1」已核准").arg(rel_path));
-					refresh();
-				});
+	// 寫確認者 + commit(帶簽核訊息)到 work 分支,不核准、不合併
+	signoffOnWorkBranch(rel_path, QString(),
+		{{QStringLiteral("checked-by"), m_username}},
+		tr("確認者 %1 已確認完畢：%2").arg(m_username, note.trimmed()),
+		[this, rel_path]() {
+			showBusy(false);
+			m_status_label->setText(
+				tr("「%1」已確認完畢").arg(rel_path));
+			refresh();
 		});
 }
 
@@ -1049,94 +1154,120 @@ void PdmDialog::rejectReview()
 	const QString rel_path = item->data(0, Qt::UserRole).toString();
 	const FileState state = m_files.value(rel_path);
 	if (state.pr_index <= 0) return;
+	const int pr_index = state.pr_index;
 
 	bool accepted = false;
 	const QString reason = QInputDialog::getMultiLineText(this,
-		tr("退回"), tr("退回意見(必填,製圖者會看到):"),
+		tr("退回"), tr("退回意見(必填,會寫入 commit,製圖者會看到):"),
 		QString(), &accepted);
 	if (!accepted) return;
 	if (reason.trimmed().isEmpty()) {
 		QMessageBox::warning(this, tr("退回"), tr("退回意見不可空白。"));
 		return;
 	}
+	const QString trimmed = reason.trimmed();
 
-	showBusy(true);
-	m_service->submitReview(currentRepoFullName(), state.pr_index,
-		QStringLiteral("REQUEST_CHANGES"), reason.trimmed(),
-		[this, rel_path](const PdmService::Reply &reply) {
-			showBusy(false);
-			if (!reply.ok) {
-				fail(tr("退回失敗"), reply.error);
-				return;
-			}
-			m_status_label->setText(tr("「%1」已退回").arg(rel_path));
-			refresh();
+	// 寫「退回修改」狀態 + commit(帶退回意見)到 work 分支,再送 REQUEST_CHANGES
+	signoffOnWorkBranch(rel_path, QLatin1String(DOC_STATUS_REJECTED),
+		QMap<QString, QString>(),
+		tr("退回 by %1：%2").arg(m_username, trimmed),
+		[this, rel_path, pr_index, trimmed]() {
+			m_service->submitReview(currentRepoFullName(), pr_index,
+				QStringLiteral("REQUEST_CHANGES"), trimmed,
+				[this, rel_path](const PdmService::Reply &reply) {
+					showBusy(false);
+					if (!reply.ok) {
+						fail(tr("退回失敗"), reply.error);
+						return;
+					}
+					m_status_label->setText(
+						tr("「%1」已退回").arg(rel_path));
+					refresh();
+				});
 		});
 }
 
-void PdmDialog::releaseApproved()
+void PdmDialog::approveAndRelease()
 {
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
 	const QString rel_path = item->data(0, Qt::UserRole).toString();
 	const FileState state = m_files.value(rel_path);
-	if (state.pr_index <= 0 || !state.pr_approved) return;
+	if (state.pr_index <= 0) return;
+	const int pr_index = state.pr_index;
 	const QString stem = sanitizedStem(rel_path);
 	const QString vault = vaultDir();
 
-	showBusy(true);
-	// 1. 由既有 tag 推下一版次
-	m_git->enqueue({"ls-remote", "--tags", "origin",
-		QStringLiteral("refs/tags/release/%1-v*").arg(stem)}, vault,
-		[this, rel_path, state, stem, vault]
-		(const PdmGitWorker::Result &tags_result) {
-			int next_version = 1;
-			const QRegularExpression pattern(
-				QStringLiteral("refs/tags/release/%1-v(\\d+)")
-					.arg(QRegularExpression::escape(stem)));
-			auto matches = pattern.globalMatch(tags_result.output);
-			while (matches.hasNext()) {
-				next_version = qMax(next_version,
-					matches.next().captured(1).toInt() + 1);
-			}
-			const QString tag = QStringLiteral("release/%1-v%2")
-				.arg(stem).arg(next_version);
+	bool accepted = false;
+	const QString note = QInputDialog::getMultiLineText(this,
+		tr("核准發行"), tr("簽核訊息(必填,會寫入 commit):"),
+		QString(), &accepted);
+	if (!accepted) return;
+	if (note.trimmed().isEmpty()) {
+		QMessageBox::warning(this, tr("核准發行"), tr("簽核訊息不可空白。"));
+		return;
+	}
+	const QString msg = note.trimmed();
 
-			const auto answer = QMessageBox::question(this, tr("發行"),
-				tr("將「%1」(#%2)合入 %3 並發行為 %4,確定?")
-					.arg(rel_path).arg(state.pr_index)
-					.arg(QLatin1String(DEFAULT_BRANCH), tag));
-			if (answer != QMessageBox::Yes) {
+	// 先在 work 分支寫核准者 + 已發行狀態 + commit,再核准最新 head 並合併發行。
+	// 順序:先 commit(改 head)、後核准 → 不觸發「廢止過時核准」。
+	signoffOnWorkBranch(rel_path, QLatin1String(DOC_STATUS_RELEASED),
+		{{QStringLiteral("approved-by"), m_username}},
+		tr("核准發行 by %1：%2").arg(m_username, msg),
+		[this, rel_path, pr_index, stem, vault, msg]() {
+		// 核准含核准者 commit 的最新 head
+		m_service->submitReview(currentRepoFullName(), pr_index,
+			QStringLiteral("APPROVED"), msg,
+			[this, rel_path, pr_index, stem, vault]
+			(const PdmService::Reply &approve_reply) {
+			if (!approve_reply.ok) {
 				showBusy(false);
+				fail(tr("核准失敗"), approve_reply.error);
 				return;
 			}
-
-			// 2. merge(核准後可合併狀態有延遲,service 內建重試)
-			m_service->mergePullRequest(currentRepoFullName(),
-				state.pr_index,
-				[this, rel_path, stem, tag, vault]
-				(const PdmService::Reply &merge_reply) {
-				if (!merge_reply.ok) {
-					fail(tr("合併失敗(需有效核准,且僅"
-						"放行者有權發行)"),
-					     merge_reply.error);
-					return;
+			// 由既有 tag 推下一發行版次
+			m_git->enqueue({"ls-remote", "--tags", "origin",
+				QStringLiteral("refs/tags/release/%1-v*").arg(stem)},
+				vault,
+				[this, rel_path, pr_index, stem, vault]
+				(const PdmGitWorker::Result &tags_result) {
+				int next_version = 1;
+				const QRegularExpression pattern(
+					QStringLiteral("refs/tags/release/%1-v(\\d+)")
+					.arg(QRegularExpression::escape(stem)));
+				auto matches = pattern.globalMatch(tags_result.output);
+				while (matches.hasNext()) {
+					next_version = qMax(next_version,
+						matches.next().captured(1).toInt() + 1);
 				}
-				// 3. 更新 vault 到合併後的 main
-				m_git->enqueue({"fetch", "origin", "--prune"},
-					vault, {});
-				m_git->enqueue({"checkout", DEFAULT_BRANCH},
-					vault, {});
-				m_git->enqueue({"pull", "--ff-only"}, vault, {});
-				m_git->enqueue({"rev-parse", "HEAD"}, vault,
+				const QString tag = QStringLiteral("release/%1-v%2")
+					.arg(stem).arg(next_version);
+				// 合併(核准後可合併狀態有延遲,service 內建重試)
+				m_service->mergePullRequest(currentRepoFullName(),
+					pr_index,
 					[this, rel_path, stem, tag, vault]
-					(const PdmGitWorker::Result &sha_result) {
-					const QString sha =
-						sha_result.output.trimmed();
-					finishRelease(rel_path, stem, tag, sha);
+					(const PdmService::Reply &merge_reply) {
+					if (!merge_reply.ok) {
+						fail(tr("合併失敗(需有效核准,且僅"
+							"核准者有權發行)"),
+						     merge_reply.error);
+						return;
+					}
+					m_git->enqueue({"fetch", "origin", "--prune"},
+						vault, {});
+					m_git->enqueue({"checkout", DEFAULT_BRANCH},
+						vault, {});
+					m_git->enqueue({"pull", "--ff-only"}, vault, {});
+					m_git->enqueue({"rev-parse", "HEAD"}, vault,
+						[this, rel_path, stem, tag]
+						(const PdmGitWorker::Result &sha_result) {
+						finishRelease(rel_path, stem, tag,
+							sha_result.output.trimmed());
+					});
 				});
 			});
 		});
+	});
 }
 
 /**
@@ -1240,67 +1371,67 @@ void PdmDialog::forceUnlock()
 		});
 }
 
-void PdmDialog::showReleaseHistory()
+void PdmDialog::loadReleaseHistory(const QString &rel_path)
 {
-	const QTreeWidgetItem *item = selectedFileItem();
-	if (!item) return;
-	const QString rel_path = item->data(0, Qt::UserRole).toString();
 	const QString stem = sanitizedStem(rel_path);
-
 	m_service->get(QStringLiteral("/repos/%1/releases?limit=50")
 		.arg(currentRepoFullName()),
 		[this, rel_path, stem](const PdmService::Reply &reply) {
-		if (!reply.ok) {
-			fail(tr("讀取發行歷史失敗"), reply.error);
+		// 回呼期間可能已改選其他檔;確認仍是同一檔才填
+		const QTreeWidgetItem *current = selectedFileItem();
+		if (!current
+		    || current->data(0, Qt::UserRole).toString() != rel_path)
 			return;
-		}
-		QStringList tags;
+		m_history_tree->clear();
+		if (!reply.ok) return;
+
 		const QJsonArray releases = reply.json.array();
 		const QString prefix = QStringLiteral("release/%1-v").arg(stem);
 		for (const QJsonValue &value : releases) {
-			const QString tag = value.toObject()
-				.value(QStringLiteral("tag_name")).toString();
-			if (tag.startsWith(prefix)) tags << tag;
+			const QJsonObject rel = value.toObject();
+			const QString tag = rel.value(
+				QStringLiteral("tag_name")).toString();
+			if (!tag.startsWith(prefix)) continue;
+			// created_at 例:2026-08-01T...,只取日期
+			const QString date = rel.value(
+				QStringLiteral("created_at")).toString().left(10);
+			new QTreeWidgetItem(m_history_tree, {tag, date});
 		}
-		if (tags.isEmpty()) {
-			QMessageBox::information(this, tr("發行歷史"),
-				tr("「%1」尚無發行版。").arg(rel_path));
+		if (m_history_tree->topLevelItemCount() == 0)
+			new QTreeWidgetItem(m_history_tree,
+				{tr("(尚無發行版)"), QString()});
+	});
+}
+
+void PdmDialog::openReleaseRevision(const QString &tag, const QString &rel_path)
+{
+	if (!tag.startsWith(QStringLiteral("release/"))) return;   // 略過佔位列
+
+	// 發行版以 detached worktree 唯讀開啟(lockable 保唯讀)
+	const QString vault = vaultDir();
+	QString dir_name = tag;
+	dir_name.replace('/', '_');
+	const QString view_dir = PdmSettings::workRoot() + '/'
+		+ currentRepoFullName()
+		+ QStringLiteral("/releases-view/") + dir_name;
+	showBusy(true);
+	m_git->enqueue({"fetch", "origin", "--tags"}, vault, {});
+	auto open_view = [this, rel_path, view_dir]
+		(const PdmGitWorker::Result &result) {
+		if (!result.ok) {
+			fail(tr("開啟發行版失敗"), result.output);
 			return;
 		}
-		bool accepted = false;
-		const QString chosen = QInputDialog::getItem(this,
-			tr("發行歷史"),
-			tr("「%1」的發行版(選擇後以唯讀開啟):").arg(rel_path),
-			tags, 0, false, &accepted);
-		if (!accepted || chosen.isEmpty()) return;
-
-		// 發行版以 detached worktree 唯讀開啟(lockable 保唯讀)
-		const QString vault = vaultDir();
-		QString dir_name = chosen;
-		dir_name.replace('/', '_');
-		const QString view_dir = PdmSettings::workRoot() + '/'
-			+ currentRepoFullName()
-			+ QStringLiteral("/releases-view/") + dir_name;
-		showBusy(true);
-		m_git->enqueue({"fetch", "origin", "--tags"}, vault, {});
-		auto open_view = [this, rel_path, view_dir]
-			(const PdmGitWorker::Result &result) {
-			if (!result.ok) {
-				fail(tr("開啟發行版失敗"), result.output);
-				return;
-			}
-			// 發行版檢視強制唯讀
-			setFileWritable(view_dir + '/' + rel_path, false);
-			emit requestOpenFile(view_dir + '/' + rel_path);
-			showBusy(false);
-		};
-		if (QDir(view_dir).exists()) {
-			open_view({true, 0, QString()});
-		} else {
-			m_git->enqueue({"worktree", "add", "--detach",
-				view_dir, chosen}, vault, open_view);
-		}
-	});
+		setFileWritable(view_dir + '/' + rel_path, false);
+		emit requestOpenFile(view_dir + '/' + rel_path);
+		showBusy(false);
+	};
+	if (QDir(view_dir).exists()) {
+		open_view({true, 0, QString()});
+	} else {
+		m_git->enqueue({"worktree", "add", "--detach",
+			view_dir, tag}, vault, open_view);
+	}
 }
 
 void PdmDialog::showBusy(bool busy)

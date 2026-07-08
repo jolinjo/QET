@@ -423,6 +423,14 @@ void TitleBlockPropertiesWidget::initDialog(
 	for (const auto &pair : company_keys) {
 		auto *edit = new QLineEdit(this);
 		m_company_fields.insert(pair.first, edit);
+		// 審核者/核准者由圖檔管理(PDM)於審核流程自動寫入,UI 一律唯讀,
+		// 不允許任何人手動填改(既有值仍會顯示並原樣保留)。
+		if (pair.first == QLatin1String("checked-by")
+		    || pair.first == QLatin1String("approved-by")) {
+			edit->setReadOnly(true);
+			edit->setToolTip(
+				tr("由圖檔管理自動設定,不可手動修改"));
+		}
 		company_form->addRow(pair.second, edit);
 	}
 	ui -> verticalLayout_2 -> addLayout(company_form);

@@ -20,6 +20,7 @@
 
 #include <QDialog>
 #include <QHash>
+#include <QMap>
 
 class PdmGitWorker;
 class PdmService;
@@ -65,7 +66,10 @@ class PdmDialog : public QDialog
 			QString pr_head_sha;
 			bool pr_approved = false;
 			QString revision;      ///< 修訂索引(讀自 .qet 的 indexrev)
-			QString doc_status;    ///< 文件狀態(讀自 .qet 的 status 附加欄位)
+			QString doc_status;    ///< 文件狀態(讀自 .qet 的 doc-status)
+			QString drawn_by;      ///< 繪製者(讀自 .qet 的 author 屬性)
+			QString checked_by;    ///< 審核者(讀自 .qet 的 checked-by)
+			QString approved_by;   ///< 核准者(讀自 .qet 的 approved-by)
 		};
 
 		void setUpWidget();
@@ -77,15 +81,22 @@ class PdmDialog : public QDialog
 		void rebuildFolderTree();
 		void populateFileList();
 		void updateButtons();
+		/// 選取圖檔後自動載入其發行歷史到右側面板
+		void loadReleaseHistory(const QString &rel_path);
+		/// 唯讀開啟某個發行 tag
+		void openReleaseRevision(const QString &tag, const QString &rel_path);
 
-		/// 讀 .qet 首頁圖框的 indexrev / status 附加欄位
-		void readDocFields(const QString &abs_path,
-				   QString *revision, QString *status) const;
-		/// 把文件狀態/修訂索引寫入 .qet 每一頁圖框並存檔。
+		/// 讀 .qet 首頁圖框欄位(版本/文件狀態/繪製者/審核者/核准者)填入 state
+		void readDocFields(const QString &abs_path, FileState *state) const;
+		/// 把文件狀態/修訂索引/附加欄位寫入 .qet 每一頁圖框並存檔。
 		/// status 空字串=不動狀態;set_revision=true 時才寫 revision
-		///(可為空字串以清空版本),false 則保留原修訂索引。
+		///(可為空字串以清空版本),false 則保留原修訂索引;
+		/// extra_fields 內每個 name→value 會寫入對應附加欄位(如
+		/// checked-by/approved-by),value 可為空字串以清空。
 		bool stampDocFields(const QString &abs_path, const QString &status,
-				    const QString &revision, bool set_revision) const;
+				    const QString &revision, bool set_revision,
+				    const QMap<QString, QString> &extra_fields =
+					    QMap<QString, QString>()) const;
 		/// 修訂索引進位(數字制):數字 +1;空/非數字(舊字母)歸 1
 		static QString nextRevision(const QString &current);
 
@@ -95,14 +106,25 @@ class PdmDialog : public QDialog
 		void submitForReview();
 		void openReviewView();
 		void viewReleased();   ///< 唯讀開啟 main 上最後發行版
-		void approve();
-		void rejectReview();
-		void releaseApproved();
+		void confirmDone();    ///< 確認者「確認完畢」:寫確認者+commit
+		void rejectReview();   ///< 退回:寫退回狀態+commit+REQUEST_CHANGES
+		void approveAndRelease(); ///< 核准者「核准發行」:寫核准者+發行
 		void finishRelease(const QString &rel_path, const QString &stem,
 				   const QString &tag, const QString &sha);
 		void forceUnlock();
-		void showReleaseHistory();
 
+		/// 查登入者所屬 team,設定 m_is_confirmer / m_is_releaser
+		void loadUserRoles();
+		/**
+			在 work 分支上簽核:準備 work 分支工作區→戳記(狀態/附加
+			欄位)→commit(帶簽核訊息)→push,成功後呼叫 after_push。
+			供確認/核准/退回共用(它們都要在 work 分支留 commit)。
+		*/
+		void signoffOnWorkBranch(const QString &rel_path,
+			const QString &status,
+			const QMap<QString, QString> &extra_fields,
+			const QString &commit_message,
+			const std::function<void ()> &after_push);
 		void showBusy(bool busy);
 		void fail(const QString &title, const QString &log);
 
@@ -120,7 +142,8 @@ class PdmDialog : public QDialog
 		QLabel *m_account_label = nullptr;
 		QComboBox *m_repo_combo = nullptr;
 		QTreeWidget *m_folder_tree = nullptr;   ///< 左:資料夾樹
-		QTreeWidget *m_tree = nullptr;          ///< 右:所選資料夾的圖檔清單
+		QTreeWidget *m_tree = nullptr;          ///< 中:所選資料夾的圖檔清單
+		QTreeWidget *m_history_tree = nullptr;  ///< 右:所選圖檔的發行歷史
 		QString m_current_folder;               ///< 目前選取的資料夾(相對路徑)
 		QPushButton *m_checkout_button = nullptr,
 			    *m_checkin_button = nullptr,
@@ -132,12 +155,13 @@ class PdmDialog : public QDialog
 			    *m_approve_button = nullptr,
 			    *m_reject_button = nullptr,
 			    *m_release_button = nullptr,
-			    *m_force_unlock_button = nullptr,
-			    *m_history_button = nullptr;
+			    *m_force_unlock_button = nullptr;
 		QLabel *m_status_label = nullptr;
 		QProgressBar *m_progress = nullptr;
 
 		QString m_username;
+		bool m_is_confirmer = false;   ///< 在 pdm-confirmers team
+		bool m_is_releaser = false;    ///< 在 pdm-releasers team
 		bool m_auto_refreshed = false;
 		QHash<QString, FileState> m_files;   ///< key = rel_path
 };
