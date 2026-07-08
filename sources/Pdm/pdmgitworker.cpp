@@ -17,7 +17,11 @@
 */
 #include "pdmgitworker.h"
 
+#include <QCoreApplication>
+#include <QDir>
+#include <QFileInfo>
 #include <QProcess>
+#include <QProcessEnvironment>
 
 PdmGitWorker::PdmGitWorker(QObject *parent) :
 	QObject(parent)
@@ -59,6 +63,20 @@ void PdmGitWorker::startNext()
 	process->setProcessChannelMode(QProcess::MergedChannels);
 	if (!job.working_dir.isEmpty())
 		process->setWorkingDirectory(job.working_dir);
+
+	// 讓 `git lfs …` 找得到隨 app 打包的 git-lfs：把 bundle 內
+	// Resources/bin 插到 PATH 最前(Finder 啟動的 app PATH 精簡,
+	// 系統/brew 的 git-lfs 找不到)。系統 git 仍走 /usr/bin。
+	QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+	const QString bundled_bin = QDir::cleanPath(
+		QCoreApplication::applicationDirPath()
+		+ QStringLiteral("/../Resources/bin"));
+	if (QFileInfo::exists(bundled_bin + QStringLiteral("/git-lfs"))) {
+		env.insert(QStringLiteral("PATH"), bundled_bin
+			   + QLatin1Char(':')
+			   + env.value(QStringLiteral("PATH")));
+		process->setProcessEnvironment(env);
+	}
 
 	const bool is_git = job.program.isEmpty();
 	const QString program = is_git ? QStringLiteral("git") : job.program;

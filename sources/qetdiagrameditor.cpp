@@ -610,6 +610,24 @@ void QETDiagramEditor::showPdmDialog()
 			[this](const QString &file_path) {
 				openAndAddProject(file_path, false);
 			});
+		// 入庫前自動存檔(同步),免使用者手動 Cmd+S,git 才抓得到最新編輯。
+		connect(m_pdm_dialog, &PdmDialog::requestSaveFile, this,
+			[this](const QString &file_path) {
+				if (ProjectView *pv = viewForFile(file_path))
+					pv->save();
+			});
+		// 入庫/取消出庫後強制關閉該檔(不提示存檔:磁碟上已 commit 的
+		// 版本才是正本),避免編輯器留著舊內容、下次出庫開到舊版。
+		connect(m_pdm_dialog, &PdmDialog::requestCloseFile, this,
+			[this](const QString &file_path) {
+				ProjectView *pv = viewForFile(file_path);
+				if (!pv) return;
+				if (QETProject *proj = pv->project()) {
+					proj->undoStack()->setClean();
+					proj->setModified(false);
+				}
+				closeProject(pv);
+			});
 		applyInterfaceFonts();
 	}
 	m_pdm_dialog->show();

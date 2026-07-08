@@ -99,6 +99,16 @@ if(APPLE)
             ${QET_DIR}/elements $<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/
     COMMAND rsync -a --delete
             ${QET_DIR}/titleblocks $<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/)
+  # git-lfs 打包進 Resources/bin，供 PDM 出庫/入庫鎖定使用（免使用者安裝）。
+  # PdmGitWorker 執行時把此目錄注入子行程 PATH。
+  include(cmake/bundle_git_lfs.cmake)
+  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+            $<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/bin
+    COMMAND ${CMAKE_COMMAND} -E copy ${GITLFS_BINARY}
+            $<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/bin/git-lfs
+    COMMAND chmod +x
+            $<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/bin/git-lfs)
   # 私有混合字型不進公開 repo/qrc（CI 編不了），改為執行時從
   # Resources/fonts 載入；本地有檔案才複製進 bundle。
   if(EXISTS ${QET_DIR}/fonts/YaHei.Consolas.1.11b.ttf)

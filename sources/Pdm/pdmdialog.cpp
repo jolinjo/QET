@@ -760,9 +760,15 @@ void PdmDialog::populateFileList()
 		if (folder != m_current_folder) continue;
 
 		const FileState &state = m_files.value(path);
-		// 狀態欄以檔內文件狀態為主(使用者要求),空值才退回流程狀態
-		const QString status = state.doc_status.isEmpty()
-			? lifecycleStatus(state) : state.doc_status;
+		// 進行中的圖檔(已出庫/送審/入庫未發行)顯示即時流程狀態;
+		// 閒置(已發行)才顯示檔內文件狀態。清單讀 main,故進行中的
+		// 檔內狀態尚未合併回 main,以即時狀態呈現才不會顯示成舊值。
+		const bool active = !state.lock_owner.isEmpty()
+			|| state.pr_index > 0 || state.has_work_branch;
+		const QString status = active
+			? lifecycleStatus(state)
+			: (state.doc_status.isEmpty()
+				? lifecycleStatus(state) : state.doc_status);
 		// 右側只顯示檔名;完整相對路徑存在 UserRole 供動作用
 		auto *item = new QTreeWidgetItem(m_tree,
 			{QFileInfo(path).fileName(),
@@ -844,7 +850,7 @@ void PdmDialog::checkOut()
 				// 確認者/核准者(新修訂週期舊簽核作廢)。隨入庫 commit;
 				// 取消出庫會還原。
 				stampDocFields(abs_path,
-					QLatin1String(DOC_STATUS_EDITING),
+					QString::fromUtf8(DOC_STATUS_EDITING),
 					QString(), true,
 					{{QStringLiteral("checked-by"), QString()},
 					 {QStringLiteral("approved-by"), QString()}});
@@ -895,6 +901,10 @@ void PdmDialog::checkIn()
 		QMessageBox::warning(this, tr("入庫"), tr("變更說明不可空白。"));
 		return;
 	}
+
+	// 入庫前先請編輯器把該檔存檔(同步),使用者不用手動 Cmd+S,
+	// git 才抓得到最新編輯內容。
+	emit requestSaveFile(worktree + '/' + rel_path);
 
 	showBusy(true);
 	// 入庫給版本:讀 work 分支 HEAD 的舊修訂索引→進位(數字)→寫回檔案。
@@ -948,6 +958,11 @@ void PdmDialog::checkIn()
 							// 避免使用者繼續改到過期版本
 							setFileWritable(worktree + '/'
 								+ rel_path, false);
+							// 入庫後關掉編輯器裡的該檔:磁碟已被
+							// 戳記/commit,留著會是舊內容,下次出庫
+							// 才能開到乾淨的最新版
+							emit requestCloseFile(
+								worktree + '/' + rel_path);
 							refresh();
 						});
 				});
@@ -974,6 +989,8 @@ void PdmDialog::cancelCheckOut()
 		[this, rel_path, worktree](const PdmGitWorker::Result &result) {
 			if (!result.ok) fail(tr("解除鎖定失敗"), result.output);
 			setFileWritable(worktree + '/' + rel_path, false);
+			// 取消出庫後同樣關掉編輯器裡的該檔(已還原成庫內版本)
+			emit requestCloseFile(worktree + '/' + rel_path);
 			refresh();
 		});
 }
@@ -1025,7 +1042,7 @@ void PdmDialog::submitForReview()
 	// 讓審核者看到的版本即帶此狀態。工作區不在(換機送審)則略過。
 	if (QDir(worktree).exists()
 	    && stampDocFields(abs_path,
-			      QLatin1String(DOC_STATUS_REVIEWING),
+			      QString::fromUtf8(DOC_STATUS_REVIEWING),
 			      QString(), false)) {   // 保留入庫時給的版本
 		setFileWritable(abs_path, true);
 		m_git->enqueue({"add", "--", rel_path}, worktree, {});
@@ -1168,7 +1185,7 @@ void PdmDialog::rejectReview()
 	const QString trimmed = reason.trimmed();
 
 	// 寫「退回修改」狀態 + commit(帶退回意見)到 work 分支,再送 REQUEST_CHANGES
-	signoffOnWorkBranch(rel_path, QLatin1String(DOC_STATUS_REJECTED),
+	signoffOnWorkBranch(rel_path, QString::fromUtf8(DOC_STATUS_REJECTED),
 		QMap<QString, QString>(),
 		tr("退回 by %1：%2").arg(m_username, trimmed),
 		[this, rel_path, pr_index, trimmed]() {
@@ -1211,7 +1228,7 @@ void PdmDialog::approveAndRelease()
 
 	// 先在 work 分支寫核准者 + 已發行狀態 + commit,再核准最新 head 並合併發行。
 	// 順序:先 commit(改 head)、後核准 → 不觸發「廢止過時核准」。
-	signoffOnWorkBranch(rel_path, QLatin1String(DOC_STATUS_RELEASED),
+	signoffOnWorkBranch(rel_path, QString::fromUtf8(DOC_STATUS_RELEASED),
 		{{QStringLiteral("approved-by"), m_username}},
 		tr("核准發行 by %1：%2").arg(m_username, msg),
 		[this, rel_path, pr_index, stem, vault, msg]() {

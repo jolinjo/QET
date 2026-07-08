@@ -49,6 +49,10 @@ class PdmDialog : public QDialog
 	signals:
 		/// 要求編輯器開啟一個 .qet 檔(出庫/審核檢視時發出)
 		void requestOpenFile(const QString &file_path);
+		/// 要求編輯器關閉某 .qet(入庫/取消出庫後,避免編輯器留著舊內容)
+		void requestCloseFile(const QString &file_path);
+		/// 要求編輯器存檔某 .qet(入庫前自動存檔,免使用者手動 Cmd+S)
+		void requestSaveFile(const QString &file_path);
 
 	public slots:
 		void refresh();
