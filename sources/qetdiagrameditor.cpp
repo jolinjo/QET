@@ -188,6 +188,7 @@ QETDiagramEditor::QETDiagramEditor(const QStringList &files, QWidget *parent) :
 	// 啟動後背景預連圖檔管理伺服器,依結果啟用/禁用工具列按鈕
 	setUpPdmBackgroundConnect();
 	updatePdmToolbar();   // 初始:無受管檔開啟→隱藏入庫/確認等動作
+	applyReadOnlyView(false);   // 初始無開圖→隱藏編輯類工具鈕(has_project=false)
 
 	tabifyDockWidget(qdw_undo, qdw_pa);
 
@@ -420,57 +421,53 @@ void QETDiagramEditor::updateWelcomeWidget()
 		});
 
 		const QDate today = QDate::currentDate();
-		const auto group_of = [&today](const QDate &date) -> int {
-			const qint64 days = date.daysTo(today);
-			if (days <= 0) return 0;
-			if (days == 1) return 1;
-			if (days <= 7) return 2;
-			return 3;
-		};
-		const QStringList group_labels {
-			tr("Aujourd'hui", "welcome view"),
-			tr("Hier", "welcome view"),
-			tr("Les 7 derniers jours", "welcome view"),
-			tr("Plus ancien", "welcome view") };
+
+		// 依開啟來源分兩區:圖檔管理(PDM)在上、本地檔案在下。
+		// 各區內部維持原本的最近開啟排序。
+		QList<QPair<QDateTime, QString>> pdm_entries, local_entries;
+		for (const auto &entry : entries) {
+			if (PdmDialog::isManagedPath(entry.second))
+				pdm_entries.append(entry);
+			else
+				local_entries.append(entry);
+		}
 
 		int total_height = 8;
-		int previous_group = -1;
-		for (const auto &entry : entries) {
-			const QDate date = entry.first.date();
-			const int group = group_of(date);
-			if (group != previous_group) {
-				previous_group = group;
-				auto *header = new QListWidgetItem(
-					group_labels.at(group), m_welcome_list);
-				header->setFlags(Qt::NoItemFlags);
-				header->setData(
-					RecentFileDelegate::HeaderRole, true);
-				total_height +=
-					RecentFileDelegate::HEADER_HEIGHT;
+		const auto add_section =
+			[&](const QString &label,
+			    const QList<QPair<QDateTime, QString>> &list) {
+			if (list.isEmpty()) return;
+			auto *header = new QListWidgetItem(label, m_welcome_list);
+			header->setFlags(Qt::NoItemFlags);
+			header->setData(RecentFileDelegate::HeaderRole, true);
+			total_height += RecentFileDelegate::HEADER_HEIGHT;
+			for (const auto &entry : list) {
+				const QDate date = entry.first.date();
+				const qint64 days = date.daysTo(today);
+				QString date_text;
+				if (days <= 0) {
+					date_text = tr("Aujourd'hui", "welcome view");
+				} else if (days == 1) {
+					date_text = tr("Hier", "welcome view");
+				} else if (days <= 30) {
+					date_text = tr("Il y a %1 jours",
+						       "welcome view").arg(days);
+				} else {
+					date_text = date.toString(
+						QStringLiteral("yyyy/M/d"));
+				}
+				auto *item = new QListWidgetItem(
+					QFileInfo(entry.second).completeBaseName(),
+					m_welcome_list);
+				item->setData(RecentFileDelegate::PathRole,
+					      entry.second);
+				item->setData(RecentFileDelegate::DateRole, date_text);
+				item->setToolTip(entry.second);
+				total_height += RecentFileDelegate::ROW_HEIGHT;
 			}
-			const qint64 days = date.daysTo(today);
-			QString date_text;
-			if (days <= 0) {
-				date_text = tr("Aujourd'hui", "welcome view");
-			} else if (days == 1) {
-				date_text = tr("Hier", "welcome view");
-			} else if (days <= 30) {
-				date_text = tr("Il y a %1 jours",
-					       "welcome view").arg(days);
-			} else {
-				date_text = date.toString(
-					QStringLiteral("yyyy/M/d"));
-			}
-
-			auto *item = new QListWidgetItem(
-				QFileInfo(entry.second).completeBaseName(),
-				m_welcome_list);
-			item->setData(RecentFileDelegate::PathRole,
-				      entry.second);
-			item->setData(RecentFileDelegate::DateRole, date_text);
-			item->setToolTip(entry.second);
-			total_height += RecentFileDelegate::ROW_HEIGHT;
-		}
+		};
+		add_section(tr("圖檔管理 PDM", "welcome view"), pdm_entries);
+		add_section(tr("本地檔案 Local", "welcome view"), local_entries);
 
 		m_welcome_list->setFixedHeight(qMin(
 			total_height,
@@ -685,9 +682,10 @@ void QETDiagramEditor::updatePdmToolbar()
 	const bool checkout = (ctx == PdmDialog::CheckoutEdit);
 	const bool review   = (ctx == PdmDialog::ReviewReadOnly);
 
-	// 出庫編輯的檔:隱藏儲存/另存(改走入庫),顯示入庫/取消出庫
-	if (m_save_file)    m_save_file->setVisible(!checkout);
-	if (m_save_file_as) m_save_file_as->setVisible(!checkout);
+	// 出庫編輯改走入庫、審核檢視為唯讀:兩者都隱藏儲存/另存
+	const bool managed = checkout || review;
+	if (m_save_file)    m_save_file->setVisible(!managed);
+	if (m_save_file_as) m_save_file_as->setVisible(!managed);
 	if (m_pdm_checkin)  m_pdm_checkin->setVisible(checkout);
 	if (m_pdm_cancel)   m_pdm_cancel->setVisible(checkout);
 
@@ -1319,6 +1317,9 @@ void QETDiagramEditor::setUpToolBar()
 	main_tool_bar = new QToolBar(tr("Outils"), this);
 	main_tool_bar -> setObjectName("toolbar");
 
+	edit_tool_bar = new QToolBar(tr("Édition"), this);
+	edit_tool_bar -> setObjectName("edit_toolbar");
+
 	view_tool_bar = new QToolBar(tr("Affichage"), this);
 	view_tool_bar -> setObjectName("display");
 
@@ -1335,19 +1336,19 @@ void QETDiagramEditor::setUpToolBar()
 	main_tool_bar -> addAction(m_pdm_cancel);
 	main_tool_bar -> addAction(m_pdm_confirm);
 	main_tool_bar -> addAction(m_pdm_release);
-	main_tool_bar -> addSeparator();
-	main_tool_bar -> addAction(m_project_add_diagram);
-	main_tool_bar -> addAction(m_remove_diagram_from_project);
-	main_tool_bar -> addSeparator();
-	main_tool_bar -> addAction(undo);
-	main_tool_bar -> addAction(redo);
-	main_tool_bar -> addSeparator();
-	main_tool_bar -> addAction(m_cut);
-	main_tool_bar -> addAction(m_copy);
-	main_tool_bar -> addAction(m_paste);
-	main_tool_bar -> addSeparator();
-	main_tool_bar -> addAction(m_delete_selection);
-	main_tool_bar -> addAction(m_rotate_selection);
+	// 編輯類動作獨立成 edit_tool_bar,方便無開圖/唯讀時整條隱藏
+	edit_tool_bar -> addAction(m_project_add_diagram);
+	edit_tool_bar -> addAction(m_remove_diagram_from_project);
+	edit_tool_bar -> addSeparator();
+	edit_tool_bar -> addAction(undo);
+	edit_tool_bar -> addAction(redo);
+	edit_tool_bar -> addSeparator();
+	edit_tool_bar -> addAction(m_cut);
+	edit_tool_bar -> addAction(m_copy);
+	edit_tool_bar -> addAction(m_paste);
+	edit_tool_bar -> addSeparator();
+	edit_tool_bar -> addAction(m_delete_selection);
+	edit_tool_bar -> addAction(m_rotate_selection);
 
 	// Modes selection / visualisation et zoom
 	view_tool_bar -> addAction(m_mode_selection);
@@ -1420,7 +1421,7 @@ void QETDiagramEditor::setUpToolBar()
 	m_auto_conductor->setIconText(tr("Câblage auto", "toolbar icon text"));
 
 	const QList<QToolBar *> top_toolbars {
-		main_tool_bar, view_tool_bar, diagram_tool_bar,
+		main_tool_bar, edit_tool_bar, view_tool_bar, diagram_tool_bar,
 		m_add_item_tool_bar, m_depth_tool_bar };
 	for (QToolBar *tool_bar : top_toolbars) {
 		tool_bar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
@@ -1436,6 +1437,7 @@ void QETDiagramEditor::setUpToolBar()
 	}
 
 	addToolBar(Qt::TopToolBarArea, main_tool_bar);
+	addToolBar(Qt::TopToolBarArea, edit_tool_bar);
 	addToolBar(Qt::TopToolBarArea, view_tool_bar);
 	addToolBar(Qt::TopToolBarArea, diagram_tool_bar);
 	addToolBar(Qt::TopToolBarArea, m_add_item_tool_bar);
@@ -1588,6 +1590,15 @@ bool QETDiagramEditor::event(QEvent *e)
 		//restaure par restoreState (souvent les proprietes, vides)
 		if (qdw_pa->isVisible() && !tabifiedDockWidgets(qdw_pa).isEmpty())
 			qdw_pa->raise();
+		// restoreState 之後、且工具列按鈕已實體化,才能正確隱藏編輯類圖示
+		//(建構期呼叫時 widgetForAction 尚為 null,且會被 restoreState 蓋掉)
+		bool read_only = false;
+		if (ProjectView *pv = currentProjectView())
+			if (QETProject *proj = pv->project())
+				read_only = proj->isReadOnly()
+					    && !proj->filePath().isEmpty();
+		applyReadOnlyView(read_only);
+		updatePdmToolbar();
 	}
 	return(QETMainWindow::event(e));
 }
@@ -3147,11 +3158,19 @@ void QETDiagramEditor::subWindowActivated(QMdiSubWindow *subWindows)
 
 /**
 	@brief QETDiagramEditor::applyReadOnlyView
-	唯讀檢視時切瀏覽模式並隱藏會動到版面的 UI(元件庫面板、繪圖/深度/圖框
-	工具列);可編輯時還原顯示。供 subWindowActivated 依專案唯讀狀態呼叫。
+	依目前開檔狀態切換編輯類 UI 的顯示:
+	- 沒開任何圖時:隱藏所有編輯/檢視/繪圖工具鈕(只留新增/開啟/圖檔管理)。
+	- 唯讀檢視(檢視發行版/審核檢視)時:強制瀏覽模式,隱藏會動到版面的編輯
+	  工具(新增/刪除頁面、復原/重做、剪貼、刪除/旋轉、繪圖/深度/圖框工具列、
+	  元件庫面板),但保留檢視工具列(模式鈕+縮放)供瀏覽。
+	- 可編輯時:全部還原顯示。
+	供 subWindowActivated 依專案唯讀狀態呼叫。
 */
 void QETDiagramEditor::applyReadOnlyView(bool read_only)
 {
+	const bool has_project = currentProjectView() != nullptr;
+	const bool editable = has_project && !read_only;
+
 	// 唯讀才強制把 folio 切為瀏覽模式;可編輯專案不強制改模式(避免干擾
 	// 開啟流程),僅同步工具列模式鈕的勾選/啟用狀態。
 	if (read_only) {
@@ -3161,14 +3180,21 @@ void QETDiagramEditor::applyReadOnlyView(bool read_only)
 	}
 	if (m_mode_selection) {
 		m_mode_selection->setChecked(!read_only);
-		m_mode_selection->setEnabled(!read_only);
+		m_mode_selection->setEnabled(editable);
 	}
 	if (m_mode_visualise) m_mode_visualise->setChecked(read_only);
 
-	if (qdw_pa) qdw_pa->setVisible(!read_only);
-	if (m_add_item_tool_bar) m_add_item_tool_bar->setVisible(!read_only);
-	if (m_depth_tool_bar) m_depth_tool_bar->setVisible(!read_only);
-	if (diagram_tool_bar) diagram_tool_bar->setVisible(!read_only);
+	// 面板與繪圖類工具列:僅可編輯時顯示
+	if (qdw_pa) qdw_pa->setVisible(editable);
+	if (m_add_item_tool_bar) m_add_item_tool_bar->setVisible(editable);
+	if (m_depth_tool_bar) m_depth_tool_bar->setVisible(editable);
+	if (diagram_tool_bar) diagram_tool_bar->setVisible(editable);
+
+	// 編輯工具列(新增/刪除頁面、復原/重做、剪貼、刪除/旋轉):僅可編輯時顯示
+	if (edit_tool_bar) edit_tool_bar->setVisible(editable);
+
+	// 檢視工具列(模式鈕+縮放):有開圖就顯示(瀏覽時仍可縮放),無開圖隱藏
+	if (view_tool_bar) view_tool_bar->setVisible(has_project);
 }
 
 /**

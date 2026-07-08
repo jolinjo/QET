@@ -264,6 +264,7 @@ class QETDiagramEditor : public QETMainWindow
 		
 		QToolBar
 		*main_tool_bar       = nullptr,
+		*edit_tool_bar       = nullptr,
 		*view_tool_bar       = nullptr,
 		*diagram_tool_bar    = nullptr,
 		*m_add_item_tool_bar = nullptr,

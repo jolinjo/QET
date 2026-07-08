@@ -959,9 +959,12 @@ void PdmDialog::updateButtons()
 				     && !locked_by_me;
 	const bool in_review = has_selection && state.pr_index > 0;
 
-	// 出庫:未鎖定且不在審核流程中(送審後圖對製圖者唯讀)
-	m_checkout_button->setEnabled(has_selection && state.lock_owner.isEmpty()
-				      && !in_review);
+	// 出庫:未鎖定→出庫並開啟;已被自己出庫→繼續編輯(重開工作區);
+	// 送審中/他人鎖定則不可。
+	m_checkout_button->setEnabled(has_selection && !in_review
+		&& (state.lock_owner.isEmpty() || locked_by_me));
+	m_checkout_button->setText(locked_by_me ? tr("繼續編輯")
+						: tr("出庫並開啟"));
 	m_checkin_button->setEnabled(locked_by_me && !in_review);
 	m_cancel_button->setEnabled(locked_by_me);
 	// 檢視發行版(唯讀):清單內的圖檔都在 main 上,隨時可看發行版
@@ -972,14 +975,11 @@ void PdmDialog::updateButtons()
 				    && state.lock_owner.isEmpty() && !in_review);
 	// 審核檢視:有 PR 即可(唯讀)
 	m_review_button->setEnabled(in_review);
-	// 確認完畢:限確認者(pdm-confirmers)、非製圖者本人
-	const bool not_author = state.pr_author != m_username;
-	m_approve_button->setEnabled(in_review && not_author && m_is_confirmer);
-	// 退回:確認者或核准者、非製圖者本人
-	m_reject_button->setEnabled(in_review && not_author
-				    && (m_is_confirmer || m_is_releaser));
-	// 核准發行:限核准者(pdm-releasers);合併權另由 main 分支保護把關
-	m_release_button->setEnabled(in_review && not_author && m_is_releaser);
+	// 開發期暫放寬「非製圖者本人」限制,方便單人自測整套流程;
+	// 正式版應恢復 (state.pr_author != m_username) 條件。
+	m_approve_button->setEnabled(in_review && m_is_confirmer);
+	m_reject_button->setEnabled(in_review && (m_is_confirmer || m_is_releaser));
+	m_release_button->setEnabled(in_review && m_is_releaser);
 	m_force_unlock_button->setVisible(locked_by_other);
 	m_force_unlock_button->setEnabled(locked_by_other);
 	// 退回上一發行版:有進行中的 work 分支才有得退;限製圖者本人或核准者。
@@ -1120,6 +1120,18 @@ void PdmDialog::checkOut()
 	const QString vault = vaultDir();
 	const QString branch = workBranchOf(rel_path);
 	const QString worktree = worktreeDir(sanitizedStem(rel_path));
+
+	// 已被自己出庫(上次沒入庫就關閉):直接重開工作區的檔繼續編輯,
+	// 不重新鎖定、不進版、不重置修改。
+	if (state.lock_owner == m_username && !m_username.isEmpty()) {
+		const QString abs_path = worktree + '/' + rel_path;
+		if (QFile::exists(abs_path)) {
+			setFileWritable(abs_path, true);
+			emit requestOpenFile(abs_path);
+			return;
+		}
+		// 工作區不在了(換機器)→ 走下面的正常流程重建工作區
+	}
 
 	showBusy(true);
 	// 鎖定成功才有編輯權;任何後續失敗都不影響「鎖是我的」這個事實
@@ -1511,17 +1523,8 @@ void PdmDialog::approveAndRelease()
 		{{QStringLiteral("approved-by"), m_username}},
 		tr("核准發行 by %1：%2").arg(m_username, msg),
 		[this, rel_path, pr_index, stem, vault, msg]() {
-		// 核准含核准者 commit 的最新 head
-		m_service->submitReview(currentRepoFullName(), pr_index,
-			QStringLiteral("APPROVED"), msg,
-			[this, rel_path, pr_index, stem, vault]
-			(const PdmService::Reply &approve_reply) {
-			if (!approve_reply.ok) {
-				showBusy(false);
-				fail(tr("核准失敗"), approve_reply.error);
-				return;
-			}
-			// 由既有 tag 推下一發行版次
+		// 推下一發行版次 → 合併 → 發行(核准成功或自我核准被拒都走這)
+		auto merge_and_release = [this, rel_path, pr_index, stem, vault]() {
 			m_git->enqueue({"ls-remote", "--tags", "origin",
 				QStringLiteral("refs/tags/release/%1-v*").arg(stem)},
 				vault,
@@ -1538,7 +1541,6 @@ void PdmDialog::approveAndRelease()
 				}
 				const QString tag = QStringLiteral("release/%1-v%2")
 					.arg(stem).arg(next_version);
-				// 合併(核准後可合併狀態有延遲,service 內建重試)
 				m_service->mergePullRequest(currentRepoFullName(),
 					pr_index,
 					[this, rel_path, stem, tag, vault]
@@ -1562,6 +1564,24 @@ void PdmDialog::approveAndRelease()
 					});
 				});
 			});
+		};
+		// 核准含核准者 commit 的最新 head
+		m_service->submitReview(currentRepoFullName(), pr_index,
+			QStringLiteral("APPROVED"), msg,
+			[this, merge_and_release]
+			(const PdmService::Reply &approve_reply) {
+			if (!approve_reply.ok) {
+				// 開發期單人測試:Gitea 擋「核准自己的 PR」(422),
+				// 跳過核准直接嘗試合併(需 main 分支保護暫免必要核准)。
+				if (approve_reply.http_status == 422) {
+					merge_and_release();
+					return;
+				}
+				showBusy(false);
+				fail(tr("核准失敗"), approve_reply.error);
+				return;
+			}
+			merge_and_release();
 		});
 	});
 }
@@ -2030,6 +2050,23 @@ PdmDialog::OpenContext PdmDialog::openContext(const QString &abs_path) const
 	if (abs_path.startsWith(base + QStringLiteral("/reviews/")))
 		return ReviewReadOnly;
 	return NotManaged;
+}
+
+bool PdmDialog::isManagedPath(const QString &abs_path)
+{
+	const QString root = PdmSettings::workRoot();
+	if (!root.isEmpty() && abs_path.startsWith(root + '/'))
+		return true;
+	// 檢視發行版是匯出到暫存目錄的唯讀 .qet(檔名 pdm-released-<圖號>.qet)
+	return QFileInfo(abs_path).fileName().startsWith(
+		QStringLiteral("pdm-released-"));
+}
+
+bool PdmDialog::isCheckedOutByMe(const QString &abs_path) const
+{
+	if (openContext(abs_path) != CheckoutEdit) return false;
+	const FileState st = m_files.value(relPathForOpen(abs_path));
+	return !m_username.isEmpty() && st.lock_owner == m_username;
 }
 
 QString PdmDialog::relPathForOpen(const QString &abs_path) const

@@ -55,6 +55,10 @@ class PdmDialog : public QDialog
 		OpenContext openContext(const QString &abs_path) const;
 		bool isConfirmer() const { return m_is_confirmer; }
 		bool isReleaser() const  { return m_is_releaser; }
+		/// 該 abs_path 是否為「我出庫中(已鎖定、尚未入庫)」的檔
+		bool isCheckedOutByMe(const QString &abs_path) const;
+		/// 該 .qet 是否由圖檔管理開啟(在 PDM 工作根目錄下,或發行版暫存匯出)
+		static bool isManagedPath(const QString &abs_path);
 
 	signals:
 		/// 要求編輯器開啟一個 .qet 檔(出庫/審核檢視時發出)
