@@ -86,6 +86,7 @@ class PdmDialog : public QDialog
 			QString drawn_by;      ///< 繪製者(讀自 .qet 的 author 屬性)
 			QString checked_by;    ///< 審核者(讀自 .qet 的 checked-by)
 			QString approved_by;   ///< 核准者(讀自 .qet 的 approved-by)
+			QString work_author;   ///< work 分支末次 commit 作者 email
 		};
 
 		void setUpWidget();
@@ -188,11 +189,15 @@ class PdmDialog : public QDialog
 			    *m_reject_button = nullptr,
 			    *m_release_button = nullptr,
 			    *m_force_unlock_button = nullptr,
-			    *m_revert_button = nullptr;
+			    *m_revert_button = nullptr,
+			    *m_add_folder_button = nullptr,
+			    *m_del_folder_button = nullptr,
+			    *m_del_drawing_button = nullptr;
 		QLabel *m_status_label = nullptr;
 		QProgressBar *m_progress = nullptr;
 
 		QString m_username;
+		QString m_user_email;          ///< 登入者 email(比對 work 分支作者)
 		bool m_is_confirmer = false;   ///< 在 pdm-confirmers team
 		bool m_is_releaser = false;    ///< 在 pdm-releasers team
 		bool m_auto_refreshed = false;

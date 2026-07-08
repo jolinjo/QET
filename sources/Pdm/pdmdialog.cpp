@@ -33,6 +33,7 @@
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QJsonArray>
@@ -168,11 +169,16 @@ void PdmDialog::setUpWidget()
 	m_tree->setRootIsDecorated(false);
 	m_tree->setSelectionMode(QAbstractItemView::SingleSelection);
 	m_tree->setAllColumnsShowFocus(true);
+	// 欄寬隨內容自動調整
+	m_tree->header()->setSectionResizeMode(QHeaderView::ResizeToContents);
 
 	m_history_tree = new QTreeWidget(splitter);
-	m_history_tree->setHeaderLabels({tr("版本/日期"), tr("訊息")});
+	m_history_tree->setHeaderLabels({tr("版本"), tr("日期時間"),
+					 tr("提交者"), tr("訊息")});
 	m_history_tree->setRootIsDecorated(true);   // 顯示發行版下的小版縮排
 	m_history_tree->setSelectionMode(QAbstractItemView::SingleSelection);
+	m_history_tree->header()->setSectionResizeMode(
+		QHeaderView::ResizeToContents);
 
 	splitter->addWidget(m_folder_tree);
 	splitter->addWidget(m_tree);
@@ -214,6 +220,16 @@ void PdmDialog::setUpWidget()
 	release_row->addWidget(m_revert_button);
 	release_row->addWidget(m_force_unlock_button);
 	layout->addLayout(release_row);
+
+	// 結構性維運按鈕列:僅核准者可見
+	auto *admin_row = new QHBoxLayout();
+	m_add_folder_button = new QPushButton(tr("新增資料夾…"), content);
+	m_del_folder_button = new QPushButton(tr("刪除資料夾…"), content);
+	m_del_drawing_button = new QPushButton(tr("刪除圖檔…"), content);
+	admin_row->addWidget(m_add_folder_button);
+	admin_row->addWidget(m_del_folder_button);
+	admin_row->addWidget(m_del_drawing_button);
+	layout->addLayout(admin_row);
 
 	// 進度顯示沿用元件庫「更新公司庫」模式:按鈕下方內嵌,不跳對話框
 	m_status_label = new QLabel(content);
@@ -310,6 +326,12 @@ void PdmDialog::setUpWidget()
 		this, &PdmDialog::forceUnlock);
 	connect(m_revert_button, &QPushButton::clicked,
 		this, &PdmDialog::revertToRelease);
+	connect(m_add_folder_button, &QPushButton::clicked,
+		this, &PdmDialog::addFolder);
+	connect(m_del_folder_button, &QPushButton::clicked,
+		this, &PdmDialog::deleteFolder);
+	connect(m_del_drawing_button, &QPushButton::clicked,
+		this, &PdmDialog::deleteDrawing);
 
 	updateButtons();
 }
@@ -345,6 +367,13 @@ void PdmDialog::refresh()
 		m_username = login_or_error;
 		PdmSettings::setUsername(m_username);
 		m_account_label->setText(tr("帳號:%1").arg(m_username));
+		// 取 email 供比對 work 分支作者(判斷「繪製者本人」)
+		m_service->get(QStringLiteral("/user"),
+			[this](const PdmService::Reply &reply) {
+				if (reply.ok)
+					m_user_email = reply.json.object()
+						.value(QStringLiteral("email")).toString();
+			});
 		loadUserRoles();
 		connectionRefreshed();
 	});
@@ -528,6 +557,29 @@ void PdmDialog::loadFileStates()
 				readDocFields(vault + '/' + state.rel_path, &state);
 				m_files.insert(state.rel_path, state);
 			}
+		});
+
+	// work 分支末次 commit 作者(判斷「繪製者本人」用,尤其入庫未送審時
+	// 已解鎖、無 PR,靠此認人)
+	m_git->enqueue({"for-each-ref",
+		QStringLiteral("--format=%(refname:short)%x1f%(authoremail)"),
+		QStringLiteral("refs/remotes/origin/work/")}, vault,
+		[this](const PdmGitWorker::Result &result) {
+			const QStringList lines = result.output.split('\n',
+				Qt::SkipEmptyParts);
+			QHash<QString, QString> branch_author;
+			for (const QString &line : lines) {
+				const QStringList f = line.split(QChar(0x1f));
+				if (f.size() < 2) continue;
+				QString ref = f.at(0);   // origin/work/<stem>
+				QString email = f.at(1);
+				email.remove(QLatin1Char('<')).remove(QLatin1Char('>'));
+				if (ref.startsWith(QLatin1String("origin/")))
+					branch_author.insert(ref.mid(7), email.trimmed());
+			}
+			for (auto it = m_files.begin(); it != m_files.end(); ++it)
+				it->work_author = branch_author.value(
+					workBranchOf(it.key()));
 		});
 
 	m_git->enqueue({"lfs", "locks", "--json"}, vault,
@@ -923,12 +975,27 @@ void PdmDialog::updateButtons()
 	m_release_button->setEnabled(in_review && not_author && m_is_releaser);
 	m_force_unlock_button->setVisible(locked_by_other);
 	m_force_unlock_button->setEnabled(locked_by_other);
-	// 退回上一發行版:有進行中的 work 分支才有得退;限製圖者本人
-	//(自己出庫/送審者)或核准者
-	const bool mine = (state.lock_owner == m_username && !m_username.isEmpty())
-			  || (state.pr_author == m_username && !m_username.isEmpty());
+	// 退回上一發行版:有進行中的 work 分支才有得退;限製圖者本人或核准者。
+	// 「本人」以鎖定者/送審者/work 分支作者 email 任一相符判定(入庫未送審
+	// 時已解鎖、無 PR,靠 work 分支作者認人)。
+	const bool mine =
+		(state.lock_owner == m_username && !m_username.isEmpty())
+		|| (state.pr_author == m_username && !m_username.isEmpty())
+		|| (!state.work_author.isEmpty()
+		    && state.work_author == m_user_email);
 	m_revert_button->setEnabled(has_selection && state.has_work_branch
 				    && (mine || m_is_releaser));
+
+	// 結構性維運:僅核准者可見;刪除需選到對應項目、且該圖檔閒置
+	const bool idle = has_selection && state.lock_owner.isEmpty()
+			  && !state.has_work_branch && state.pr_index == 0;
+	const bool folder_selected = m_folder_tree->currentItem()
+		&& m_folder_tree->currentItem()->text(0) != tr("(根目錄)");
+	m_add_folder_button->setVisible(m_is_releaser);
+	m_del_folder_button->setVisible(m_is_releaser);
+	m_del_drawing_button->setVisible(m_is_releaser);
+	m_del_folder_button->setEnabled(folder_selected);
+	m_del_drawing_button->setEnabled(idle);
 }
 
 void PdmDialog::addNewDrawing()
@@ -1755,9 +1822,10 @@ void PdmDialog::loadReleaseHistory(const QString &rel_path)
 	const QString ref = st.has_work_branch
 		? QStringLiteral("origin/") + workBranchOf(rel_path)
 		: QStringLiteral("origin/") + QLatin1String(DEFAULT_BRANCH);
-	// 每列:subject <US> 日期 <US> refs(以 \x1f 分隔避免撞到訊息內容)
+	// 每列:subject <US> 日期時間 <US> 提交者 <US> refs
 	m_git->enqueue({QStringLiteral("log"),
-		QStringLiteral("--format=%s%x1f%cs%x1f%D"),
+		QStringLiteral("--date=format:%Y-%m-%d %H:%M"),
+		QStringLiteral("--format=%s%x1f%cd%x1f%cn%x1f%D"),
 		ref, QStringLiteral("--"), rel_path}, vaultDir(),
 		[this, rel_path, stem](const PdmGitWorker::Result &r) {
 		// 回呼期間可能已改選其他檔;確認仍是同一檔才填
@@ -1773,16 +1841,17 @@ void PdmDialog::loadReleaseHistory(const QString &rel_path)
 
 		// 尚未發行的最新一批 commit 掛在「編輯中(未發行)」節點下
 		auto *pending = new QTreeWidgetItem(m_history_tree,
-			{tr("編輯中"), tr("(未發行)")});
+			{tr("編輯中"), QString(), QString(), tr("(未發行)")});
 		QTreeWidgetItem *parent = pending;
 
 		const QStringList lines = r.output.split('\n', Qt::SkipEmptyParts);
 		for (const QString &line : lines) {
 			const QStringList f = line.split(QChar(0x1f));
-			if (f.size() < 3) continue;
-			const QString subject = f.at(0);
-			const QString date = f.at(1);
-			const QString refs = f.at(2);
+			if (f.size() < 4) continue;
+			const QString subject   = f.at(0);
+			const QString datetime  = f.at(1);
+			const QString committer = f.at(2);
+			const QString refs      = f.at(3);
 
 			// 這個 commit 是否帶發行 tag
 			QString rel_tag;
@@ -1802,9 +1871,9 @@ void PdmDialog::loadReleaseHistory(const QString &rel_path)
 				// 發行版:★ + 底色 + 粗體,可雙擊唯讀開啟
 				const QString ver = rel_tag.mid(rel_prefix.length());
 				auto *item = new QTreeWidgetItem(m_history_tree,
-					{QStringLiteral("★ v") + ver,
-					 tr("發行 %1").arg(date)});
-				for (int c = 0; c < 2; ++c) {
+					{QStringLiteral("★ v") + ver, datetime,
+					 committer, tr("正式發行")});
+				for (int c = 0; c < 4; ++c) {
 					item->setBackground(c, highlight);
 					QFont fnt = item->font(c);
 					fnt.setBold(true);
@@ -1813,8 +1882,9 @@ void PdmDialog::loadReleaseHistory(const QString &rel_path)
 				item->setData(0, Qt::UserRole, rel_tag);
 				parent = item;
 			} else {
-				// 小版 commit:縮排在所屬發行版之下,顯示 commit 訊息
-				new QTreeWidgetItem(parent, {date, subject});
+				// 小版 commit:縮排在所屬發行版之下
+				new QTreeWidgetItem(parent,
+					{QString(), datetime, committer, subject});
 			}
 		}
 		if (pending->childCount() == 0)

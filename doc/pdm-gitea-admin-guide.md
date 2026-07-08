@@ -12,6 +12,9 @@
   `LFS_START_SERVER = true`,預設多半已開)。圖檔鎖定(出庫)靠 LFS
   file locking,LFS 沒開整套機制就不成立。
 - 主機建議沿用現有 `http://hc-server:3000`。
+- **用戶端 git-lfs 免安裝**:git-lfs 已隨 QET 一起打包(macOS 版於建置時
+  下載官方 release 放進 .app,執行時自動注入路徑),使用者電腦**不需**另外
+  安裝 git-lfs。系統 `git` 本身仍需具備(macOS 內建 Xcode 命令列工具即有)。
 - (選配,建議)Gitea Actions runner 一台:供 PR 自動檢查圖檔
   (`--cli-validate`)與發行 PDF 渲染;沒有 runner 系統一樣能用,
   PDF 改由放行者的 QET 用戶端渲染上傳。
@@ -27,18 +30,24 @@
 
 ### 2.2 建立組織與三個 Team
 
-建一個組織(例如 `pdm`),之下三個 Team,權限如下:
+建一個組織(例如 `HC-Git`),之下 Team,權限如下(**Team 名稱寫死在
+程式**,務必一致):
 
 | Team | 角色 | Gitea 權限設定 |
 | --- | --- | --- |
-| `pdm-drafters` | 製圖者 | Write(可 push、開 PR、鎖定檔案) |
-| `pdm-checkers` | 確認者 | Write + 列入分支保護「核准白名單」 |
-| `pdm-releasers` | 放行者 | Write + 列入「可合併白名單」與保護 tag 白名單 |
+| (write 權即可) | 製圖者 | Write(可 push、開 PR、鎖定檔案);不需特定 Team |
+| `pdm-confirmers` | 確認者 | Write(單元:程式碼=寫入) |
+| `pdm-releasers` | 核准者 | Write(單元:程式碼/合併請求/版本發布=寫入)＋列入 main 的**可推送、核准、可合併白名單**與**保護 tag 白名單** |
 
-- 三個 Team 都勾「存取所有倉庫」(includes all repositories),
-  之後新增產品線 repo 不用逐一調整。
-- 同一人可加入多個 Team(例如資深工程師兼確認者);
-  **PR 作者不能核准自己的 PR** 是 Gitea 原生行為,不用另外設。
+- Team 都建議勾「存取所有倉庫」或指定圖庫 repo。
+- 同一人可加入多個 Team。
+- **簽核分工(重要)**:程式的流程是——
+  - **確認者**按「確認完畢」→ 只在 work 分支留一個 commit(記錄確認者+
+    checked-by 欄位),**不做 Gitea 核准**。
+  - **核准者**按「核准發行」→ 寫核准者欄位+commit → **由核准者做 Gitea
+    核准**並合併發行。
+  故 Gitea 分支保護的「核准白名單」要放 **`pdm-releasers`**(核准動作來自
+  核准者),確認者不需列入核准白名單。
 
 ### 2.3 使用者加入流程(到職)
 
@@ -77,11 +86,16 @@ repo 設定 → 分支 → 新增規則,分支名 `main`:
 
 | 設定項 | 值 | 目的 |
 | --- | --- | --- |
-| 停用推送(Disable push) | ✅ | 任何人都不能直接改 main,只能走 PR |
-| 所需核准數(Required approvals) | 1 | 一位確認者核准即可 |
-| 限制核准白名單 | Team `pdm-checkers` | 只有確認者的核准算數 |
-| 廢止過時核准(Dismiss stale approvals) | ✅ **必開** | 核准後又推新 commit,核准自動失效,防「看 A 版核准、偷換 B 版發行」 |
-| 限制可合併白名單 | Team `pdm-releasers` | 只有放行者能執行發行(合併) |
+| 啟用推送 + **可推送白名單** | Team `pdm-releasers` | 一般人(製圖/確認)不能直接推 main,只能走 PR;**核准者可直接推**,供資料夾/檔案維運(新增/刪除資料夾、刪除圖檔) |
+| 所需核准數(Required approvals) | 1 | 核准發行時由核准者核准 |
+| 限制核准白名單 | Team `pdm-releasers` | 核准動作來自核准者(見 §2.2 簽核分工) |
+| 廢止過時核准(Dismiss stale approvals) | ✅ **必開** | 防「看 A 版核准、偷換 B 版發行」;程式的核准發行是「先 commit 後核准」,核准落在最終 head,不受影響 |
+| 限制可合併白名單 | Team `pdm-releasers` | 只有核准者能執行發行(合併) |
+
+> ⚠️ **可推送白名單 = pdm-releasers 是必要的**:圖檔管理的「新增/刪除
+> 資料夾、刪除圖檔」是核准者直接對 main commit+push 的結構性維運。若把
+> main 設成「停用推送」,這些維運會失敗(app 會提示推送失敗)。製圖者/
+> 確認者不在白名單內,仍只能透過 PR(出庫→入庫→送審→核准發行)改 main。
 
 ### 3.3 保護 tag(發行版不可竄改)
 
