@@ -64,6 +64,8 @@ class PdmDialog : public QDialog
 			QString pr_author;
 			QString pr_head_sha;
 			bool pr_approved = false;
+			QString revision;      ///< 修訂索引(讀自 .qet 的 indexrev)
+			QString doc_status;    ///< 文件狀態(讀自 .qet 的 status 附加欄位)
 		};
 
 		void setUpWidget();
@@ -72,13 +74,27 @@ class PdmDialog : public QDialog
 		void loadFileStates();
 		void loadPullRequests();
 		void rebuildTree();
+		void rebuildFolderTree();
+		void populateFileList();
 		void updateButtons();
+
+		/// 讀 .qet 首頁圖框的 indexrev / status 附加欄位
+		void readDocFields(const QString &abs_path,
+				   QString *revision, QString *status) const;
+		/// 把文件狀態/修訂索引寫入 .qet 每一頁圖框並存檔。
+		/// status 空字串=不動狀態;set_revision=true 時才寫 revision
+		///(可為空字串以清空版本),false 則保留原修訂索引。
+		bool stampDocFields(const QString &abs_path, const QString &status,
+				    const QString &revision, bool set_revision) const;
+		/// 修訂索引進位(數字制):數字 +1;空/非數字(舊字母)歸 1
+		static QString nextRevision(const QString &current);
 
 		void checkOut();
 		void checkIn();
 		void cancelCheckOut();
 		void submitForReview();
 		void openReviewView();
+		void viewReleased();   ///< 唯讀開啟 main 上最後發行版
 		void approve();
 		void rejectReview();
 		void releaseApproved();
@@ -103,10 +119,13 @@ class PdmDialog : public QDialog
 
 		QLabel *m_account_label = nullptr;
 		QComboBox *m_repo_combo = nullptr;
-		QTreeWidget *m_tree = nullptr;
+		QTreeWidget *m_folder_tree = nullptr;   ///< 左:資料夾樹
+		QTreeWidget *m_tree = nullptr;          ///< 右:所選資料夾的圖檔清單
+		QString m_current_folder;               ///< 目前選取的資料夾(相對路徑)
 		QPushButton *m_checkout_button = nullptr,
 			    *m_checkin_button = nullptr,
 			    *m_cancel_button = nullptr,
+			    *m_view_released_button = nullptr,
 			    *m_refresh_button = nullptr,
 			    *m_submit_button = nullptr,
 			    *m_review_button = nullptr,
