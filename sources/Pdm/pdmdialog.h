@@ -128,6 +128,8 @@ class PdmDialog : public QDialog
 		void finishRelease(const QString &rel_path, const QString &stem,
 				   const QString &tag, const QString &sha);
 		void forceUnlock();
+		/// 退回上一發行版:捨棄進行中的 work 分支,還原為 main 最後發行版
+		void revertToRelease();
 
 		/// 查登入者所屬 team,設定 m_is_confirmer / m_is_releaser
 		void loadUserRoles();
@@ -172,7 +174,8 @@ class PdmDialog : public QDialog
 			    *m_approve_button = nullptr,
 			    *m_reject_button = nullptr,
 			    *m_release_button = nullptr,
-			    *m_force_unlock_button = nullptr;
+			    *m_force_unlock_button = nullptr,
+			    *m_revert_button = nullptr;
 		QLabel *m_status_label = nullptr;
 		QProgressBar *m_progress = nullptr;
 

@@ -207,8 +207,10 @@ void PdmDialog::setUpWidget()
 	// 發行歷史改為右側面板自動顯示(選檔即載入),不再需要按鈕
 	auto *release_row = new QHBoxLayout();
 	m_release_button = new QPushButton(tr("核准發行…"), content);
+	m_revert_button = new QPushButton(tr("退回上一發行版…"), content);
 	m_force_unlock_button = new QPushButton(tr("強制解鎖…"), content);
 	release_row->addWidget(m_release_button);
+	release_row->addWidget(m_revert_button);
 	release_row->addWidget(m_force_unlock_button);
 	layout->addLayout(release_row);
 
@@ -278,6 +280,8 @@ void PdmDialog::setUpWidget()
 		this, &PdmDialog::approveAndRelease);
 	connect(m_force_unlock_button, &QPushButton::clicked,
 		this, &PdmDialog::forceUnlock);
+	connect(m_revert_button, &QPushButton::clicked,
+		this, &PdmDialog::revertToRelease);
 
 	updateButtons();
 }
@@ -874,6 +878,12 @@ void PdmDialog::updateButtons()
 	m_release_button->setEnabled(in_review && not_author && m_is_releaser);
 	m_force_unlock_button->setVisible(locked_by_other);
 	m_force_unlock_button->setEnabled(locked_by_other);
+	// 退回上一發行版:有進行中的 work 分支才有得退;限製圖者本人
+	//(自己出庫/送審者)或核准者
+	const bool mine = (state.lock_owner == m_username && !m_username.isEmpty())
+			  || (state.pr_author == m_username && !m_username.isEmpty());
+	m_revert_button->setEnabled(has_selection && state.has_work_branch
+				    && (mine || m_is_releaser));
 }
 
 void PdmDialog::addNewDrawing()
@@ -1534,6 +1544,49 @@ void PdmDialog::forceUnlock()
 				m_status_label->setText(
 					tr("「%1」已強制解鎖").arg(rel_path));
 			}
+			refresh();
+		});
+}
+
+void PdmDialog::revertToRelease()
+{
+	const QTreeWidgetItem *item = selectedFileItem();
+	if (!item) return;
+	const QString rel_path = item->data(0, Qt::UserRole).toString();
+	const FileState state = m_files.value(rel_path);
+	if (!state.has_work_branch) return;
+	const QString branch = workBranchOf(rel_path);
+	const QString worktree = worktreeDir(sanitizedStem(rel_path));
+	const QString vault = vaultDir();
+
+	const auto answer = QMessageBox::warning(this, tr("退回上一發行版"),
+		tr("將捨棄「%1」進行中的所有未發行修改(工作分支及其送審),"
+		   "還原為圖庫最後發行版,且無法復原。\n確定退回?").arg(rel_path),
+		QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+	if (answer != QMessageBox::Yes) return;
+
+	showBusy(true);
+	// 1. 解鎖(若有鎖):自己的一般解鎖,他人的強制解鎖(核准者才會走到)
+	if (state.lock_owner == m_username && !m_username.isEmpty())
+		m_git->enqueue({"lfs", "unlock", rel_path}, vault, {});
+	else if (!state.lock_owner.isEmpty())
+		m_git->enqueue({"lfs", "unlock", "--force", rel_path}, vault, {});
+	// 2. 移除工作區(才能刪本地分支)
+	if (QDir(worktree).exists())
+		m_git->enqueue({"worktree", "remove", "--force", worktree},
+			vault, {});
+	// 3. 刪本地 work 分支
+	m_git->enqueue({"branch", "-D", branch}, vault, {});
+	// 4. 刪遠端 work 分支(會一併關閉其 PR),關檔並重整
+	m_git->enqueue({"push", "origin", "--delete", branch}, vault,
+		[this, rel_path, worktree](const PdmGitWorker::Result &r) {
+			if (!r.ok) {
+				fail(tr("刪除工作分支失敗"), r.output);
+				return;
+			}
+			emit requestCloseFile(worktree + '/' + rel_path);
+			m_status_label->setText(
+				tr("「%1」已退回上一發行版").arg(rel_path));
 			refresh();
 		});
 }
