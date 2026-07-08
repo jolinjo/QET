@@ -3066,11 +3066,14 @@ void QETDiagramEditor::subWindowActivated(QMdiSubWindow *subWindows)
 	emit syncElementsPanel();
 	updateWelcomeWidget();
 
-	// 唯讀專案(檢視發行版/審核檢視)自動進瀏覽模式、隱藏編輯 UI
+	// 唯讀專案(檢視發行版/審核檢視)自動進瀏覽模式、隱藏編輯 UI。
+	// 未命名的新專案(無檔案路徑)其 QFileInfo("").isWritable() 為 false 會被
+	// 判成唯讀,須排除,否則新專案會被誤鎖成瀏覽模式。
 	bool read_only = false;
 	if (ProjectView *pv = currentProjectView())
 		if (QETProject *proj = pv->project())
-			read_only = proj->isReadOnly();
+			read_only = proj->isReadOnly()
+				    && !proj->filePath().isEmpty();
 	applyReadOnlyView(read_only);
 }
 
@@ -3081,22 +3084,18 @@ void QETDiagramEditor::subWindowActivated(QMdiSubWindow *subWindows)
 */
 void QETDiagramEditor::applyReadOnlyView(bool read_only)
 {
+	// 唯讀才強制把 folio 切為瀏覽模式;可編輯專案不強制改模式(避免干擾
+	// 開啟流程),僅同步工具列模式鈕的勾選/啟用狀態。
 	if (read_only) {
-		// 全部 folio 切為瀏覽(唯讀)模式,並把工具列模式鈕切到「瀏覽模式」
 		if (ProjectView *pv = currentProjectView())
 			for (DiagramView *dv : pv->diagram_views())
 				dv->setVisualisationMode();
-		if (m_mode_selection) m_mode_selection->setChecked(false);
-		if (m_mode_visualise) m_mode_visualise->setChecked(true);
-	} else {
-		// 可編輯專案:切回「編輯模式(選取)」
-		if (ProjectView *pv = currentProjectView())
-			for (DiagramView *dv : pv->diagram_views())
-				dv->setSelectionMode();
-		if (m_mode_visualise) m_mode_visualise->setChecked(false);
-		if (m_mode_selection) m_mode_selection->setChecked(true);
 	}
-	if (m_mode_selection) m_mode_selection->setEnabled(!read_only);
+	if (m_mode_selection) {
+		m_mode_selection->setChecked(!read_only);
+		m_mode_selection->setEnabled(!read_only);
+	}
+	if (m_mode_visualise) m_mode_visualise->setChecked(read_only);
 
 	if (qdw_pa) qdw_pa->setVisible(!read_only);
 	if (m_add_item_tool_bar) m_add_item_tool_bar->setVisible(!read_only);

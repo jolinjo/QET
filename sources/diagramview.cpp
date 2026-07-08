@@ -1189,10 +1189,8 @@ QList<QAction *> DiagramView::contextMenuActions() const
 	{
 		if (m_diagram->selectedItems().isEmpty())
 		{
-			list << m_paste_here;
-			list << m_separators.at(0);
+			// 空白處右鍵僅保留「頁面屬性」(移除貼上與新增/刪除列欄)
 			list << qde->m_edit_diagram_properties;
-			list << qde->m_row_column_actions_group.actions();
 		}
 		else
 		{
