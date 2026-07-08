@@ -116,12 +116,13 @@ PdmDialog::PdmDialog(QWidget *parent) :
 {
 	setObjectName("pdm_dialog");
 	setWindowTitle(tr("圖檔管理"));
-	resize(1080, 560);
+	resize(1280, 580);
 	setUpWidget();
 
 	connect(m_git, &PdmGitWorker::stepStarted, this,
-		[this](const QString &description) {
-			m_status_label->setText(description);
+		[this](const QString &) {
+			// 不顯示原始 git 指令(對使用者是雜訊);進度由進度條表示
+			m_status_label->setText(tr("處理中…"));
 		});
 	connect(m_git, &PdmGitWorker::allFinished, this,
 		[this]() { showBusy(false); });
@@ -177,15 +178,21 @@ void PdmDialog::setUpWidget()
 					 tr("提交者"), tr("訊息")});
 	m_history_tree->setRootIsDecorated(true);   // 顯示發行版下的小版縮排
 	m_history_tree->setSelectionMode(QAbstractItemView::SingleSelection);
+	// 版本/日期/提交者依內容,訊息欄填滿剩餘寬度(避免被切掉)
 	m_history_tree->header()->setSectionResizeMode(
-		QHeaderView::ResizeToContents);
+		0, QHeaderView::ResizeToContents);
+	m_history_tree->header()->setSectionResizeMode(
+		1, QHeaderView::ResizeToContents);
+	m_history_tree->header()->setSectionResizeMode(
+		2, QHeaderView::ResizeToContents);
+	m_history_tree->header()->setSectionResizeMode(3, QHeaderView::Stretch);
 
 	splitter->addWidget(m_folder_tree);
 	splitter->addWidget(m_tree);
 	splitter->addWidget(m_history_tree);
 	splitter->setStretchFactor(0, 1);
-	splitter->setStretchFactor(1, 4);
-	splitter->setStretchFactor(2, 2);
+	splitter->setStretchFactor(1, 3);
+	splitter->setStretchFactor(2, 3);
 	layout->addWidget(splitter, 1);
 
 	// 三排動作鈕:依選取圖檔的狀態顯示/隱藏
@@ -1671,11 +1678,12 @@ void PdmDialog::revertToRelease()
 	const QString worktree = worktreeDir(sanitizedStem(rel_path));
 	const QString vault = vaultDir();
 
-	const auto answer = QMessageBox::warning(this, tr("退回上一發行版"),
-		tr("將捨棄「%1」進行中的所有未發行修改(工作分支及其送審),"
-		   "還原為圖庫最後發行版,且無法復原。\n確定退回?").arg(rel_path),
-		QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-	if (answer != QMessageBox::Yes) return;
+	QMessageBox box(QMessageBox::Warning, tr("退回上一發行版"),
+		tr("退回「%1」到上一發行版?").arg(QFileInfo(rel_path).fileName()),
+		QMessageBox::Yes | QMessageBox::No, this);
+	box.setInformativeText(tr("會捨棄進行中的所有修改,無法復原。"));
+	box.setDefaultButton(QMessageBox::No);
+	if (box.exec() != QMessageBox::Yes) return;
 
 	showBusy(true);
 	// 1. 解鎖(若有鎖):自己的一般解鎖,他人的強制解鎖(核准者才會走到)
