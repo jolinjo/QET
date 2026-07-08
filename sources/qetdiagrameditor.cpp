@@ -3312,14 +3312,22 @@ void QETDiagramEditor::applyReadOnlyView(bool read_only)
 			for (DiagramView *dv : pv->diagram_views())
 				dv->setVisualisationMode();
 	}
+	// 唯讀時模式切換沒有意義:直接隱藏「編輯模式/瀏覽模式」兩顆動作(工具列與
+	// 選單一併),縮放鈕仍留著。可編輯時再顯示。用 QAction::setVisible 較
+	// widgetForAction 可靠(後者在部分時機取不到按鈕)。
 	if (m_mode_selection) {
 		m_mode_selection->setChecked(!read_only);
 		m_mode_selection->setEnabled(editable);
+		m_mode_selection->setVisible(editable);
 	}
-	if (m_mode_visualise) m_mode_visualise->setChecked(read_only);
+	if (m_mode_visualise) {
+		m_mode_visualise->setChecked(read_only);
+		m_mode_visualise->setVisible(editable);
+	}
 
-	// 面板與繪圖類工具列:僅可編輯時顯示(元件庫/模組面板無開圖或瀏覽時也隱藏)
-	if (qdw_pa) qdw_pa->setVisible(editable);
+	// 專案面板(qdw_pa,含專案/頁面樹):有開圖就顯示,審核/瀏覽時也要能翻頁;
+	// 元件庫/模組面板(m_qdw_elmt_collection)只在可編輯時顯示。
+	if (qdw_pa) qdw_pa->setVisible(has_project);
 	if (m_qdw_elmt_collection) m_qdw_elmt_collection->setVisible(editable);
 	if (m_add_item_tool_bar) m_add_item_tool_bar->setVisible(editable);
 	if (m_depth_tool_bar) m_depth_tool_bar->setVisible(editable);
@@ -3328,16 +3336,8 @@ void QETDiagramEditor::applyReadOnlyView(bool read_only)
 	// 編輯工具列(新增/刪除頁面、復原/重做、剪貼、刪除/旋轉):僅可編輯時顯示
 	if (edit_tool_bar) edit_tool_bar->setVisible(editable);
 
-	// 檢視工具列(模式鈕+縮放):有開圖就顯示(瀏覽時仍可縮放),無開圖隱藏
+	// 檢視工具列(縮放):有開圖就顯示(瀏覽時仍可縮放),無開圖隱藏
 	if (view_tool_bar) view_tool_bar->setVisible(has_project);
-
-	// 唯讀時模式切換沒有意義:隱藏「編輯模式/瀏覽模式」兩個工具鈕(只藏工具列
-	// 圖示,不動 View 選單項),縮放鈕仍留著。可編輯時再顯示。
-	if (view_tool_bar)
-		for (QAction *act : {m_mode_selection, m_mode_visualise})
-			if (act)
-				if (QWidget *w = view_tool_bar->widgetForAction(act))
-					w->setVisible(editable);
 }
 
 /**

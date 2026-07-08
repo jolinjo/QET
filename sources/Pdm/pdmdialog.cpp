@@ -122,15 +122,24 @@ PdmDialog::PdmDialog(QWidget *parent) :
 	connect(m_git, &PdmGitWorker::stepStarted, this,
 		[this](const QString &cmd) {
 			// 不顯示原始 git 指令(對使用者是雜訊),改對應成看得懂的
-			// 階段說明,讓使用者知道目前在做什麼、不會以為當掉。
+			// 階段說明。任何 git 步驟一開始就顯示專用進度對話框並更新
+			// 說明——不論從工具列或本視窗觸發、有沒有呼叫 showBusy,
+			// 都有一致的進度回饋。
 			const QString text = friendlyStep(cmd);
 			m_status_label->setText(text);
-			if (m_busy_label && m_busy_dialog
-			    && m_busy_dialog->isVisible())
-				m_busy_label->setText(text);
+			ensureBusyDialog();
+			m_busy_label->setText(text);
+			if (!m_busy_dialog->isVisible()) {
+				m_busy_dialog->show();
+				m_busy_dialog->raise();
+			}
 		});
 	connect(m_git, &PdmGitWorker::allFinished, this,
-		[this]() { showBusy(false); });
+		[this]() {
+			// git 佇列清空 → 收起進度對話框(成功或失敗都會走到)
+			if (m_busy_dialog) m_busy_dialog->hide();
+			showBusy(false);
+		});
 }
 
 // 視窗首次顯示才連線,避免程式一啟動就打伺服器
@@ -1449,13 +1458,16 @@ void PdmDialog::confirmDone()
 	}
 
 	// 寫確認者 + commit(帶簽核訊息)到 work 分支,不核准、不合併
+	const int pr_index = state.pr_index;
 	signoffOnWorkBranch(rel_path, QString(),
 		{{QStringLiteral("checked-by"), m_username}},
 		tr("確認者 %1 已確認完畢：%2").arg(m_username, note.trimmed()),
-		[this, rel_path]() {
+		[this, rel_path, pr_index]() {
 			showBusy(false);
 			m_status_label->setText(
 				tr("「%1」已確認完畢").arg(rel_path));
+			// 確認完畢後自動關掉開著的審核檢視(唯讀,留著沒意義)
+			emit requestCloseFile(reviewDir(pr_index) + '/' + rel_path);
 			refresh();
 		});
 }
@@ -2002,6 +2014,7 @@ QString PdmDialog::friendlyStep(const QString &cmd)
 		{"reset",            "還原工作區…"},
 		{"restore",          "還原工作區…"},
 		{"merge",            "合併發行…"},
+		{"show",             "讀取最新版…"},
 		{"ls-remote",        "查詢版本標籤…"},
 		{"rev-parse",        "確認版本…"},
 		{"cli-export-pdf",   "產生發行 PDF…"},
@@ -2019,10 +2032,13 @@ void PdmDialog::ensureBusyDialog()
 	if (m_busy_dialog) return;
 	// 父層設為本對話框的 parent(編輯器主視窗):圖檔管理視窗沒開也能置中顯示
 	QWidget *host = parentWidget() ? parentWidget() : this;
+	// 非模態 + 置頂:提供進度回饋但不鎖死整個程式(避免某步驟未收尾時
+	// 卡住其他操作,如刪資料夾)。收起一律由 git 佇列清空(allFinished)負責。
 	m_busy_dialog = new QDialog(host,
-		Qt::Dialog | Qt::CustomizeWindowHint | Qt::WindowTitleHint);
+		Qt::Dialog | Qt::CustomizeWindowHint | Qt::WindowTitleHint
+		| Qt::WindowStaysOnTopHint);
 	m_busy_dialog->setWindowTitle(tr("圖檔管理"));
-	m_busy_dialog->setModal(true);
+	m_busy_dialog->setModal(false);
 	m_busy_dialog->setFixedWidth(380);
 
 	auto *lay = new QVBoxLayout(m_busy_dialog);
@@ -2047,16 +2063,8 @@ void PdmDialog::ensureBusyDialog()
 
 void PdmDialog::showBusy(bool busy)
 {
-	// 所有 PDM 出入庫造成的延遲,一律用這個專用對話框顯示進度
-	if (busy) {
-		ensureBusyDialog();
-		m_busy_label->setText(tr("處理中…"));
-		m_busy_dialog->show();
-		m_busy_dialog->raise();
-	} else if (m_busy_dialog) {
-		m_busy_dialog->hide();
-	}
-	// 主視窗內嵌進度條同步(視窗開著時也有回饋)
+	// 進度對話框改由 git 佇列生命週期(stepStarted/allFinished)驅動,
+	// 這裡只管主視窗內嵌進度條與按鈕啟用。
 	if (busy) {
 		m_progress->setRange(0, 0);
 		m_progress->show();
@@ -2069,6 +2077,7 @@ void PdmDialog::showBusy(bool busy)
 
 void PdmDialog::fail(const QString &title, const QString &log)
 {
+	if (m_busy_dialog) m_busy_dialog->hide();
 	showBusy(false);
 	m_status_label->setText(title);
 	QMessageBox::warning(this, title, log.right(1500));
@@ -2169,7 +2178,7 @@ QString PdmDialog::drawingRelPath(const QString &abs_path) const
 bool PdmDialog::isCheckedOutByMe(const QString &abs_path) const
 {
 	if (openContext(abs_path) != CheckoutEdit) return false;
-	const FileState st = m_files.value(relPathForOpen(abs_path));
+	const FileState st = m_files.value(drawingRelPath(abs_path));
 	return !m_username.isEmpty() && st.lock_owner == m_username;
 }
 
@@ -2213,7 +2222,7 @@ bool PdmDialog::selectFileInUi(const QString &rel_path)
 
 void PdmDialog::checkInByPath(const QString &abs_path)
 {
-	if (selectFileInUi(relPathForOpen(abs_path))) checkIn();
+	if (selectFileInUi(drawingRelPath(abs_path))) checkIn();
 }
 
 void PdmDialog::checkOutByPath(const QString &abs_path)
@@ -2270,15 +2279,15 @@ void PdmDialog::browseLatestByPath(const QString &abs_path)
 
 void PdmDialog::cancelByPath(const QString &abs_path)
 {
-	if (selectFileInUi(relPathForOpen(abs_path))) cancelCheckOut();
+	if (selectFileInUi(drawingRelPath(abs_path))) cancelCheckOut();
 }
 
 void PdmDialog::confirmByPath(const QString &abs_path)
 {
-	if (selectFileInUi(relPathForOpen(abs_path))) confirmDone();
+	if (selectFileInUi(drawingRelPath(abs_path))) confirmDone();
 }
 
 void PdmDialog::releaseByPath(const QString &abs_path)
 {
-	if (selectFileInUi(relPathForOpen(abs_path))) approveAndRelease();
+	if (selectFileInUi(drawingRelPath(abs_path))) approveAndRelease();
 }
