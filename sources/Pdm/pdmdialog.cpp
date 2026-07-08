@@ -1830,74 +1830,100 @@ void PdmDialog::loadReleaseHistory(const QString &rel_path)
 	const QString ref = st.has_work_branch
 		? QStringLiteral("origin/") + workBranchOf(rel_path)
 		: QStringLiteral("origin/") + QLatin1String(DEFAULT_BRANCH);
-	// 每列:subject <US> 日期時間 <US> 提交者 <US> refs
+	const QString vault = vaultDir();
+	// %H hash, %s subject, %cd 日期時間, %cn 提交者, %D refs
 	m_git->enqueue({QStringLiteral("log"),
 		QStringLiteral("--date=format:%Y-%m-%d %H:%M"),
-		QStringLiteral("--format=%s%x1f%cd%x1f%cn%x1f%D"),
-		ref, QStringLiteral("--"), rel_path}, vaultDir(),
-		[this, rel_path, stem](const PdmGitWorker::Result &r) {
-		// 回呼期間可能已改選其他檔;確認仍是同一檔才填
+		QStringLiteral("--format=%H%x1f%s%x1f%cd%x1f%cn%x1f%D"),
+		ref, QStringLiteral("--"), rel_path}, vault,
+		[this, rel_path, stem, vault](const PdmGitWorker::Result &r) {
 		const QTreeWidgetItem *current = selectedFileItem();
 		if (!current
 		    || current->data(0, Qt::UserRole).toString() != rel_path)
 			return;
-		m_history_tree->clear();
-		if (!r.ok) return;
+		if (!r.ok) { m_history_tree->clear(); return; }
 
+		struct Rec { QString subject, datetime, committer, rel_tag, version; };
+		auto recs = std::make_shared<QVector<Rec>>();
+		auto hashes = std::make_shared<QStringList>();
 		const QString rel_prefix = QStringLiteral("release/%1-v").arg(stem);
-		const QColor highlight(255, 244, 214);   // 發行版底色(淡黃)
-
-		// 尚未發行的最新一批 commit 掛在「編輯中(未發行)」節點下
-		auto *pending = new QTreeWidgetItem(m_history_tree,
-			{tr("編輯中"), QString(), QString(), tr("(未發行)")});
-		QTreeWidgetItem *parent = pending;
-
 		const QStringList lines = r.output.split('\n', Qt::SkipEmptyParts);
 		for (const QString &line : lines) {
 			const QStringList f = line.split(QChar(0x1f));
-			if (f.size() < 4) continue;
-			const QString subject   = f.at(0);
-			const QString datetime  = f.at(1);
-			const QString committer = f.at(2);
-			const QString refs      = f.at(3);
-
-			// 這個 commit 是否帶發行 tag
-			QString rel_tag;
-			const QStringList tokens = refs.split(QLatin1Char(','));
+			if (f.size() < 5) continue;
+			Rec rec;
+			rec.subject   = f.at(1);
+			rec.datetime  = f.at(2);
+			rec.committer = f.at(3);
+			const QStringList tokens = f.at(4).split(QLatin1Char(','));
 			for (const QString &token : tokens) {
 				const QString t = token.trimmed();
 				if (t.startsWith(QLatin1String("tag: "))) {
 					const QString tg = t.mid(5);
 					if (tg.startsWith(rel_prefix)) {
-						rel_tag = tg;
+						rec.rel_tag = tg;
 						break;
 					}
 				}
 			}
-
-			if (!rel_tag.isEmpty()) {
-				// 發行版:★ + 底色 + 粗體,可雙擊唯讀開啟
-				const QString ver = rel_tag.mid(rel_prefix.length());
-				auto *item = new QTreeWidgetItem(m_history_tree,
-					{QStringLiteral("★ v") + ver, datetime,
-					 committer, tr("正式發行")});
-				for (int c = 0; c < 4; ++c) {
-					item->setBackground(c, highlight);
-					QFont fnt = item->font(c);
-					fnt.setBold(true);
-					item->setFont(c, fnt);
-				}
-				item->setData(0, Qt::UserRole, rel_tag);
-				parent = item;
-			} else {
-				// 小版 commit:縮排在所屬發行版之下
-				new QTreeWidgetItem(parent,
-					{QString(), datetime, committer, subject});
-			}
+			recs->append(rec);
+			hashes->append(f.at(0));
 		}
-		if (pending->childCount() == 0)
-			delete pending;   // 沒有未發行 commit 就不顯示該節點
-		m_history_tree->expandAll();
+		if (recs->isEmpty()) { m_history_tree->clear(); return; }
+
+		// 逐 commit 讀出當下的 indexrev 當版本號(出庫領號、每次入庫都有),
+		// 全部讀完再一次建樹
+		auto remaining = std::make_shared<int>(recs->size());
+		for (int i = 0; i < recs->size(); ++i) {
+			m_git->enqueue({QStringLiteral("show"),
+				hashes->at(i) + QLatin1Char(':') + rel_path}, vault,
+				[this, rel_path, stem, recs, remaining, i]
+				(const PdmGitWorker::Result &sr) {
+				QDomDocument doc;
+				if (doc.setContent(sr.output))
+					(*recs)[i].version = doc.documentElement()
+						.firstChildElement(QStringLiteral("diagram"))
+						.attribute(QStringLiteral("indexrev"));
+				if (--(*remaining) != 0) return;
+
+				const QTreeWidgetItem *cur = selectedFileItem();
+				if (!cur
+				    || cur->data(0, Qt::UserRole).toString() != rel_path)
+					return;
+				m_history_tree->clear();
+				const QColor highlight(255, 244, 214);
+				const QString pfx =
+					QStringLiteral("release/%1-v").arg(stem);
+				auto *pending = new QTreeWidgetItem(m_history_tree,
+					{tr("編輯中"), QString(), QString(),
+					 tr("(未發行)")});
+				QTreeWidgetItem *parent = pending;
+				for (const Rec &rec : *recs) {
+					if (!rec.rel_tag.isEmpty()) {
+						// 發行版:★ + 版本 + 底色粗體,可雙擊唯讀開啟
+						auto *item = new QTreeWidgetItem(
+							m_history_tree,
+							{QStringLiteral("★ ") + rec.version,
+							 rec.datetime, rec.committer,
+							 tr("正式發行")});
+						for (int c = 0; c < 4; ++c) {
+							item->setBackground(c, highlight);
+							QFont fnt = item->font(c);
+							fnt.setBold(true);
+							item->setFont(c, fnt);
+						}
+						item->setData(0, Qt::UserRole, rec.rel_tag);
+						parent = item;
+					} else {
+						new QTreeWidgetItem(parent,
+							{rec.version, rec.datetime,
+							 rec.committer, rec.subject});
+					}
+				}
+				if (pending->childCount() == 0) delete pending;
+				m_history_tree->expandAll();
+			});
+		}
 	});
 }
 
