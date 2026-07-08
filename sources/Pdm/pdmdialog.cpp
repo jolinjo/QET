@@ -514,7 +514,32 @@ void PdmDialog::loadFileStates()
 				iterator->has_work_branch = branches.contains(
 					workBranchOf(iterator->rel_path));
 			}
-			loadPullRequests();
+
+			// 進行中的圖檔:版本/狀態/簽核者改讀 work 分支的圖框
+			//(這些值尚未合併回 main,清單直接讀 main 會顯示成舊值)
+			QStringList work_paths;
+			for (auto it = m_files.constBegin();
+			     it != m_files.constEnd(); ++it)
+				if (it->has_work_branch) work_paths << it.key();
+			if (work_paths.isEmpty()) {
+				loadPullRequests();
+				return;
+			}
+			auto remaining = std::make_shared<int>(work_paths.size());
+			for (const QString &rp : work_paths) {
+				m_git->enqueue({"show", QStringLiteral("origin/")
+					+ workBranchOf(rp) + ':' + rp}, vaultDir(),
+					[this, rp, remaining]
+					(const PdmGitWorker::Result &show_r) {
+					QDomDocument doc;
+					if (doc.setContent(show_r.output)) {
+						auto it = m_files.find(rp);
+						if (it != m_files.end())
+							parseDocFields(doc, &(*it));
+					}
+					if (--(*remaining) == 0) loadPullRequests();
+				});
+			}
 		});
 }
 
@@ -597,13 +622,17 @@ void PdmDialog::loadPullRequests()
 void PdmDialog::readDocFields(const QString &abs_path, FileState *state) const
 {
 	if (!state) return;
-
 	QFile file(abs_path);
 	if (!file.open(QIODevice::ReadOnly)) return;
 	QDomDocument doc;
 	if (!doc.setContent(&file)) { file.close(); return; }
 	file.close();
+	parseDocFields(doc, state);
+}
 
+void PdmDialog::parseDocFields(const QDomDocument &doc, FileState *state) const
+{
+	if (!state) return;
 	// 取首頁(第一個 <diagram>)的圖框欄位為整檔代表值
 	const QDomElement diagram =
 		doc.documentElement().firstChildElement(QStringLiteral("diagram"));
@@ -847,15 +876,15 @@ void PdmDialog::updateButtons()
 
 void PdmDialog::addNewDrawing()
 {
-	if (currentRepoFullName().isEmpty()) return;
+	// 取目前開啟的圖檔:請編輯器存檔後以路徑回呼 addDrawingFromFile
+	emit requestAddCurrentDrawing();
+}
 
-	// 1. 選來源 .qet(使用者已畫好、存在本機的新圖)
-	const QString source = QFileDialog::getOpenFileName(this,
-		tr("選擇要加入圖庫的圖檔"), QString(),
-		tr("QElectroTech 圖檔 (*.qet)"));
-	if (source.isEmpty()) return;
+void PdmDialog::addDrawingFromFile(const QString &source)
+{
+	if (currentRepoFullName().isEmpty() || source.isEmpty()) return;
 
-	// 2. 選專案資料夾 + 圖號
+	// 選專案資料夾 + 圖號
 	QDialog dlg(this);
 	dlg.setWindowTitle(tr("新增圖檔到圖庫"));
 	auto *form = new QFormLayout(&dlg);

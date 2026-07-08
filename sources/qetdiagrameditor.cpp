@@ -619,6 +619,21 @@ void QETDiagramEditor::ensurePdmDialog()
 			if (ProjectView *pv = viewForFile(file_path))
 				pv->save();
 		});
+	// 新增圖檔:取目前開啟的圖檔,存檔後把路徑交給對話框匯入圖庫
+	connect(m_pdm_dialog, &PdmDialog::requestAddCurrentDrawing, this,
+		[this]() {
+			ProjectView *pv = currentProjectView();
+			if (!pv || !pv->project()) {
+				QET::QetMessageBox::warning(m_pdm_dialog,
+					tr("新增圖檔"),
+					tr("請先開啟要加入圖庫的圖檔。"));
+				return;
+			}
+			pv->save();   // 未命名會跳另存;取消則路徑為空
+			const QString path = pv->project()->filePath();
+			if (!path.isEmpty())
+				m_pdm_dialog->addDrawingFromFile(path);
+		});
 	// 入庫/取消出庫後強制關閉該檔(不提示存檔:磁碟上已 commit 的
 	// 版本才是正本),避免編輯器留著舊內容、下次出庫開到舊版。
 	connect(m_pdm_dialog, &PdmDialog::requestCloseFile, this,
@@ -3067,11 +3082,19 @@ void QETDiagramEditor::subWindowActivated(QMdiSubWindow *subWindows)
 void QETDiagramEditor::applyReadOnlyView(bool read_only)
 {
 	if (read_only) {
-		// 全部 folio 切為瀏覽(唯讀)模式,禁止切回選取/編輯模式
+		// 全部 folio 切為瀏覽(唯讀)模式,並把工具列模式鈕切到「瀏覽模式」
 		if (ProjectView *pv = currentProjectView())
 			for (DiagramView *dv : pv->diagram_views())
 				dv->setVisualisationMode();
+		if (m_mode_selection) m_mode_selection->setChecked(false);
 		if (m_mode_visualise) m_mode_visualise->setChecked(true);
+	} else {
+		// 可編輯專案:切回「編輯模式(選取)」
+		if (ProjectView *pv = currentProjectView())
+			for (DiagramView *dv : pv->diagram_views())
+				dv->setSelectionMode();
+		if (m_mode_visualise) m_mode_visualise->setChecked(false);
+		if (m_mode_selection) m_mode_selection->setChecked(true);
 	}
 	if (m_mode_selection) m_mode_selection->setEnabled(!read_only);
 

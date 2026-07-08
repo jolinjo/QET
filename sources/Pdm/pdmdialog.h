@@ -25,6 +25,7 @@
 class PdmGitWorker;
 class PdmService;
 class QComboBox;
+class QDomDocument;
 class QLabel;
 class QProgressBar;
 class QPushButton;
@@ -55,11 +56,15 @@ class PdmDialog : public QDialog
 		void requestSaveFile(const QString &file_path);
 		/// 背景連線結果:ok=已連上並取回資料(供工具列按鈕 enable/disable)
 		void connectionReady(bool ok);
+		/// 按「新增圖檔」:請編輯器提供目前開啟的圖檔(存檔後回呼 addDrawingFromFile)
+		void requestAddCurrentDrawing();
 
 	public slots:
 		void refresh();
 		/// 程式啟動後背景先連一次(不需開視窗),結果由 connectionReady 發出
 		void startBackgroundConnect();
+		/// 把指定來源 .qet 加入圖庫(由編輯器提供目前開啟檔的路徑後呼叫)
+		void addDrawingFromFile(const QString &source_path);
 
 	protected:
 		void showEvent(QShowEvent *event) override;
@@ -96,6 +101,8 @@ class PdmDialog : public QDialog
 
 		/// 讀 .qet 首頁圖框欄位(版本/文件狀態/繪製者/審核者/核准者)填入 state
 		void readDocFields(const QString &abs_path, FileState *state) const;
+		/// 從已解析的 XML 取首頁圖框欄位填入 state(供讀 work 分支內容用)
+		void parseDocFields(const QDomDocument &doc, FileState *state) const;
 		/// 把文件狀態/修訂索引/附加欄位寫入 .qet 每一頁圖框並存檔。
 		/// status 空字串=不動狀態;set_revision=true 時才寫 revision
 		///(可為空字串以清空版本),false 則保留原修訂索引;
