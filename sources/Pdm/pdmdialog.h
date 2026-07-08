@@ -176,6 +176,8 @@ class PdmDialog : public QDialog
 			const QString &commit_message,
 			const std::function<void ()> &after_push);
 		void showBusy(bool busy);
+		/// 把 git/子行程指令對應成使用者看得懂的階段說明
+		static QString friendlyStep(const QString &cmd);
 		void fail(const QString &title, const QString &log);
 
 		QString currentRepoFullName() const;

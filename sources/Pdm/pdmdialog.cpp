@@ -120,9 +120,10 @@ PdmDialog::PdmDialog(QWidget *parent) :
 	setUpWidget();
 
 	connect(m_git, &PdmGitWorker::stepStarted, this,
-		[this](const QString &) {
-			// 不顯示原始 git 指令(對使用者是雜訊);進度由進度條表示
-			m_status_label->setText(tr("處理中…"));
+		[this](const QString &cmd) {
+			// 不顯示原始 git 指令(對使用者是雜訊),改對應成看得懂的
+			// 階段說明,讓使用者知道目前在做什麼、不會以為當掉。
+			m_status_label->setText(friendlyStep(cmd));
 		});
 	connect(m_git, &PdmGitWorker::allFinished, this,
 		[this]() { showBusy(false); });
@@ -1978,6 +1979,37 @@ void PdmDialog::openReleaseRevision(const QString &tag, const QString &rel_path)
 	}
 }
 
+QString PdmDialog::friendlyStep(const QString &cmd)
+{
+	// 把 git/子行程指令對應成使用者看得懂的階段說明
+	struct Rule { const char *needle; const char *text; };
+	static const Rule rules[] = {
+		{"clone",            "首次下載圖庫…"},
+		{"lfs lock",         "鎖定圖檔(出庫)…"},
+		{"lfs unlock",       "解除鎖定…"},
+		{"worktree add",     "建立本機工作區…"},
+		{"worktree remove",  "清理工作區…"},
+		{"fetch",            "連線伺服器、取得最新版本…"},
+		{"pull",             "更新本機到最新…"},
+		{"push",             "上傳到伺服器…"},
+		{"commit",           "記錄變更…"},
+		{"add ",             "準備變更…"},
+		{"checkout",         "切換版本…"},
+		{"reset",            "還原工作區…"},
+		{"restore",          "還原工作區…"},
+		{"merge",            "合併發行…"},
+		{"ls-remote",        "查詢版本標籤…"},
+		{"rev-parse",        "確認版本…"},
+		{"cli-export-pdf",   "產生發行 PDF…"},
+		{"cli-validate",     "驗證圖檔…"},
+	};
+	for (const Rule &r : rules) {
+		if (cmd.contains(QLatin1String(r.needle)))
+			return tr(r.text);
+	}
+	return tr("處理中…");
+}
+
 void PdmDialog::showBusy(bool busy)
 {
 	if (busy) {
@@ -2114,16 +2146,19 @@ void PdmDialog::checkInByPath(const QString &abs_path)
 
 void PdmDialog::checkOutByPath(const QString &abs_path)
 {
+	// 出庫是多步驟的網路/git 作業,顯示本視窗讓使用者看得到進度條與
+	// 階段說明(連線→建立工作區→鎖定…),不會以為當掉。
+	show();
+	raise();
+	activateWindow();
+
 	const QString rel = relPathForOpen(abs_path);
 	if (!rel.isEmpty() && selectFileInUi(rel)) {
 		checkOut();
 		return;
 	}
 	// 清單尚未載入,或路徑不在工作區內(如發行版暫存檢視):
-	// 開啟圖檔管理視窗讓使用者在清單中出庫。
-	show();
-	raise();
-	activateWindow();
+	// 重整清單讓使用者在清單中出庫。
 	refresh();
 }
 

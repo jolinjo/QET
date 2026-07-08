@@ -19,6 +19,7 @@
 
 #include <QListWidget>
 #include <QMessageBox>
+#include <QProgressDialog>
 #include <QPushButton>
 #include <QStyledItemDelegate>
 #include <QSettings>
@@ -390,10 +391,24 @@ void QETDiagramEditor::setUpWelcomeWidget()
 			box.addButton(QMessageBox::Cancel);
 			box.setDefaultButton(checkout);
 			box.exec();
-			if (box.clickedButton() == checkout)
+			if (box.clickedButton() == checkout) {
+				// 出庫走 PdmDialog(其進度條/階段說明會顯示)
 				m_pdm_dialog->checkOutByPath(path);
-			else if (box.clickedButton() == browse)
+			} else if (box.clickedButton() == browse) {
+				// 唯讀開檔是同步作業(解析 .qet 會卡一下),先顯示
+				// 忙碌指示,免得使用者以為當掉
+				QProgressDialog prog(
+					tr("正在開啟圖檔(唯讀)…"),
+					QString(), 0, 0, this);
+				prog.setWindowTitle(tr("圖檔管理"));
+				prog.setWindowModality(Qt::ApplicationModal);
+				prog.setMinimumDuration(0);
+				prog.setCancelButton(nullptr);
+				prog.show();
+				QCoreApplication::processEvents();
 				m_pdm_dialog->openReadOnlyByPath(path);
+				prog.close();
+			}
 			return;
 		}
 		openRecentFile(path);
@@ -696,17 +711,32 @@ void QETDiagramEditor::showPdmDialog()
 
 void QETDiagramEditor::updatePdmToolbar()
 {
-	PdmDialog::OpenContext ctx = PdmDialog::NotManaged;
-	if (m_pdm_dialog)
-		if (ProjectView *pv = currentProjectView())
-			if (QETProject *proj = pv->project())
-				ctx = m_pdm_dialog->openContext(proj->filePath());
+	// ── 開檔情境 → 工具列按鈕 核心表(唯一真相來源)────────────────────
+	// 情境        判定                         儲存/另存 入庫/取消出庫 確認/核准
+	// 本地        非受管路徑                    顯示       隱藏         隱藏
+	// 出庫編輯    checkouts 路徑 且 可寫(非唯讀) 隱藏      顯示         隱藏
+	// 唯讀瀏覽    受管但唯讀開啟(含發行版暫存)   隱藏      隱藏         隱藏
+	// 審核檢視    reviews 路徑                  隱藏       隱藏         顯示(依角色)
+	// 關鍵:入庫/取消出庫只在「真的出庫且可編輯」時出現——唯讀瀏覽一顆都不給。
+	// ────────────────────────────────────────────────────────────────
+	QString path;
+	bool proj_read_only = false;
+	if (ProjectView *pv = currentProjectView())
+		if (QETProject *proj = pv->project()) {
+			path = proj->filePath();
+			proj_read_only = proj->isReadOnly() && !path.isEmpty();
+		}
 
-	const bool checkout = (ctx == PdmDialog::CheckoutEdit);
+	const PdmDialog::OpenContext ctx = m_pdm_dialog
+		? m_pdm_dialog->openContext(path) : PdmDialog::NotManaged;
+
+	// 受管檔(工作區內或發行版暫存)一律隱藏儲存/另存
+	const bool managed  = PdmDialog::isManagedPath(path);
+	// 真正的出庫編輯 = 在 checkouts 且是可寫開啟(唯讀瀏覽不算)
+	const bool checkout = (ctx == PdmDialog::CheckoutEdit) && !proj_read_only;
+	// 審核檢視 = reviews 路徑(一律唯讀)
 	const bool review   = (ctx == PdmDialog::ReviewReadOnly);
 
-	// 出庫編輯改走入庫、審核檢視為唯讀:兩者都隱藏儲存/另存
-	const bool managed = checkout || review;
 	if (m_save_file)    m_save_file->setVisible(!managed);
 	if (m_save_file_as) m_save_file_as->setVisible(!managed);
 	if (m_pdm_checkin)  m_pdm_checkin->setVisible(checkout);
@@ -3185,7 +3215,7 @@ void QETDiagramEditor::subWindowActivated(QMdiSubWindow *subWindows)
 	- 沒開任何圖時:隱藏所有編輯/檢視/繪圖工具鈕(只留新增/開啟/圖檔管理)。
 	- 唯讀檢視(檢視發行版/審核檢視)時:強制瀏覽模式,隱藏會動到版面的編輯
 	  工具(新增/刪除頁面、復原/重做、剪貼、刪除/旋轉、繪圖/深度/圖框工具列、
-	  元件庫面板),但保留檢視工具列(模式鈕+縮放)供瀏覽。
+	  元件庫面板、以及「編輯模式/瀏覽模式」模式鈕),僅保留縮放供瀏覽。
 	- 可編輯時:全部還原顯示。
 	供 subWindowActivated 依專案唯讀狀態呼叫。
 */
@@ -3218,6 +3248,14 @@ void QETDiagramEditor::applyReadOnlyView(bool read_only)
 
 	// 檢視工具列(模式鈕+縮放):有開圖就顯示(瀏覽時仍可縮放),無開圖隱藏
 	if (view_tool_bar) view_tool_bar->setVisible(has_project);
+
+	// 唯讀時模式切換沒有意義:隱藏「編輯模式/瀏覽模式」兩個工具鈕(只藏工具列
+	// 圖示,不動 View 選單項),縮放鈕仍留著。可編輯時再顯示。
+	if (view_tool_bar)
+		for (QAction *act : {m_mode_selection, m_mode_visualise})
+			if (act)
+				if (QWidget *w = view_tool_bar->widgetForAction(act))
+					w->setVisible(editable);
 }
 
 /**
