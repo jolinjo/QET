@@ -26,6 +26,8 @@
 #include <QWidget>
 #include <QtWidgets>
 
+#include <functional>
+
 #ifdef Q_OS_MACOS
 
 class WheelEnabledTabBar : public QTabWidget
@@ -98,6 +100,10 @@ class ProjectView : public QWidget
 		QList<DiagramView *> diagram_views() const;
 		DiagramView *currentDiagram() const;
 		void closeEvent(QCloseEvent *) override;
+		/// 關閉前的外部確認(圖檔管理:出庫中要先入庫/取消出庫);
+		/// 回傳 false 則本次不關閉。空 = 不攔截。
+		void setPreCloseCheck(const std::function<bool ()> &check)
+			{ m_pre_close_check = check; }
 		void changeTabUp();
 		void changeTabDown();
 		void changeFirstTab();
@@ -181,6 +187,7 @@ class ProjectView : public QWidget
 		QVBoxLayout *layout_;
 		QWidget *fallback_widget_;
 		QLabel *fallback_label_;
+		std::function<bool ()> m_pre_close_check;
 
 #ifdef Q_OS_MACOS
 		WheelEnabledTabBar *m_tab; 

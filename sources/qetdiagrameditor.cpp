@@ -20,6 +20,7 @@
 #include <QListWidget>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSet>
 #include <QStyledItemDelegate>
 #include <QSettings>
 #include <QToolBar>
@@ -453,14 +454,33 @@ void QETDiagramEditor::updateWelcomeWidget()
 
 		const QDate today = QDate::currentDate();
 
-		// 依開啟來源分兩區:圖檔管理(PDM)在上、本地檔案在下。
-		// 各區內部維持原本的最近開啟排序。
+		// 依開啟來源分兩區:圖檔管理(PDM)在上、本地檔案在下。各區維持最近
+		// 開啟排序;PDM 同一張圖(相同圖號路徑,不論 checkouts/reviews/暫存)
+		// 只留最新一筆(entries 已由新到舊排序,取第一筆即最新)。
 		QList<QPair<QDateTime, QString>> pdm_entries, local_entries;
+		QSet<QString> seen_pdm;
 		for (const auto &entry : entries) {
-			if (PdmDialog::isManagedPath(entry.second))
-				pdm_entries.append(entry);
-			else
+			if (!PdmDialog::isManagedPath(entry.second)) {
 				local_entries.append(entry);
+				continue;
+			}
+			QString key = m_pdm_dialog
+				? m_pdm_dialog->drawingRelPath(entry.second)
+				: QString();
+			if (key.isEmpty()) {   // 解析不到:用去前綴的檔名當識別
+				key = QFileInfo(entry.second).fileName();
+				for (const QString &p :
+				     {QStringLiteral("pdm-released-"),
+				      QStringLiteral("pdm-latest-")}) {
+					if (key.startsWith(p)) {
+						key = key.mid(p.length());
+						break;
+					}
+				}
+			}
+			if (seen_pdm.contains(key)) continue;
+			seen_pdm.insert(key);
+			pdm_entries.append(entry);
 		}
 
 		int total_height = 8;
@@ -698,6 +718,9 @@ void QETDiagramEditor::ensurePdmDialog()
 		[this](const QString &file_path) {
 			ProjectView *pv = viewForFile(file_path);
 			if (!pv) return;
+			// 此為入庫/取消出庫成功後的強制關閉:清掉出庫關閉確認,
+			// 避免又跳一次(且此時 m_files 可能還沒 refresh)
+			pv->setPreCloseCheck({});
 			if (QETProject *proj = pv->project()) {
 				proj->undoStack()->setClean();
 				proj->setModified(false);
@@ -778,6 +801,35 @@ void QETDiagramEditor::updatePdmToolbar()
 		m_pdm_release->setEnabled(review && m_pdm_dialog
 					  && m_pdm_dialog->isReleaser());
 	}
+}
+
+bool QETDiagramEditor::confirmPdmClose(ProjectView *project_view)
+{
+	if (!m_pdm_dialog || !project_view || !project_view->project())
+		return true;
+	QETProject *proj = project_view->project();
+	// 只攔「正在出庫編輯(我鎖定、可寫)」的檔;唯讀檢視/本地檔正常關
+	if (proj->isReadOnly()) return true;
+	const QString path = proj->filePath();
+	if (!m_pdm_dialog->isCheckedOutByMe(path)) return true;
+
+	QMessageBox box(this);
+	box.setIcon(QMessageBox::Warning);
+	box.setWindowTitle(tr("圖檔管理"));
+	box.setText(tr("此圖已出庫且尚未入庫。"));
+	box.setInformativeText(tr("關閉前請先入庫,或取消出庫捨棄修改。"));
+	QPushButton *checkin = box.addButton(tr("入庫"), QMessageBox::AcceptRole);
+	QPushButton *cancel_co = box.addButton(tr("取消出庫"),
+					       QMessageBox::DestructiveRole);
+	box.addButton(tr("取消"), QMessageBox::RejectRole);
+	box.setDefaultButton(checkin);
+	box.exec();
+	// 入庫/取消出庫都是非同步:本次先不關,待其完成後由 requestCloseFile 關閉
+	if (box.clickedButton() == checkin)
+		m_pdm_dialog->checkInByPath(path);
+	else if (box.clickedButton() == cancel_co)
+		m_pdm_dialog->cancelByPath(path);
+	return false;
 }
 
 /**
@@ -2613,6 +2665,10 @@ void QETDiagramEditor::addProjectView(ProjectView *project_view)
 	//Manage the close event of project
 	connect(project_view, SIGNAL(projectClosed(ProjectView*)),
 		this, SLOT(projectWasClosed(ProjectView *)));
+	// 圖檔管理:出庫中的檔關閉前先確認(入庫/取消出庫)
+	project_view->setPreCloseCheck([this, project_view]() {
+		return confirmPdmClose(project_view);
+	});
 	//Manage the adding  of diagram
 	connect(project_view, SIGNAL(diagramAdded(DiagramView *)),
 		this, SLOT(diagramWasAdded(DiagramView *)));
@@ -3262,8 +3318,9 @@ void QETDiagramEditor::applyReadOnlyView(bool read_only)
 	}
 	if (m_mode_visualise) m_mode_visualise->setChecked(read_only);
 
-	// 面板與繪圖類工具列:僅可編輯時顯示
+	// 面板與繪圖類工具列:僅可編輯時顯示(元件庫/模組面板無開圖或瀏覽時也隱藏)
 	if (qdw_pa) qdw_pa->setVisible(editable);
+	if (m_qdw_elmt_collection) m_qdw_elmt_collection->setVisible(editable);
 	if (m_add_item_tool_bar) m_add_item_tool_bar->setVisible(editable);
 	if (m_depth_tool_bar) m_depth_tool_bar->setVisible(editable);
 	if (diagram_tool_bar) diagram_tool_bar->setVisible(editable);

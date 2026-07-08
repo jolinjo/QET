@@ -97,6 +97,8 @@ class QETDiagramEditor : public QETMainWindow
 		void showPdmDialog      ();
 		/// 依目前作用中專案的圖檔管理開檔情境,切換工具列(儲存/入庫/確認等)
 		void updatePdmToolbar   ();
+		/// 關閉出庫中的檔前確認:跳入庫/取消出庫/取消。回傳 false 表本次不關。
+		bool confirmPdmClose    (ProjectView *project_view);
 		void setUpActions       ();
 		void setUpToolBar       ();
 		void setUpMenu          ();

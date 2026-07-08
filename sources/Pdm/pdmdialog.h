@@ -180,6 +180,8 @@ class PdmDialog : public QDialog
 			const QString &commit_message,
 			const std::function<void ()> &after_push);
 		void showBusy(bool busy);
+		/// 建立(僅一次)專用進度對話框
+		void ensureBusyDialog();
 		/// 把 git/子行程指令對應成使用者看得懂的階段說明
 		static QString friendlyStep(const QString &cmd);
 		void fail(const QString &title, const QString &log);
@@ -224,6 +226,10 @@ class PdmDialog : public QDialog
 			    *m_del_drawing_button = nullptr;
 		QLabel *m_status_label = nullptr;
 		QProgressBar *m_progress = nullptr;
+
+		// 專用的出入庫進度對話框(所有 PDM 造成的延遲都用它,不再借用主視窗)
+		QDialog *m_busy_dialog = nullptr;
+		QLabel *m_busy_label = nullptr;
 
 		QString m_username;
 		QString m_user_email;          ///< 登入者 email(比對 work 分支作者)

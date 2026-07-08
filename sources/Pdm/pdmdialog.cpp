@@ -123,7 +123,11 @@ PdmDialog::PdmDialog(QWidget *parent) :
 		[this](const QString &cmd) {
 			// 不顯示原始 git 指令(對使用者是雜訊),改對應成看得懂的
 			// 階段說明,讓使用者知道目前在做什麼、不會以為當掉。
-			m_status_label->setText(friendlyStep(cmd));
+			const QString text = friendlyStep(cmd);
+			m_status_label->setText(text);
+			if (m_busy_label && m_busy_dialog
+			    && m_busy_dialog->isVisible())
+				m_busy_label->setText(text);
 		});
 	connect(m_git, &PdmGitWorker::allFinished, this,
 		[this]() { showBusy(false); });
@@ -2010,8 +2014,49 @@ QString PdmDialog::friendlyStep(const QString &cmd)
 	return tr("處理中…");
 }
 
+void PdmDialog::ensureBusyDialog()
+{
+	if (m_busy_dialog) return;
+	// 父層設為本對話框的 parent(編輯器主視窗):圖檔管理視窗沒開也能置中顯示
+	QWidget *host = parentWidget() ? parentWidget() : this;
+	m_busy_dialog = new QDialog(host,
+		Qt::Dialog | Qt::CustomizeWindowHint | Qt::WindowTitleHint);
+	m_busy_dialog->setWindowTitle(tr("圖檔管理"));
+	m_busy_dialog->setModal(true);
+	m_busy_dialog->setFixedWidth(380);
+
+	auto *lay = new QVBoxLayout(m_busy_dialog);
+	lay->setContentsMargins(28, 24, 28, 24);
+	lay->setSpacing(16);
+
+	m_busy_label = new QLabel(tr("處理中…"), m_busy_dialog);
+	m_busy_label->setWordWrap(true);
+	QFont f = m_busy_label->font();
+	f.setPointSizeF(f.pointSizeF() * 1.15);
+	f.setBold(true);
+	m_busy_label->setFont(f);
+	m_busy_label->setAlignment(Qt::AlignHCenter);
+	lay->addWidget(m_busy_label);
+
+	auto *bar = new QProgressBar(m_busy_dialog);
+	bar->setRange(0, 0);          // 忙碌動畫(不確定進度)
+	bar->setTextVisible(false);
+	bar->setFixedHeight(6);
+	lay->addWidget(bar);
+}
+
 void PdmDialog::showBusy(bool busy)
 {
+	// 所有 PDM 出入庫造成的延遲,一律用這個專用對話框顯示進度
+	if (busy) {
+		ensureBusyDialog();
+		m_busy_label->setText(tr("處理中…"));
+		m_busy_dialog->show();
+		m_busy_dialog->raise();
+	} else if (m_busy_dialog) {
+		m_busy_dialog->hide();
+	}
+	// 主視窗內嵌進度條同步(視窗開著時也有回饋)
 	if (busy) {
 		m_progress->setRange(0, 0);
 		m_progress->show();
@@ -2173,19 +2218,17 @@ void PdmDialog::checkInByPath(const QString &abs_path)
 
 void PdmDialog::checkOutByPath(const QString &abs_path)
 {
-	// 出庫是多步驟的網路/git 作業,顯示本視窗讓使用者看得到進度條與
-	// 階段說明(連線→建立工作區→鎖定…),不會以為當掉。
-	show();
-	raise();
-	activateWindow();
-
+	// 出庫的進度由專用進度對話框顯示(checkOut→showBusy),不必開主視窗。
 	const QString rel = drawingRelPath(abs_path);
 	if (!rel.isEmpty() && selectFileInUi(rel)) {
 		checkOut();
 		return;
 	}
 	// 清單尚未載入,或無法解析(如已從圖庫刪除的圖):
-	// 重整清單讓使用者在清單中出庫。
+	// 開主視窗、重整清單讓使用者在清單中出庫。
+	show();
+	raise();
+	activateWindow();
 	refresh();
 }
 
@@ -2197,9 +2240,8 @@ void PdmDialog::browseLatestByPath(const QString &abs_path)
 		show(); raise(); activateWindow(); refresh();
 		return;
 	}
-	show(); raise();   // 讓 fetch 階段的進度條/說明可見
 	const QString vault = vaultDir();
-	showBusy(true);
+	showBusy(true);   // 進度由專用對話框顯示(fetch→git show)
 	m_git->enqueue({"fetch", "origin", "--prune"}, vault, {});
 	const QString ref = QStringLiteral("origin/") + QLatin1String(DEFAULT_BRANCH)
 		+ QLatin1Char(':') + rel;

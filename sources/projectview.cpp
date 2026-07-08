@@ -120,6 +120,11 @@ DiagramView *ProjectView::currentDiagram() const
 	@param qce Le QCloseEvent decrivant l'evenement
 */
 void ProjectView::closeEvent(QCloseEvent *qce) {
+	// 圖檔管理:出庫中的檔要先入庫/取消出庫才能關(由編輯器植入檢查)
+	if (m_pre_close_check && !m_pre_close_check()) {
+		qce->ignore();
+		return;
+	}
 	bool can_close_project = tryClosing();
 	if (can_close_project) {
 		qce -> accept();
