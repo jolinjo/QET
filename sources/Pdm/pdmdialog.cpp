@@ -43,6 +43,8 @@
 #include <QMessageBox>
 #include <QProgressBar>
 #include <QGroupBox>
+#include <QPainter>
+#include <QStyledItemDelegate>
 #include <QTimer>
 #include <QPushButton>
 #include <QRegularExpression>
@@ -72,6 +74,49 @@ namespace
 	// 角色 team(Gitea 組織團隊):確認者 / 核准者。
 	const char *TEAM_CONFIRMERS = "pdm-confirmers";
 	const char *TEAM_RELEASERS  = "pdm-releasers";
+
+	// 文件狀態→底色(隨狀態變化)。以關鍵字比對,涵蓋即時流程狀態與
+	// 檔內 doc-status 雙語值。順序有意義:「待發行」需先於「發行」。
+	QColor statusColor(const QString &s)
+	{
+		if (s.contains(QStringLiteral("待發行")))
+			return QColor(0xB2, 0xDF, 0xDB);   // 青:已確認待發行
+		if (s.contains(QStringLiteral("審核")))
+			return QColor(0xBB, 0xDE, 0xFB);   // 藍:審核中
+		if (s.contains(QStringLiteral("發行"))
+		    || s.contains(QStringLiteral("Released")))
+			return QColor(0xC8, 0xE6, 0xC9);   // 綠:正式發行
+		if (s.contains(QStringLiteral("編輯")))
+			return QColor(0xFF, 0xE0, 0xB2);   // 橙:編輯中
+		if (s.contains(QStringLiteral("出庫中")))
+			return QColor(0xFF, 0xCC, 0xBC);   // 深橙:他人出庫中
+		if (s.contains(QStringLiteral("未送審")))
+			return QColor(0xD1, 0xC4, 0xE9);   // 紫:已入庫未送審
+		if (s.contains(QStringLiteral("可出庫")))
+			return QColor(0xEC, 0xEF, 0xF1);   // 灰:閒置可出庫
+		return QColor();
+	}
+
+	// 只替「狀態」欄上底色,且底色不被整列選取色蓋掉(選取時仍看得到狀態色)。
+	class StatusBgDelegate : public QStyledItemDelegate
+	{
+		public:
+			using QStyledItemDelegate::QStyledItemDelegate;
+			void paint(QPainter *painter,
+				   const QStyleOptionViewItem &option,
+				   const QModelIndex &index) const override
+			{
+				const QColor c = statusColor(index.data().toString());
+				QStyleOptionViewItem opt(option);
+				if (c.isValid()) {
+					painter->fillRect(option.rect, c);
+					// 蓋掉選取底色,改用深色文字確保可讀
+					opt.state &= ~QStyle::State_Selected;
+					opt.palette.setColor(QPalette::Text, Qt::black);
+				}
+				QStyledItemDelegate::paint(painter, opt, index);
+			}
+	};
 
 	QString sanitizedStem(const QString &rel_path)
 	{
@@ -212,6 +257,8 @@ void PdmDialog::setUpWidget()
 	m_tree->setRootIsDecorated(false);
 	m_tree->setSelectionMode(QAbstractItemView::SingleSelection);
 	m_tree->setAllColumnsShowFocus(true);
+	// 「狀態」欄(index 2)上隨狀態變化的底色
+	m_tree->setItemDelegateForColumn(2, new StatusBgDelegate(m_tree));
 	// 欄寬隨內容自動調整
 	m_tree->header()->setSectionResizeMode(QHeaderView::ResizeToContents);
 
@@ -232,9 +279,12 @@ void PdmDialog::setUpWidget()
 	// 列高加大約 1.5 倍(上下各補 ~1/4 字高的 padding),好點選、好閱讀。
 	// 只加 padding、不設背景,保留發行版列的底色 highlight。
 	const int vpad = fontMetrics().height() / 4;
+	// 左右各補約一個中文字寬,欄與欄之間至少留兩個字的間隔,字不擠在一起。
+	const int hpad = fontMetrics().horizontalAdvance(QChar(0x4e2d));
 	const QString row_ss = QStringLiteral(
-		"QTreeView::item { padding-top: %1px; padding-bottom: %1px; }")
-		.arg(vpad);
+		"QTreeView::item { padding-top: %1px; padding-bottom: %1px;"
+		" padding-left: %2px; padding-right: %2px; }")
+		.arg(vpad).arg(hpad);
 	m_folder_tree->setStyleSheet(row_ss);
 	m_tree->setStyleSheet(row_ss);
 	m_history_tree->setStyleSheet(row_ss);
