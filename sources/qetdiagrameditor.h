@@ -202,6 +202,7 @@ class QETDiagramEditor : public QETMainWindow
 		*m_export_to_pdf = nullptr, ///< Export project to pdf.
 		*m_pdm_action = nullptr,	///< 開啟圖檔管理視窗
 		*m_pdm_checkin = nullptr,	///< 入庫(圖檔管理開啟的檔)
+		*m_pdm_submit = nullptr,	///< 入庫簽核(入庫並直接送審)
 		*m_pdm_cancel = nullptr,	///< 取消出庫
 		*m_pdm_confirm = nullptr,	///< 確認完畢(審核檢視)
 		*m_pdm_release = nullptr,	///< 核准發行(審核檢視)

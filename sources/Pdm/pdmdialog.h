@@ -85,6 +85,8 @@ class PdmDialog : public QDialog
 		void addDrawingFromFile(const QString &source_path);
 		// 由工具列針對「某開啟中的檔」直接執行動作(先在清單選到該檔再動作)
 		void checkInByPath(const QString &abs_path);
+		/// 入庫並直接送審(一步):存檔→戳記→commit→push→開 PR
+		void submitDirectByPath(const QString &abs_path);
 		/// 出庫並編輯該檔;清單未載入或非工作區路徑時改開圖檔管理視窗
 		void checkOutByPath(const QString &abs_path);
 		/// 唯讀瀏覽該圖的「伺服器最新版」:fetch 後取 origin/main 內容存暫存

@@ -2446,6 +2446,11 @@ void PdmDialog::checkInByPath(const QString &abs_path)
 	if (selectFileInUi(drawingRelPath(abs_path))) checkIn();
 }
 
+void PdmDialog::submitDirectByPath(const QString &abs_path)
+{
+	if (selectFileInUi(drawingRelPath(abs_path))) checkInAndSubmit();
+}
+
 void PdmDialog::checkOutByPath(const QString &abs_path)
 {
 	// 出庫的進度由專用進度對話框顯示(checkOut→showBusy),不必開主視窗。

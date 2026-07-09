@@ -788,6 +788,7 @@ void QETDiagramEditor::updatePdmToolbar()
 	if (m_save_file)    m_save_file->setVisible(!managed);
 	if (m_save_file_as) m_save_file_as->setVisible(!managed);
 	if (m_pdm_checkin)  m_pdm_checkin->setVisible(checkout);
+	if (m_pdm_submit)   m_pdm_submit->setVisible(checkout);
 	if (m_pdm_cancel)   m_pdm_cancel->setVisible(checkout);
 
 	// 審核檢視的檔:顯示確認完畢/核准發行,依角色決定可否按
@@ -981,6 +982,12 @@ void QETDiagramEditor::setUpActions()
 	connect(m_pdm_checkin, &QAction::triggered, this, [this, active_qet_path]() {
 		ensurePdmDialog();
 		m_pdm_dialog->checkInByPath(active_qet_path());
+	});
+	m_pdm_submit = new QAction(QET::Icons::DocumentExport, tr("入庫簽核"), this);
+	m_pdm_submit->setStatusTip(tr("把目前圖檔入庫並直接送審(開啟審核)"));
+	connect(m_pdm_submit, &QAction::triggered, this, [this, active_qet_path]() {
+		ensurePdmDialog();
+		m_pdm_dialog->submitDirectByPath(active_qet_path());
 	});
 	m_pdm_cancel = new QAction(QET::Icons::DocumentClose, tr("取消出庫"), this);
 	m_pdm_cancel->setStatusTip(tr("捨棄未入庫修改並解除鎖定"));
@@ -1463,6 +1470,7 @@ void QETDiagramEditor::setUpToolBar()
 	main_tool_bar -> addAction(m_pdm_action);
 	// 圖檔管理右側:依開檔情境顯示的動作(預設隱藏,由 updatePdmToolbar 控制)
 	main_tool_bar -> addAction(m_pdm_checkin);
+	main_tool_bar -> addAction(m_pdm_submit);
 	main_tool_bar -> addAction(m_pdm_cancel);
 	main_tool_bar -> addAction(m_pdm_confirm);
 	main_tool_bar -> addAction(m_pdm_release);
