@@ -379,6 +379,8 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/Pdm/pdmservice.h
   ${QET_DIR}/sources/Pdm/pdmsettings.cpp
   ${QET_DIR}/sources/Pdm/pdmsettings.h
+  ${QET_DIR}/sources/Pdm/pdmversion.cpp
+  ${QET_DIR}/sources/Pdm/pdmversion.h
   ${QET_DIR}/sources/ElementsCollection/elementslocation.cpp
   ${QET_DIR}/sources/ElementsCollection/elementslocation.h
   ${QET_DIR}/sources/ElementsCollection/elementstreeview.cpp

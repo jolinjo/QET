@@ -20,6 +20,7 @@
 #include "pdmgitworker.h"
 #include "pdmservice.h"
 #include "pdmsettings.h"
+#include "pdmversion.h"
 
 #include <QColor>
 #include <QComboBox>
@@ -965,12 +966,15 @@ void PdmDialog::readDocFields(const QString &abs_path, FileState *state) const
 void PdmDialog::parseDocFields(const QDomDocument &doc, FileState *state) const
 {
 	if (!state) return;
-	// 取首頁(第一個 <diagram>)的圖框欄位為整檔代表值
+	// 版本改讀專案級 pdm_work_version(舊檔自動退回首頁 indexrev)。
+	// 見 doc/pdm-revision-design.md §2:版本不再逐頁存放。
+	state->revision = PdmVersion::workVersion(doc);
+
+	// 其餘代表欄位仍取首頁(第一個 <diagram>)的圖框資料
 	const QDomElement diagram =
 		doc.documentElement().firstChildElement(QStringLiteral("diagram"));
 	if (diagram.isNull()) return;
 
-	state->revision = diagram.attribute(QStringLiteral("indexrev"));
 	state->drawn_by = diagram.attribute(QStringLiteral("author"));
 
 	// 附加欄位:文件狀態、審核者、核准者
@@ -1038,15 +1042,20 @@ bool PdmDialog::stampDocFields(const QString &abs_path, const QString &status,
 
 	QDomElement root = doc.documentElement();
 	bool changed = false;
+
+	// 版本寫到專案級 pdm_work_version,不再逐頁蓋 indexrev——各頁 indexrev
+	// 交還使用者當「頁修訂索引」。見 doc/pdm-revision-design.md §2。
+	if (set_revision) {
+		if (PdmVersion::setProjectProperty(doc,
+			QLatin1String(PdmVersion::WORK_VERSION), revision))
+			changed = true;
+	}
+
+	// 簽核附加欄位(文件狀態/確認者/核准者)仍逐頁寫,維持既有代表值語意
 	for (QDomElement diagram = root.firstChildElement(
 		QStringLiteral("diagram"));
 	     !diagram.isNull();
 	     diagram = diagram.nextSiblingElement(QStringLiteral("diagram"))) {
-		if (set_revision) {
-			// revision 可為空字串以清空版本(編輯中不顯示版本)
-			diagram.setAttribute(QStringLiteral("indexrev"), revision);
-			changed = true;
-		}
 		for (auto it = props.constBegin(); it != props.constEnd(); ++it) {
 			setProperty(diagram, it.key(), it.value());
 			changed = true;
@@ -1060,32 +1069,6 @@ bool PdmDialog::stampDocFields(const QString &abs_path, const QString &status,
 	stream << doc.toString(2);
 	out.close();
 	return true;
-}
-
-QString PdmDialog::nextMinor(const QString &current)
-{
-	// 「主.次」→ 次版 +1;純整數 N(已發行版)→ N.1;空/舊字母 → 0.1
-	const QStringList parts = current.trimmed().split(QLatin1Char('.'));
-	if (parts.size() >= 2) {
-		bool maj_ok = false, min_ok = false;
-		const int maj = parts.at(0).toInt(&maj_ok);
-		const int min = parts.at(1).toInt(&min_ok);
-		if (maj_ok && min_ok)
-			return QStringLiteral("%1.%2").arg(maj).arg(min + 1);
-	}
-	bool int_ok = false;
-	const int n = current.trimmed().toInt(&int_ok);
-	return int_ok ? QStringLiteral("%1.1").arg(n) : QStringLiteral("0.1");
-}
-
-QString PdmDialog::nextMajor(const QString &current)
-{
-	// 發行進版:主版 +1、次版歸零。0.4→1.0、1.3→2.0;空/舊字母→1.0
-	const int dot = current.indexOf(QLatin1Char('.'));
-	bool ok = false;
-	const int maj = (dot >= 0 ? current.left(dot) : current).trimmed()
-		.toInt(&ok);
-	return QStringLiteral("%1.0").arg((ok ? maj : 0) + 1);
 }
 
 void PdmDialog::rebuildTree()
@@ -1331,7 +1314,7 @@ void PdmDialog::addDrawingFromFile(const QString &source)
 		setFileWritable(abs_path, true);
 		// 初版 0.1、編輯中、清空確認/核准欄位
 		stampDocFields(abs_path, QString::fromUtf8(DOC_STATUS_EDITING),
-			nextMinor(QString()), true,
+			PdmVersion::nextMinor(QString()), true,
 			{{QStringLiteral("checked-by"), QString()},
 			 {QStringLiteral("approved-by"), QString()}});
 
@@ -1406,7 +1389,7 @@ void PdmDialog::checkOut()
 				readDocFields(abs_path, &fs);
 				stampDocFields(abs_path,
 					QString::fromUtf8(DOC_STATUS_EDITING),
-					nextMinor(fs.revision), true,
+					PdmVersion::nextMinor(fs.revision), true,
 					{{QStringLiteral("checked-by"), QString()},
 					 {QStringLiteral("approved-by"), QString()}});
 				emit requestOpenFile(abs_path);
@@ -1945,7 +1928,7 @@ void PdmDialog::approveAndRelease()
 		});
 	// 發行進版:把版本推到下一個主版(0.x→1.0、1.x→2.0),再真正發行。
 	// 發行步驟多(簽核+合併+渲染 PDF+建 Release+清理),預期步數給大一點。
-	}, true, nextMajor(state.revision), 15);
+	}, true, PdmVersion::nextMajor(state.revision), 15);
 }
 
 /**
@@ -2265,9 +2248,8 @@ void PdmDialog::loadReleaseHistory(const QString &rel_path)
 				(const PdmGitWorker::Result &sr) {
 				QDomDocument doc;
 				if (doc.setContent(sr.output))
-					(*recs)[i].version = doc.documentElement()
-						.firstChildElement(QStringLiteral("diagram"))
-						.attribute(QStringLiteral("indexrev"));
+					// 新 commit 版本在專案級,舊 commit 退回首頁 indexrev
+					(*recs)[i].version = PdmVersion::workVersion(doc);
 				if (--(*remaining) != 0) return;
 
 				const QTreeWidgetItem *cur = selectedFileItem();

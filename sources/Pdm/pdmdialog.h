@@ -108,7 +108,7 @@ class PdmDialog : public QDialog
 			QString pr_author;
 			QString pr_head_sha;
 			bool pr_approved = false;
-			QString revision;      ///< 修訂索引(讀自 .qet 的 indexrev)
+			QString revision;      ///< 工作小版(讀自專案級 pdm_work_version;舊檔退回首頁 indexrev)
 			QString doc_status;    ///< 文件狀態(讀自 .qet 的 doc-status)
 			QString drawn_by;      ///< 繪製者(讀自 .qet 的 author 屬性)
 			QString checked_by;    ///< 審核者(讀自 .qet 的 checked-by)
@@ -143,10 +143,7 @@ class PdmDialog : public QDialog
 				    const QString &revision, bool set_revision,
 				    const QMap<QString, QString> &extra_fields =
 					    QMap<QString, QString>()) const;
-		/// 小版號進版:「主.次」的次版 +1;純整數 N→N.1;空/舊字母→0.1
-		static QString nextMinor(const QString &current);
-		/// 發行進版:進主版、次版歸零。「主.次」→(主+1).0;空/舊字母→1.0
-		static QString nextMajor(const QString &current);
+		// 版本進版邏輯已移至 PdmVersion::nextMinor / nextMajor
 
 		void addNewDrawing();   ///< 新增一張圖檔到圖庫(建 work 分支、出庫編輯)
 		void checkOut();
