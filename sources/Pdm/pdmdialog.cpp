@@ -141,24 +141,25 @@ PdmDialog::PdmDialog(QWidget *parent) :
 			m_busy_label->setText(text);
 			m_hide_timer->stop();
 			if (!m_busy_dialog->isVisible()) {
-				// 背景讀取自行彈框:無預期步數,改用漸進逼近
-				m_op_total = 0;
-				m_op_done = 0;
 				m_busy_dialog->show();
 				m_busy_dialog->raise();
-				m_busy_bar->setValue(8);
-			} else if (m_op_total > 0) {
-				// 已知步數:以 已完成/預期 顯示;超出預期的尾段(背景
-				// 重整)不再前進,維持在接近滿的位置,直到 allFinished 補滿
+				if (!m_op_active) {   // 背景讀取自行彈框:無預期步數
+					m_op_total = 0;
+					m_op_done = 0;
+					m_busy_bar->setValue(8);
+				}
+			}
+			if (m_op_active && m_op_total > 0) {
+				// 使用者操作、已知步數:進度條以 已完成/預期 前進
 				if (m_op_done < m_op_total) ++m_op_done;
 				m_busy_bar->setValue(
 					qMin(99, m_op_done * 100 / m_op_total));
 			} else {
-				// 未知步數:每步補 1/3 剩餘距離(逼近 92%)
+				// 背景讀取/尾段重整:只往上漸進逼近 92,不倒退
 				const int v = m_busy_bar->value();
-				m_busy_bar->setValue(v + (92 - v) / 3);
+				if (v < 92) m_busy_bar->setValue(v + (92 - v) / 3);
 			}
-			m_progress->setRange(0, 0);
+			m_progress->setValue(m_busy_bar->value());
 			m_progress->show();
 			m_refresh_button->setEnabled(false);
 			m_repo_combo->setEnabled(false);
@@ -167,6 +168,7 @@ PdmDialog::PdmDialog(QWidget *parent) :
 		m_op_active = false;
 		m_op_total = 0;
 		if (m_busy_bar) m_busy_bar->setValue(100);   // 完成:補滿再收框
+		m_progress->setValue(100);
 		m_hide_timer->start();   // 防抖收框(有新步驟會取消)
 	});
 }
@@ -286,6 +288,7 @@ void PdmDialog::setUpWidget()
 	m_status_label->setWordWrap(true);
 	layout->addWidget(m_status_label);
 	m_progress = new QProgressBar(content);
+	m_progress->setRange(0, 100);   // 與進度框同為漸進式
 	m_progress->setTextVisible(false);
 	m_progress->hide();
 	layout->addWidget(m_progress);
@@ -2162,6 +2165,10 @@ void PdmDialog::showBusy(bool busy, bool with_dialog, int op_steps)
 	// 一按下就立刻顯示框並設定預期步數(進度條以 已完成/預期 前進)。
 	if (busy) {
 		if (with_dialog) {
+			// 使用者操作開始前,清掉還排隊中的背景讀取(重整/歷史)git,
+			// 讓本操作的步驟獨佔佇列——否則背景步驟會被算進本操作的進度,
+			// 進度條就會「一出現就跳到很高、再亂跳」。
+			m_git->cancelPending();
 			m_op_active = true;
 			m_op_total = op_steps;
 			m_op_done = 0;
@@ -2171,7 +2178,7 @@ void PdmDialog::showBusy(bool busy, bool with_dialog, int op_steps)
 			m_hide_timer->stop();
 			m_busy_dialog->show();
 			m_busy_dialog->raise();
-			m_progress->setRange(0, 0);
+			m_progress->setValue(0);
 			m_progress->show();
 			m_refresh_button->setEnabled(false);
 			m_repo_combo->setEnabled(false);
