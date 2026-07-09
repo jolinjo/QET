@@ -130,7 +130,6 @@ PdmDialog::PdmDialog(QWidget *parent) :
 	m_hide_timer->setInterval(400);
 	connect(m_hide_timer, &QTimer::timeout, this, [this]() {
 		if (m_busy_dialog) m_busy_dialog->hide();
-		m_progress->hide();
 		m_refresh_button->setEnabled(true);
 		m_repo_combo->setEnabled(true);
 	});
@@ -151,8 +150,6 @@ PdmDialog::PdmDialog(QWidget *parent) :
 			// 95%,不倒退;全部真的做完(allFinished)才補滿 100% 再收框。
 			const int v = m_busy_bar->value();
 			if (v < 95) m_busy_bar->setValue(v + (95 - v) / 4);
-			m_progress->setValue(m_busy_bar->value());
-			m_progress->show();
 			m_refresh_button->setEnabled(false);
 			m_repo_combo->setEnabled(false);
 		});
@@ -160,7 +157,6 @@ PdmDialog::PdmDialog(QWidget *parent) :
 		m_op_active = false;
 		m_op_total = 0;
 		if (m_busy_bar) m_busy_bar->setValue(100);   // 完成:補滿再收框
-		m_progress->setValue(100);
 		m_hide_timer->start();   // 防抖收框(有新步驟會取消)
 	});
 }
@@ -190,15 +186,11 @@ void PdmDialog::setUpWidget()
 	top_row->addWidget(m_refresh_button);
 	layout->addLayout(top_row);
 
-	// 狀態文字 + 進度條移到帳號下方(不再擺視窗最底)
+	// 狀態文字放帳號下方(檔案數/結果訊息)。進度一律用彈出進度框顯示,
+	// 視窗內不再另放進度條,統一一種進度呈現。
 	m_status_label = new QLabel(content);
 	m_status_label->setWordWrap(true);
 	layout->addWidget(m_status_label);
-	m_progress = new QProgressBar(content);
-	m_progress->setRange(0, 100);
-	m_progress->setTextVisible(false);
-	m_progress->hide();
-	layout->addWidget(m_progress);
 
 	m_repo_combo = new QComboBox(content);
 	layout->addWidget(m_repo_combo);
@@ -233,6 +225,16 @@ void PdmDialog::setUpWidget()
 		2, QHeaderView::ResizeToContents);
 	m_history_tree->header()->setSectionResizeMode(3, QHeaderView::Stretch);
 
+	// 列高加大約 1.5 倍(上下各補 ~1/4 字高的 padding),好點選、好閱讀。
+	// 只加 padding、不設背景,保留發行版列的底色 highlight。
+	const int vpad = fontMetrics().height() / 4;
+	const QString row_ss = QStringLiteral(
+		"QTreeView::item { padding-top: %1px; padding-bottom: %1px; }")
+		.arg(vpad);
+	m_folder_tree->setStyleSheet(row_ss);
+	m_tree->setStyleSheet(row_ss);
+	m_history_tree->setStyleSheet(row_ss);
+
 	splitter->addWidget(m_folder_tree);
 	splitter->addWidget(m_tree);
 	splitter->addWidget(m_history_tree);
@@ -258,7 +260,8 @@ void PdmDialog::setUpWidget()
 	m_checkout_button = new QPushButton(tr("出庫開啟"), content);
 	m_checkin_button = new QPushButton(tr("入庫納管…"), content);
 	m_cancel_button = new QPushButton(tr("取消出庫"), content);
-	m_submit_button = new QPushButton(tr("送審…"), content);
+	m_submit_direct_button = new QPushButton(tr("入庫送審…"), content);
+	m_submit_button = new QPushButton(tr("完成送審…"), content);
 	m_force_unlock_button = new QPushButton(tr("強制解鎖…"), content);
 	// 確認
 	m_review_button = new QPushButton(tr("審核檢視"), content);
@@ -273,8 +276,8 @@ void PdmDialog::setUpWidget()
 	auto *stages = new QHBoxLayout();
 	stages->addWidget(make_stage(tr("繪製"),
 		{m_add_button, m_view_released_button, m_checkout_button,
-		 m_checkin_button, m_cancel_button, m_submit_button,
-		 m_force_unlock_button}), 1);
+		 m_checkin_button, m_cancel_button, m_submit_direct_button,
+		 m_submit_button, m_force_unlock_button}), 1);
 	stages->addWidget(make_stage(tr("確認"),
 		{m_review_button, m_approve_button, m_reject_button}), 1);
 	stages->addWidget(make_stage(tr("核准"),
@@ -365,6 +368,8 @@ void PdmDialog::setUpWidget()
 		this, &PdmDialog::cancelCheckOut);
 	connect(m_view_released_button, &QPushButton::clicked,
 		this, &PdmDialog::viewReleased);
+	connect(m_submit_direct_button, &QPushButton::clicked,
+		this, &PdmDialog::checkInAndSubmit);
 	connect(m_submit_button, &QPushButton::clicked,
 		this, &PdmDialog::submitForReview);
 	connect(m_review_button, &QPushButton::clicked,
@@ -1049,7 +1054,9 @@ void PdmDialog::updateButtons()
 	// 檢視發行版(唯讀):清單內的圖檔都在 main 上,隨時可看發行版
 	m_view_released_button->setEnabled(has_selection);
 
-	// 送審:已入庫(work 分支存在)、未鎖定、尚無 PR
+	// 入庫送審(一步):出庫編輯中(我鎖定)、尚無 PR
+	m_submit_direct_button->setEnabled(locked_by_me && !in_review);
+	// 完成送審:已入庫(work 分支存在)、未鎖定、尚無 PR
 	m_submit_button->setEnabled(has_selection && state.has_work_branch
 				    && state.lock_owner.isEmpty() && !in_review);
 	// 審核檢視:有 PR 即可(唯讀)。「確認」「核准」兩組各一顆,狀態同步。
@@ -1433,6 +1440,92 @@ void PdmDialog::submitForReview()
 	} else {
 		open_pull_request();
 	}
+}
+
+void PdmDialog::checkInAndSubmit()
+{
+	if (busyGuard()) return;
+	const QTreeWidgetItem *item = selectedFileItem();
+	if (!item) return;
+	const QString rel_path = item->data(0, Qt::UserRole).toString();
+	const QString stem = sanitizedStem(rel_path);
+	const QString branch = workBranchOf(rel_path);
+	const QString worktree = worktreeDir(stem);
+	const QString vault = vaultDir();
+	const QString abs_path = worktree + '/' + rel_path;
+
+	if (!QDir(worktree).exists()) {
+		QMessageBox::warning(this, tr("入庫送審"),
+			tr("找不到本機工作區,無法入庫送審。"));
+		return;
+	}
+
+	bool accepted = false;
+	const QString body = QInputDialog::getMultiLineText(this,
+		tr("入庫送審"), tr("送審說明(必填,審核者會看到):"),
+		QString(), &accepted);
+	if (!accepted) return;
+	if (body.trimmed().isEmpty()) {
+		QMessageBox::warning(this, tr("入庫送審"), tr("送審說明不可空白。"));
+		return;
+	}
+	const QString msg = body.trimmed();
+
+	// 存檔 → 直接把「審核中」戳進圖框 → 單一 commit(內容+狀態一起,比「入庫
+	// 再送審」少一次 commit)→ push → 解鎖 → 開 PR。
+	emit requestSaveFile(abs_path);
+	if (!stampDocFields(abs_path, QString::fromUtf8(DOC_STATUS_REVIEWING),
+			    QString(), false)) {   // 保留出庫時的版本
+		fail(tr("寫入圖框欄位失敗"), abs_path);
+		return;
+	}
+
+	showBusy(true, true, 4);
+	auto open_pr = [this, rel_path, stem, branch, worktree, msg]() {
+		m_service->createPullRequest(currentRepoFullName(),
+			branch, DEFAULT_BRANCH, tr("%1 送審").arg(stem), msg,
+			[this, rel_path, worktree](const PdmService::Reply &reply) {
+				showBusy(false);
+				if (!reply.ok) {
+					fail(tr("送審失敗"), reply.error);
+					return;
+				}
+				const int pr = reply.json.object()
+					.value(QStringLiteral("number")).toInt();
+				setFileWritable(worktree + '/' + rel_path, false);
+				emit requestCloseFile(worktree + '/' + rel_path);
+				m_status_label->setText(tr("「%1」已入庫並送審(#%2)")
+					.arg(rel_path).arg(pr));
+				refresh();
+			});
+	};
+	m_git->enqueue({"add", "--", rel_path}, worktree, {});
+	m_git->enqueue({"commit", "-m", tr("入庫送審：%1").arg(msg)}, worktree,
+		[this, branch, worktree, vault, rel_path, open_pr]
+		(const PdmGitWorker::Result &commit_r) {
+			const bool nothing = !commit_r.ok
+				&& commit_r.output.contains(QStringLiteral("nothing"));
+			if (!commit_r.ok && !nothing) {
+				fail(tr("入庫送審 commit 失敗"), commit_r.output);
+				return;
+			}
+			m_git->enqueue({"push", "-u", "origin", branch}, worktree,
+				[this, vault, rel_path, open_pr]
+				(const PdmGitWorker::Result &push_r) {
+					if (!push_r.ok) {
+						fail(tr("推送失敗,已保留出庫狀態,"
+							"請檢查網路後重試"),
+						     push_r.output);
+						return;
+					}
+					m_git->enqueue({"lfs", "unlock", rel_path},
+						vault,
+						[open_pr](const PdmGitWorker::Result &r) {
+							Q_UNUSED(r);   // 解鎖失敗不擋送審
+							open_pr();
+						});
+				});
+		});
 }
 
 void PdmDialog::openReviewView()
@@ -2188,8 +2281,6 @@ void PdmDialog::showBusy(bool busy, bool with_dialog, int op_steps)
 			m_hide_timer->stop();
 			m_busy_dialog->show();
 			m_busy_dialog->raise();
-			m_progress->setValue(0);
-			m_progress->show();
 			m_refresh_button->setEnabled(false);
 			m_repo_combo->setEnabled(false);
 		}
@@ -2203,7 +2294,6 @@ void PdmDialog::fail(const QString &title, const QString &log)
 	// 失敗:立刻收框(不等防抖)並恢復按鈕
 	if (m_hide_timer) m_hide_timer->stop();
 	if (m_busy_dialog) m_busy_dialog->hide();
-	m_progress->hide();
 	m_op_active = false;
 	m_refresh_button->setEnabled(true);
 	m_repo_combo->setEnabled(true);

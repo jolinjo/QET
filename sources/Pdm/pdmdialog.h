@@ -151,6 +151,9 @@ class PdmDialog : public QDialog
 		void checkIn();
 		void cancelCheckOut();
 		void submitForReview();
+		/// 入庫送審:存檔→戳「審核中」→單一 commit(內容+狀態,少一次 commit)
+		/// →push→解鎖→開 PR。供出庫編輯中的檔一步完成入庫並送審。
+		void checkInAndSubmit();
 		void openReviewView();
 		void viewReleased();   ///< 唯讀開啟 main 上最後發行版
 		void confirmDone();    ///< 確認者「確認完畢」:寫確認者+commit
@@ -225,6 +228,7 @@ class PdmDialog : public QDialog
 		QPushButton *m_checkout_button = nullptr,
 			    *m_checkin_button = nullptr,
 			    *m_cancel_button = nullptr,
+			    *m_submit_direct_button = nullptr,  ///< 入庫送審(一步)
 			    *m_view_released_button = nullptr,
 			    *m_refresh_button = nullptr,
 			    *m_submit_button = nullptr,
@@ -240,7 +244,6 @@ class PdmDialog : public QDialog
 			    *m_del_folder_button = nullptr,
 			    *m_del_drawing_button = nullptr;
 		QLabel *m_status_label = nullptr;
-		QProgressBar *m_progress = nullptr;
 
 		// 專用的出入庫進度對話框(所有 PDM 造成的延遲都用它,不再借用主視窗)
 		QDialog *m_busy_dialog = nullptr;
