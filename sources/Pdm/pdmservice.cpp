@@ -263,6 +263,17 @@ void PdmService::submitReview(const QString &repo_full_name, int pr_index,
 	     std::move(done));
 }
 
+void PdmService::closePullRequest(const QString &repo_full_name, int pr_index,
+				  Callback done)
+{
+	request("PATCH", QStringLiteral("/repos/%1/pulls/%2")
+			.arg(repo_full_name).arg(pr_index),
+		QJsonDocument(QJsonObject{{QStringLiteral("state"),
+					   QStringLiteral("closed")}})
+			.toJson(QJsonDocument::Compact),
+		"application/json", std::move(done));
+}
+
 void PdmService::mergePullRequest(const QString &repo_full_name, int pr_index,
 				  Callback done, int max_retries,
 				  const QString &head_commit_id)

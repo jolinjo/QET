@@ -81,6 +81,10 @@ class PdmService : public QObject
 				  const QString &event, const QString &body,
 				  Callback done);
 
+		/// PATCH /repos/{repo}/pulls/{index}：關閉 PR(退回後離開審核用)
+		void closePullRequest(const QString &repo_full_name, int pr_index,
+				      Callback done);
+
 		/**
 			POST /repos/{repo}/pulls/{index}/merge。
 			核准後 Gitea 的可合併狀態有極短暫延遲(§4 驗證:瞬態

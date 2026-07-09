@@ -1148,7 +1148,14 @@ void PdmDialog::populateFileList()
 		if (owner == m_username && !owner.isEmpty())
 			return tr("編輯中(我)");
 		if (!owner.isEmpty()) return tr("出庫中");
-		if (state.has_work_branch) return tr("已入庫未送審");
+		if (state.has_work_branch) {
+			// 被退回的圖(work 分支圖框已戳「退回修改」):回到繪製者
+			// 手上編輯,顯示「編輯中」而非「已入庫未送審」。
+			if (state.doc_status.contains(QStringLiteral("退回修改"))
+			    || state.doc_status.contains(QLatin1String("Rejected")))
+				return tr("編輯中");
+			return tr("已入庫未送審");
+		}
 		return tr("可出庫");
 	};
 
@@ -1810,18 +1817,30 @@ void PdmDialog::rejectReview()
 		[this, rel_path, pr_index, trimmed]() {
 			m_service->submitReview(currentRepoFullName(), pr_index,
 				QStringLiteral("REQUEST_CHANGES"), trimmed,
-				[this, rel_path](const PdmService::Reply &reply) {
-					showBusy(false);
+				[this, rel_path, pr_index](const PdmService::Reply &reply) {
 					// 開發期單人測試:Gitea 擋「審自己的 PR」(422)。
 					// 退回意見與「退回修改」commit 已推上 work 分支
 					// (真正有意義的部分),422 視為已退回不再報錯。
 					if (!reply.ok && reply.http_status != 422) {
+						showBusy(false);
 						fail(tr("退回失敗"), reply.error);
 						return;
 					}
-					m_status_label->setText(
-						tr("「%1」已退回").arg(rel_path));
-					refresh();
+					// 退回=離開審核:關閉 PR,讓圖回到繪製者「編輯中」,
+					// 繪製者才能再出庫修改(否則 pr 還在會一直卡審核中)。
+					m_service->closePullRequest(currentRepoFullName(),
+						pr_index,
+						[this, rel_path](const PdmService::Reply &close_r) {
+							showBusy(false);
+							if (!close_r.ok) {
+								fail(tr("退回後關閉審核失敗"),
+								     close_r.error);
+								return;
+							}
+							m_status_label->setText(
+								tr("「%1」已退回").arg(rel_path));
+							refresh();
+						});
 				});
 		});
 }
