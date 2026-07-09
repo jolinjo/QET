@@ -930,7 +930,12 @@ void ProjectView::loadDiagrams()
 
 	setDisplayFallbackWidget(m_project -> diagrams().isEmpty());
 
-	auto dialog = DialogWaiting::instance();
+	// 進度框是全域單例,規則統一為「被動」:只有頂層開檔入口
+	// (openAndAddProject / openBackupFiles)負責建立與 dropInstance()。
+	// 這裡有既存實例才更新進度,絕不自己新建——否則像「新建專案」這種
+	// 沒有對應 drop 的路徑會留下一個永遠關不掉的「建立頁面分頁 100%」框。
+	DialogWaiting *dialog = DialogWaiting::hasInstance()
+			? DialogWaiting::instance() : nullptr;
 	if(dialog)
 	{
 		dialog->setTitle( tr("<p align=\"center\">"

@@ -2040,6 +2040,11 @@ bool QETDiagramEditor::addProject(QETProject *project, bool update_panel)
 		m_autonumbering_dock->setProject(project, project_view);
 	}
 
+	// 保險:所有開檔/建檔路徑都匯流到這裡,統一在此關閉進度框單例。
+	// 這樣即使日後新增的入口忘了配對 dropInstance(),也不會留下卡在
+	// 「建立頁面分頁 100%」關不掉的框(此為反覆出現過的 bug 的根因防線)。
+	DialogWaiting::dropInstance();
+
 	return(true);
 }
 
