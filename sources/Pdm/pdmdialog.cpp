@@ -184,12 +184,21 @@ void PdmDialog::setUpWidget()
 
 	auto *top_row = new QHBoxLayout();
 	m_account_label = new QLabel(tr("尚未連線"), content);
-	m_add_button = new QPushButton(tr("新檔入庫…"), content);
+	m_add_button = new QPushButton(tr("新檔入庫…"), content);   // 放到「繪製」群組
 	m_refresh_button = new QPushButton(tr("重新整理"), content);
 	top_row->addWidget(m_account_label, 1);
-	top_row->addWidget(m_add_button);
 	top_row->addWidget(m_refresh_button);
 	layout->addLayout(top_row);
+
+	// 狀態文字 + 進度條移到帳號下方(不再擺視窗最底)
+	m_status_label = new QLabel(content);
+	m_status_label->setWordWrap(true);
+	layout->addWidget(m_status_label);
+	m_progress = new QProgressBar(content);
+	m_progress->setRange(0, 100);
+	m_progress->setTextVisible(false);
+	m_progress->hide();
+	layout->addWidget(m_progress);
 
 	m_repo_combo = new QComboBox(content);
 	layout->addWidget(m_repo_combo);
@@ -232,9 +241,9 @@ void PdmDialog::setUpWidget()
 	splitter->setStretchFactor(2, 3);
 	layout->addWidget(splitter, 1);
 
-	// 動作區依生命週期分組:編輯 → 審查 → 發行 三欄並排(工作流由左到右一目
-	// 了然),管理員維護獨立一區。每欄用有標題的 QGroupBox 視覺區隔,按鈕依
-	// 選取圖檔狀態 enable/disable。
+	// 動作區依三個角色/階段分組:繪製 → 確認 → 核准 三欄並排。每欄用有標題的
+	// QGroupBox 視覺區隔,按鈕依選取圖檔狀態 enable/disable。「審核檢視」「退回」
+	// 兩個動作在「確認」「核准」兩組都要,故各放一顆(呼叫同一功能)。
 	auto make_stage = [content](const QString &title,
 				    const QList<QPushButton *> &btns) {
 		auto *box = new QGroupBox(title, content);
@@ -244,30 +253,33 @@ void PdmDialog::setUpWidget()
 		return box;
 	};
 
-	// 編輯（出入庫）
-	m_checkout_button = new QPushButton(tr("出庫並開啟"), content);
-	m_checkin_button = new QPushButton(tr("入庫…"), content);
+	// 繪製（新檔入庫、出入庫、送審)
+	m_view_released_button = new QPushButton(tr("不出庫檢視"), content);
+	m_checkout_button = new QPushButton(tr("出庫開啟"), content);
+	m_checkin_button = new QPushButton(tr("入庫納管…"), content);
 	m_cancel_button = new QPushButton(tr("取消出庫"), content);
-	m_force_unlock_button = new QPushButton(tr("強制解鎖…"), content);
-	// 審查
 	m_submit_button = new QPushButton(tr("送審…"), content);
-	m_review_button = new QPushButton(tr("審核檢視(唯讀)"), content);
-	m_approve_button = new QPushButton(tr("確認完畢…"), content);
+	m_force_unlock_button = new QPushButton(tr("強制解鎖…"), content);
+	// 確認
+	m_review_button = new QPushButton(tr("審核檢視"), content);
+	m_approve_button = new QPushButton(tr("確認完成…"), content);
 	m_reject_button = new QPushButton(tr("退回…"), content);
-	// 發行
+	// 核准
+	m_review_button2 = new QPushButton(tr("審核檢視"), content);
 	m_release_button = new QPushButton(tr("核准發行…"), content);
-	m_view_released_button = new QPushButton(tr("檢視發行版(唯讀)"), content);
+	m_reject_button2 = new QPushButton(tr("退回…"), content);
 	m_revert_button = new QPushButton(tr("退回上一發行版…"), content);
 
 	auto *stages = new QHBoxLayout();
-	stages->addWidget(make_stage(tr("編輯（出入庫）"),
-		{m_checkout_button, m_checkin_button, m_cancel_button,
+	stages->addWidget(make_stage(tr("繪製"),
+		{m_add_button, m_view_released_button, m_checkout_button,
+		 m_checkin_button, m_cancel_button, m_submit_button,
 		 m_force_unlock_button}), 1);
-	stages->addWidget(make_stage(tr("審查"),
-		{m_submit_button, m_review_button, m_approve_button,
-		 m_reject_button}), 1);
-	stages->addWidget(make_stage(tr("發行"),
-		{m_release_button, m_view_released_button, m_revert_button}), 1);
+	stages->addWidget(make_stage(tr("確認"),
+		{m_review_button, m_approve_button, m_reject_button}), 1);
+	stages->addWidget(make_stage(tr("核准"),
+		{m_review_button2, m_release_button, m_reject_button2,
+		 m_revert_button}), 1);
 	layout->addLayout(stages);
 
 	// 管理員維護（僅核准者可見,結構性變更直接改 main）
@@ -280,16 +292,6 @@ void PdmDialog::setUpWidget()
 	admin_row->addWidget(m_del_folder_button);
 	admin_row->addWidget(m_del_drawing_button);
 	layout->addWidget(m_admin_box);
-
-	// 進度顯示沿用元件庫「更新公司庫」模式:按鈕下方內嵌,不跳對話框
-	m_status_label = new QLabel(content);
-	m_status_label->setWordWrap(true);
-	layout->addWidget(m_status_label);
-	m_progress = new QProgressBar(content);
-	m_progress->setRange(0, 100);   // 與進度框同為漸進式
-	m_progress->setTextVisible(false);
-	m_progress->hide();
-	layout->addWidget(m_progress);
 
 	auto *outer = new QVBoxLayout(this);
 	outer->setContentsMargins(0, 0, 0, 0);
@@ -367,9 +369,13 @@ void PdmDialog::setUpWidget()
 		this, &PdmDialog::submitForReview);
 	connect(m_review_button, &QPushButton::clicked,
 		this, &PdmDialog::openReviewView);
+	connect(m_review_button2, &QPushButton::clicked,
+		this, &PdmDialog::openReviewView);
 	connect(m_approve_button, &QPushButton::clicked,
 		this, &PdmDialog::confirmDone);
 	connect(m_reject_button, &QPushButton::clicked,
+		this, &PdmDialog::rejectReview);
+	connect(m_reject_button2, &QPushButton::clicked,
 		this, &PdmDialog::rejectReview);
 	connect(m_release_button, &QPushButton::clicked,
 		this, &PdmDialog::approveAndRelease);
@@ -1037,7 +1043,7 @@ void PdmDialog::updateButtons()
 	m_checkout_button->setEnabled(has_selection && !in_review
 		&& (state.lock_owner.isEmpty() || locked_by_me));
 	m_checkout_button->setText(locked_by_me ? tr("繼續編輯")
-						: tr("出庫並開啟"));
+						: tr("出庫開啟"));
 	m_checkin_button->setEnabled(locked_by_me && !in_review);
 	m_cancel_button->setEnabled(locked_by_me);
 	// 檢視發行版(唯讀):清單內的圖檔都在 main 上,隨時可看發行版
@@ -1046,12 +1052,15 @@ void PdmDialog::updateButtons()
 	// 送審:已入庫(work 分支存在)、未鎖定、尚無 PR
 	m_submit_button->setEnabled(has_selection && state.has_work_branch
 				    && state.lock_owner.isEmpty() && !in_review);
-	// 審核檢視:有 PR 即可(唯讀)
+	// 審核檢視:有 PR 即可(唯讀)。「確認」「核准」兩組各一顆,狀態同步。
 	m_review_button->setEnabled(in_review);
+	m_review_button2->setEnabled(in_review);
 	// 開發期暫放寬「非製圖者本人」限制,方便單人自測整套流程;
 	// 正式版應恢復 (state.pr_author != m_username) 條件。
 	m_approve_button->setEnabled(in_review && m_is_confirmer);
-	m_reject_button->setEnabled(in_review && (m_is_confirmer || m_is_releaser));
+	const bool can_reject = in_review && (m_is_confirmer || m_is_releaser);
+	m_reject_button->setEnabled(can_reject);
+	m_reject_button2->setEnabled(can_reject);
 	m_release_button->setEnabled(in_review && m_is_releaser);
 	m_force_unlock_button->setVisible(locked_by_other);
 	m_force_unlock_button->setEnabled(locked_by_other);

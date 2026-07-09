@@ -229,8 +229,10 @@ class PdmDialog : public QDialog
 			    *m_refresh_button = nullptr,
 			    *m_submit_button = nullptr,
 			    *m_review_button = nullptr,
+			    *m_review_button2 = nullptr,  ///< 「核准」組的審核檢視(同功能)
 			    *m_approve_button = nullptr,
 			    *m_reject_button = nullptr,
+			    *m_reject_button2 = nullptr,  ///< 「核准」組的退回(同功能)
 			    *m_release_button = nullptr,
 			    *m_force_unlock_button = nullptr,
 			    *m_revert_button = nullptr,
