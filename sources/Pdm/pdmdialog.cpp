@@ -205,8 +205,8 @@ void PdmDialog::setUpWidget()
 	m_folder_tree->setSelectionMode(QAbstractItemView::SingleSelection);
 
 	m_tree = new QTreeWidget(splitter);
-	m_tree->setHeaderLabels({tr("圖檔"), tr("狀態"), tr("繪製者"),
-				 tr("確認者"), tr("核准者"), tr("版本")});
+	m_tree->setHeaderLabels({tr("版本"), tr("檔名"), tr("狀態"),
+				 tr("繪製者"), tr("確認者"), tr("核准者")});
 	m_tree->setRootIsDecorated(false);
 	m_tree->setSelectionMode(QAbstractItemView::SingleSelection);
 	m_tree->setAllColumnsShowFocus(true);
@@ -1022,12 +1022,12 @@ void PdmDialog::populateFileList()
 				? lifecycleStatus(state) : state.doc_status);
 		// 右側只顯示檔名;完整相對路徑存在 UserRole 供動作用
 		auto *item = new QTreeWidgetItem(m_tree,
-			{QFileInfo(path).fileName(),
+			{state.revision,
+			 QFileInfo(path).fileName(),
 			 status,
 			 state.drawn_by,
 			 state.checked_by,
-			 state.approved_by,
-			 state.revision});
+			 state.approved_by});
 		item->setData(0, Qt::UserRole, path);
 		if (path == selected) m_tree->setCurrentItem(item);
 	}
