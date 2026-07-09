@@ -183,7 +183,7 @@ void PdmDialog::setUpWidget()
 
 	auto *top_row = new QHBoxLayout();
 	m_account_label = new QLabel(tr("尚未連線"), content);
-	m_add_button = new QPushButton(tr("新增圖檔…"), content);
+	m_add_button = new QPushButton(tr("新檔入庫…"), content);
 	m_refresh_button = new QPushButton(tr("重新整理"), content);
 	top_row->addWidget(m_account_label, 1);
 	top_row->addWidget(m_add_button);
