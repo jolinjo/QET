@@ -24,10 +24,54 @@
 #include "utils/qetsettings.h"
 
 #include <QMutex>
+#include <QPalette>
 #include <QStyleFactory>
 #include <QtConcurrentRun>
 #include <QSettings>
 #include <QFileInfo>
+
+/**
+	@brief applyFixedLightTheme
+	Force a fixed light (white) appearance on every platform, independent of
+	the OS light/dark setting. QET's canvas, element library and title-block
+	rendering assume a light UI; following the system into dark mode makes
+	panels and dialogs hard to read. Using the Fusion style with an explicit
+	light palette guarantees the same look on macOS and Windows.
+*/
+static void applyFixedLightTheme(QApplication &app)
+{
+	app.setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
+
+	QPalette palette;
+	const QColor window(0xF0, 0xF0, 0xF0);
+	const QColor base(Qt::white);
+	const QColor text(Qt::black);
+	const QColor highlight(0x30, 0x8C, 0xC6);
+
+	palette.setColor(QPalette::Window,          window);
+	palette.setColor(QPalette::WindowText,      text);
+	palette.setColor(QPalette::Base,            base);
+	palette.setColor(QPalette::AlternateBase,   QColor(0xE9, 0xE9, 0xE9));
+	palette.setColor(QPalette::ToolTipBase,     QColor(0xFF, 0xFF, 0xDC));
+	palette.setColor(QPalette::ToolTipText,     text);
+	palette.setColor(QPalette::Text,            text);
+	palette.setColor(QPalette::Button,          window);
+	palette.setColor(QPalette::ButtonText,      text);
+	palette.setColor(QPalette::BrightText,      Qt::red);
+	palette.setColor(QPalette::Link,            highlight);
+	palette.setColor(QPalette::Highlight,       highlight);
+	palette.setColor(QPalette::HighlightedText, Qt::white);
+	palette.setColor(QPalette::PlaceholderText, QColor(0x80, 0x80, 0x80));
+
+	// Disabled state kept legible on the same light background.
+	const QColor disabled(0x80, 0x80, 0x80);
+	palette.setColor(QPalette::Disabled, QPalette::Text,            disabled);
+	palette.setColor(QPalette::Disabled, QPalette::WindowText,      disabled);
+	palette.setColor(QPalette::Disabled, QPalette::ButtonText,      disabled);
+	palette.setColor(QPalette::Disabled, QPalette::HighlightedText, disabled);
+
+	app.setPalette(palette);
+}
 
 /**
 	@brief myMessageOutput
@@ -228,12 +272,13 @@ int main(int argc, char **argv)
 	//or drop these same files to the QET icon of the dock
 	MacOSXOpenEvent open_event;
 	app.installEventFilter(&open_event);
-	app.setStyle(QStyleFactory::create("Fusion"));
+	applyFixedLightTheme(app);
 
 	QETApp qetapp;
 	QETApp::instance()->installEventFilter(&qetapp);
 #else
 	SingleApplication app(argc, argv, true);
+	applyFixedLightTheme(app);
 
 	if (app.isSecondary())
 	{
