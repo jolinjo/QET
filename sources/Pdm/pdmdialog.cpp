@@ -1047,7 +1047,7 @@ void PdmDialog::updateButtons()
 	// 送審中/他人鎖定則不可。
 	m_checkout_button->setEnabled(has_selection && !in_review
 		&& (state.lock_owner.isEmpty() || locked_by_me));
-	m_checkout_button->setText(locked_by_me ? tr("繼續編輯")
+	m_checkout_button->setText(locked_by_me ? tr("出庫編輯")
 						: tr("出庫開啟"));
 	m_checkin_button->setEnabled(locked_by_me && !in_review);
 	m_cancel_button->setEnabled(locked_by_me);
