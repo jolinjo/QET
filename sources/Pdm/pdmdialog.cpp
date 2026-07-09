@@ -1462,35 +1462,27 @@ void PdmDialog::openReviewView()
 
 void PdmDialog::viewReleased()
 {
+	if (busyGuard()) return;
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
 	const QString rel_path = item->data(0, Qt::UserRole).toString();
 	const QString vault = vaultDir();
-	// main 上最後發行版匯出成唯讀暫存檔開啟,與任何編輯工作區完全隔離;
-	// 別人正在編輯(work 分支)也不影響,這裡只讀 main 的內容。
-	const QString out = QDir::tempPath() + QStringLiteral("/pdm-released-")
-		+ sanitizedStem(rel_path) + QStringLiteral(".qet");
-
-	showBusy(true, true, 2);
-	m_git->enqueue({"show", QStringLiteral("origin/") + DEFAULT_BRANCH
-			+ ':' + rel_path}, vault,
-		[this, rel_path, out](const PdmGitWorker::Result &result) {
-			showBusy(false);
-			if (!result.ok) {
-				fail(tr("讀取發行版失敗"), result.output);
-				return;
-			}
-			QFile file(out);
-			if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-				fail(tr("無法建立暫存檔"), out);
-				return;
-			}
-			QTextStream stream(&file);
-			stream << result.output;
-			file.close();
-			// 強制唯讀:QETProject 開啟唯讀檔時自動進入唯讀模式
-			setFileWritable(out, false);
-			emit requestOpenFile(out);
+	// main 上最後發行版,以 detached worktree 唯讀開啟(含完整倉庫上下文,
+	// 開檔乾淨無整合提示;與唯讀瀏覽、發行版檢視一致)。不用 git show 到
+	// 孤立暫存檔——那缺元件庫/圖框範本,且暫存檔設唯讀後再開會「無法建立
+	// 暫存檔」。
+	const QString view_dir = PdmSettings::workRoot() + '/' + currentRepoFullName()
+		+ QStringLiteral("/latest-view");
+	showBusy(true, true, 3);
+	m_git->enqueue({"fetch", "origin", "--prune"}, vault, {});
+	if (QDir(view_dir).exists())
+		m_git->enqueue({"worktree", "remove", "--force", view_dir}, vault, {});
+	m_git->enqueue({"worktree", "add", "--detach", view_dir,
+		QStringLiteral("origin/") + QLatin1String(DEFAULT_BRANCH)}, vault,
+		[this, rel_path, view_dir](const PdmGitWorker::Result &r) {
+			if (!r.ok) { fail(tr("讀取發行版失敗"), r.output); return; }
+			setFileWritable(view_dir + '/' + rel_path, false);
+			emit requestOpenFile(view_dir + '/' + rel_path);
 			m_status_label->setText(
 				tr("已開啟「%1」發行版(唯讀)").arg(rel_path));
 		});
@@ -2009,20 +2001,32 @@ void PdmDialog::loadReleaseHistory(const QString &rel_path)
 					 tr("(未發行)")});
 				QTreeWidgetItem *parent = pending;
 				for (const Rec &rec : *recs) {
-					if (!rec.rel_tag.isEmpty()) {
-						// 發行版:★ + 版本 + 底色粗體,可雙擊唯讀開啟
+					// 核准發行的版本:有發行 tag,或 commit 訊息是
+					// 「核准發行…」(tag 落在合併 commit,發行 commit
+					// 本身不帶 tag,故也用訊息判斷),都要底色 highlight。
+					const bool is_release = !rec.rel_tag.isEmpty()
+						|| rec.subject.startsWith(
+							QStringLiteral("核准發行"));
+					if (is_release) {
+						// 有 tag 才可雙擊唯讀開啟該發行版
+						const bool has_tag = !rec.rel_tag.isEmpty();
 						auto *item = new QTreeWidgetItem(
 							m_history_tree,
-							{QStringLiteral("★ ") + rec.version,
+							{(has_tag ? QStringLiteral("★ ")
+								  : QString())
+							 + rec.version,
 							 rec.datetime, rec.committer,
-							 tr("正式發行")});
+							 has_tag ? tr("正式發行")
+								 : rec.subject});
 						for (int c = 0; c < 4; ++c) {
 							item->setBackground(c, highlight);
 							QFont fnt = item->font(c);
 							fnt.setBold(true);
 							item->setFont(c, fnt);
 						}
-						item->setData(0, Qt::UserRole, rec.rel_tag);
+						if (has_tag)
+							item->setData(0, Qt::UserRole,
+								      rec.rel_tag);
 						parent = item;
 					} else {
 						new QTreeWidgetItem(parent,
