@@ -3341,6 +3341,11 @@ void QETDiagramEditor::applyReadOnlyView(bool read_only)
 		if (read_only && has_project) qdw_pa->raise();
 	}
 	if (m_qdw_elmt_collection) m_qdw_elmt_collection->setVisible(editable);
+	// 復原、目前選取項目的屬性、選擇自動編號:純編輯輔助面板，沒開圖就隱藏
+	if (qdw_undo) qdw_undo->setVisible(has_project);
+	if (m_selection_properties_editor)
+		m_selection_properties_editor->setVisible(has_project);
+	if (m_autonumbering_dock) m_autonumbering_dock->setVisible(has_project);
 	if (m_add_item_tool_bar) m_add_item_tool_bar->setVisible(editable);
 	if (m_depth_tool_bar) m_depth_tool_bar->setVisible(editable);
 	if (diagram_tool_bar) diagram_tool_bar->setVisible(editable);
