@@ -37,7 +37,8 @@ PdmService::PdmService(QObject *parent) :
 
 void PdmService::request(const QByteArray &verb, const QString &api_path,
 			 const QByteArray &payload,
-			 const QByteArray &content_type, Callback done)
+			 const QByteArray &content_type, Callback done,
+			 int retries_left)
 {
 	QNetworkRequest network_request(QUrl(PdmSettings::serverUrl()
 					     + QStringLiteral("/api/v1")
@@ -53,12 +54,27 @@ void PdmService::request(const QByteArray &verb, const QString &api_path,
 	QNetworkReply *network_reply = m_network->sendCustomRequest(
 		network_request, verb, payload);
 	connect(network_reply, &QNetworkReply::finished, this,
-		[network_reply, done]() {
+		[this, network_reply, done, verb, api_path, payload,
+		 content_type, retries_left]() {
 			Reply reply;
 			reply.http_status = network_reply->attribute(
 				QNetworkRequest::HttpStatusCodeAttribute).toInt();
 			const QByteArray body = network_reply->readAll();
 			reply.json = QJsonDocument::fromJson(body);
+			// 伺服器一時性 5xx(含 Windows Gitea git 程序啟動失敗
+			// 0xc0000142):稍等後自動重試幾次,重試用盡才回報。
+			if (reply.http_status >= 500 && reply.http_status < 600
+			    && retries_left > 0) {
+				network_reply->deleteLater();
+				QTimer::singleShot(1000, this,
+					[this, verb, api_path, payload,
+					 content_type, done, retries_left]() {
+						request(verb, api_path, payload,
+							content_type, done,
+							retries_left - 1);
+					});
+				return;
+			}
 			if (network_reply->error() == QNetworkReply::NoError
 			    && reply.http_status >= 200 && reply.http_status < 300) {
 				reply.ok = true;

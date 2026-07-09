@@ -110,7 +110,8 @@ class PdmService : public QObject
 	private:
 		void request(const QByteArray &verb, const QString &api_path,
 			     const QByteArray &payload,
-			     const QByteArray &content_type, Callback done);
+			     const QByteArray &content_type, Callback done,
+			     int retries_left = 3);
 
 		QNetworkAccessManager *m_network = nullptr;
 };

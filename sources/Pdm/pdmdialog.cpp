@@ -118,6 +118,90 @@ namespace
 			}
 	};
 
+	// 把 git / Gitea 的英文錯誤訊息翻成使用者看得懂的中文。
+	// 只有「認得的」錯誤才轉譯並隱藏原文;認不得的一律附上原文供通報。
+	// 回傳空字串代表「無對應」——由呼叫端決定是否顯示原文。
+	QString translateError(const QString &raw)
+	{
+		const QString s = raw.toLower();
+		auto has = [&s](const char *needle) {
+			return s.contains(QLatin1String(needle));
+		};
+
+		// Windows Gitea 端 git 子程序/hook 起不來(DLL 初始化失敗)。
+		if (has("0xc0000142"))
+			return QObject::tr(
+				"圖庫伺服器暫時無法處理這次請求(伺服器端 git 程序"
+				"啟動失敗)。通常是伺服器忙碌或需重新啟動,請稍候再試;"
+				"若持續發生,請通知管理員重啟 Gitea 服務。");
+		if (has("exit status 0xc") || has("exit status 3221"))
+			return QObject::tr(
+				"圖庫伺服器端 git 程序異常結束,多為一時性,請稍候再試;"
+				"若持續發生請通知管理員。");
+
+		// 連線類
+		if (has("could not resolve host") || has("failed to connect")
+		    || has("couldn't connect") || has("connection refused")
+		    || has("unable to access") || has("timed out")
+		    || has("connection timed") || has("no route to host"))
+			return QObject::tr(
+				"無法連線圖庫伺服器,請確認網路 / VPN 是否正常、"
+				"伺服器是否開啟。");
+
+		// 認證 / 權限
+		if (has("authentication failed") || has("http 401")
+		    || has("401 unauthorized"))
+			return QObject::tr(
+				"認證失敗:token 無效或已過期,請至偏好設定→圖檔管理"
+				"更新 token。");
+		if (has("http 403") || has("forbidden"))
+			return QObject::tr("權限不足:你沒有執行此操作的權限。");
+		if (has("http 404") || has("404 not found"))
+			return QObject::tr(
+				"找不到對應資料(可能已被刪除或改名),請按重新整理。");
+		if (has("http 409") || has("conflict"))
+			return QObject::tr(
+				"狀態衝突:資料已被他人變更,請先重新整理再操作。");
+		if (has("http 422"))
+			return QObject::tr(
+				"伺服器拒絕此操作(單人測試時常見於審核/核准自己"
+				"送出的項目)。");
+
+		// git push / 落後遠端
+		if (has("non-fast-forward") || has("fetch first")
+		    || has("[rejected]") || has("tip of your current branch"))
+			return QObject::tr(
+				"遠端圖庫已更新,請先按重新整理再操作。");
+		if (has("index.lock"))
+			return QObject::tr(
+				"本機 git 鎖檔殘留(系統會嘗試自動清除重試);"
+				"若仍失敗請關閉圖檔管理視窗重開。");
+		if (has("merge") && has("conflict"))
+			return QObject::tr(
+				"合併衝突:此圖與最新版有衝突,需人工處理。");
+
+		// 伺服器 5xx(放在 0xc0000142 之後,當作一般性後備)
+		if (has("http 500") || has("returned error: 500") || has("error: 500")
+		    || has("http 502") || has("http 503") || has("http 504")
+		    || has("502 bad gateway") || has("503 service"))
+			return QObject::tr(
+				"圖庫伺服器暫時無法處理(HTTP 5xx),多為一時性,"
+				"請稍候再試;若持續發生請通知管理員查看伺服器。");
+
+		return QString();   // 認不得 → 由呼叫端顯示原文
+	}
+
+	// git-lfs unlock 對「本來就沒鎖」會回「no matching locks / unable to get
+	// lock ID」。對我們而言鎖已不存在＝已達成解鎖目的,視為成功不報錯
+	// (常見於前一步入庫送審已解鎖、但後續建 PR 失敗後又再按入庫)。
+	bool lfsUnlockBenign(const QString &out)
+	{
+		const QString s = out.toLower();
+		return s.contains(QLatin1String("no matching locks"))
+		    || s.contains(QLatin1String("unable to get lock id"))
+		    || s.contains(QLatin1String("no locks found"));
+	}
+
 	QString sanitizedStem(const QString &rel_path)
 	{
 		// 圖號即檔名;分支/tag 名不能有空白
@@ -1399,7 +1483,7 @@ void PdmDialog::checkIn()
 						vault,
 						[this, rel_path, worktree]
 						(const PdmGitWorker::Result &r) {
-							if (!r.ok) {
+							if (!r.ok && !lfsUnlockBenign(r.output)) {
 								fail(tr("解除鎖定失敗"),
 								     r.output);
 							}
@@ -1437,7 +1521,8 @@ void PdmDialog::cancelCheckOut()
 	}
 	m_git->enqueue({"lfs", "unlock", rel_path}, vaultDir(),
 		[this, rel_path, worktree](const PdmGitWorker::Result &result) {
-			if (!result.ok) fail(tr("解除鎖定失敗"), result.output);
+			if (!result.ok && !lfsUnlockBenign(result.output))
+				fail(tr("解除鎖定失敗"), result.output);
 			setFileWritable(worktree + '/' + rel_path, false);
 			// 取消出庫後同樣關掉編輯器裡的該檔(已還原成庫內版本)
 			emit requestCloseFile(worktree + '/' + rel_path);
@@ -2368,7 +2453,14 @@ void PdmDialog::fail(const QString &title, const QString &log)
 	m_refresh_button->setEnabled(true);
 	m_repo_combo->setEnabled(true);
 	m_status_label->setText(title);
-	QMessageBox::warning(this, title, log.right(1500));
+	// 認得的 git / Gitea 錯誤轉成中文友善說明並隱藏原文;認不得的才附原文供通報。
+	const QString friendly = translateError(log);
+	if (friendly.isEmpty())
+		QMessageBox::warning(this, title,
+			tr("發生未預期的錯誤,請將下列訊息回報管理員:\n\n%1")
+			.arg(log.right(1500)));
+	else
+		QMessageBox::warning(this, title, friendly);
 }
 
 QString PdmDialog::currentRepoFullName() const

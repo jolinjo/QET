@@ -78,6 +78,7 @@ class PdmGitWorker : public QObject
 			QString working_dir;
 			Callback done;
 			bool lock_retried = false;  ///< 已為 stale index.lock 重試過一次
+			int server_retries = 0;     ///< 已為伺服器 5xx 重試的次數
 		};
 		QQueue<Job> m_queue;
 		QProcess *m_process = nullptr;

@@ -24,6 +24,24 @@
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
+#include <QTimer>
+
+namespace
+{
+	// git-over-HTTP 撞到伺服器一時性錯誤(5xx / Windows Gitea git 程序啟動
+	// 失敗)時的特徵字串,判定可重試。
+	bool isTransientServerError(const QString &out)
+	{
+		const QString s = out.toLower();
+		return s.contains(QLatin1String("error: 500"))
+		    || s.contains(QLatin1String("returned error: 50"))  // 500/502/503/504
+		    || s.contains(QLatin1String("0xc0000142"))
+		    || s.contains(QLatin1String("exit status 0xc"))
+		    || s.contains(QLatin1String("502 bad gateway"))
+		    || s.contains(QLatin1String("503 service"))
+		    || s.contains(QLatin1String("504 gateway"));
+	}
+}
 
 PdmGitWorker::PdmGitWorker(QObject *parent) :
 	QObject(parent)
@@ -122,6 +140,19 @@ void PdmGitWorker::startNext()
 					startNext();
 					return;
 				}
+			}
+			// 伺服器一時性 5xx(含 Windows Gitea 端 git 程序啟動失敗
+			// 0xc0000142):稍等後自動重試幾次,重試用盡才把錯誤丟給
+			// 使用者(避免伺服器抖動就打斷流程)。
+			if (!result.ok && job.server_retries < 3
+			    && isTransientServerError(result.output)) {
+				Job retry = job;
+				retry.server_retries = job.server_retries + 1;
+				QTimer::singleShot(1000, this, [this, retry]() {
+					m_queue.prepend(retry);
+					if (!m_process) startNext();
+				});
+				return;
 			}
 			if (job.done) job.done(result);
 			startNext();
