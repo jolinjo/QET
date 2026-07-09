@@ -1961,10 +1961,8 @@ bool QETDiagramEditor::openAndAddProject(
 		}
 	}
 
-	//Create the project.
-	// 非互動式開啟(圖檔管理:出庫/審核/瀏覽)已有 PDM 進度框,不再另彈
-	// 「載入中」啟動畫面,避免使用者覺得「跳了很多次對話框」。
-	if (interactive) DialogWaiting::instance(this);
+	//Create the project
+	DialogWaiting::instance(this);
 
 	QETProject *project = new QETProject(filepath);
 	if (project -> state() != QETProject::Ok)
@@ -1984,13 +1982,13 @@ bool QETDiagramEditor::openAndAddProject(
 			);
 		}
 		delete project;
-		if (interactive) DialogWaiting::dropInstance();
+		DialogWaiting::dropInstance();
 		return(false);
 	}
 
 	QETApp::projectsRecentFiles() -> fileWasOpened(filepath);
 	addProject(project);
-	if (interactive) DialogWaiting::dropInstance();
+	DialogWaiting::dropInstance();
 	return true;
 }
 
