@@ -28,6 +28,7 @@
 class PdmGitWorker;
 class PdmService;
 class QComboBox;
+class QGroupBox;
 class QDomDocument;
 class QLabel;
 class QProgressBar;
@@ -213,7 +214,8 @@ class PdmDialog : public QDialog
 		PdmGitWorker *m_git = nullptr;
 
 		QLabel *m_account_label = nullptr;
-		QPushButton *m_add_button = nullptr;   ///< 新增圖檔
+		QGroupBox *m_admin_box = nullptr;      ///< 管理員維護分組(核准者才顯示)
+		QPushButton *m_add_button = nullptr;   ///< 新檔入庫
 		QComboBox *m_repo_combo = nullptr;
 		QTreeWidget *m_folder_tree = nullptr;   ///< 左:資料夾樹
 		QTreeWidget *m_tree = nullptr;          ///< 中:所選資料夾的圖檔清單
