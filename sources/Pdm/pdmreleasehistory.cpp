@@ -37,6 +37,9 @@ namespace
 	const char *const HISTORY_PROP = "pdm_release_history";
 }
 
+const char *const PdmReleaseHistory::HISTORY_HEADER =
+	"【文件修訂記錄 Revision History】";
+
 QList<PdmReleaseHistory::Row> PdmReleaseHistory::readReleases(
 	const QDomDocument &doc)
 {
@@ -87,4 +90,57 @@ bool PdmReleaseHistory::appendRelease(QDomDocument &doc, const Row &row)
 		QJsonDocument(arr).toJson(QJsonDocument::Compact));
 	return PdmVersion::setProjectProperty(doc,
 		QLatin1String(HISTORY_PROP), json);
+}
+
+QString PdmReleaseHistory::formatHistoryText(const QList<Row> &rows)
+{
+	// 等寬字型下用空白對齊成類表格。版本/日期欄定寬,異動欄不截斷。
+	QString text = QLatin1String(HISTORY_HEADER);
+	for (const Row &r : rows) {
+		text += QStringLiteral("\n%1  %2  %3  %4")
+			.arg(r.version, -6)      // 版本靠左補到 6 寬
+			.arg(r.date, -10)        // ISO 日期固定 10 寬
+			.arg(r.approved_by, -6)  // 核准者靠左補到 6 寬
+			.arg(r.changes);
+	}
+	return text;
+}
+
+bool PdmReleaseHistory::upsertHistoryTextItem(QDomDocument &doc,
+	const QString &history_text, const QString &font_string,
+	double default_x, double default_y)
+{
+	QDomElement project = doc.documentElement();
+	if (project.isNull()) return false;
+	// 文件管制頁:目前取第一個 <diagram>(設計 §5.2;日後可改 UUID 釘頁)
+	QDomElement diagram = project.firstChildElement(QStringLiteral("diagram"));
+	if (diagram.isNull()) return false;
+
+	QDomElement inputs = diagram.firstChildElement(QStringLiteral("inputs"));
+	if (inputs.isNull()) {
+		inputs = doc.createElement(QStringLiteral("inputs"));
+		diagram.appendChild(inputs);
+	}
+
+	// 以「text 以 HISTORY_HEADER 起首」辨識既有的發行史文字圖元
+	const QString header = QLatin1String(HISTORY_HEADER);
+	for (QDomElement in = inputs.firstChildElement(QStringLiteral("input"));
+	     !in.isNull(); in = in.nextSiblingElement(QStringLiteral("input"))) {
+		if (in.attribute(QStringLiteral("text")).startsWith(header)) {
+			// 只更新內容,保留使用者可能調整過的位置/字型
+			in.setAttribute(QStringLiteral("text"), history_text);
+			return true;
+		}
+	}
+
+	// 沒有則新建一個,套用預設位置與(等寬)字型
+	QDomElement in = doc.createElement(QStringLiteral("input"));
+	in.setAttribute(QStringLiteral("x"), QString::number(default_x));
+	in.setAttribute(QStringLiteral("y"), QString::number(default_y));
+	in.setAttribute(QStringLiteral("text"), history_text);
+	in.setAttribute(QStringLiteral("rotation"), QStringLiteral("0"));
+	if (!font_string.isEmpty())
+		in.setAttribute(QStringLiteral("font"), font_string);
+	inputs.appendChild(in);
+	return true;
 }

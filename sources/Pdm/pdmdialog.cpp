@@ -2038,6 +2038,15 @@ void PdmDialog::approveAndRelease()
 			PdmVersion::setProjectProperty(doc,
 				QLatin1String(PdmVersion::RELEASE_VERSION),
 				release_version);
+			// 首頁自動渲染:把整份發行史(含本次)寫成文件管制頁上的
+			// 多行等寬文字圖元(見設計 §5.2)。等寬字型讓欄位對齊。
+			QFont mono(QStringLiteral("Menlo"));
+			mono.setStyleHint(QFont::Monospace);
+			mono.setPointSize(6);
+			PdmReleaseHistory::upsertHistoryTextItem(doc,
+				PdmReleaseHistory::formatHistoryText(
+					PdmReleaseHistory::readReleases(doc)),
+				mono.toString(), 20.0, 20.0);
 			QFile out(abs_path);
 			if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate))
 				return false;

@@ -48,6 +48,25 @@ namespace PdmReleaseHistory
 	/// 於 <pdm-release-history> 末端 append 一列(容器不存在則建立)
 	/// @return true 若成功寫入
 	bool appendRelease(QDomDocument &doc, const Row &row);
+
+	/// 首頁自動渲染用的固定標題(兼作 upsert 時辨識該文字圖元的標記)。
+	/// 依靠 text 內容辨識,因 QET 存檔會丟棄 <input> 的自訂屬性,但保留 text。
+	extern const char *const HISTORY_HEADER;
+
+	/// 把發行史組成多行等寬文字(首行為 HISTORY_HEADER,其後每列一行)
+	QString formatHistoryText(const QList<Row> &rows);
+
+	/**
+		在「文件管制頁」(目前取第一個 <diagram>)以 IndependentTextItem
+		(<inputs>/<input>)呈現發行史:找到既有(text 以 HISTORY_HEADER
+		起首)則只更新其 text(保留使用者調整的位置/字型);否則新建一個,
+		套用預設位置與字型。見 doc/pdm-revision-design.md §5.2(採文字圖元
+		路線:序列化自足、開檔即所見、不依賴 DB)。
+		@return true 若有寫入變更
+	*/
+	bool upsertHistoryTextItem(QDomDocument &doc, const QString &history_text,
+				   const QString &font_string,
+				   double default_x, double default_y);
 }
 
 #endif // PDMRELEASEHISTORY_H
