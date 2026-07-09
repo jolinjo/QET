@@ -40,3 +40,7 @@ fonts/NotoSansMonoCJKtc-Regular.otf
 /_deps/sqlite/
 /*.log
 aqtinstall.log
+
+# macOS
+.DS_Store
+**/.DS_Store
