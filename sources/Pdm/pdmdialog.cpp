@@ -143,22 +143,13 @@ PdmDialog::PdmDialog(QWidget *parent) :
 			if (!m_busy_dialog->isVisible()) {
 				m_busy_dialog->show();
 				m_busy_dialog->raise();
-				if (!m_op_active) {   // 背景讀取自行彈框:無預期步數
-					m_op_total = 0;
-					m_op_done = 0;
-					m_busy_bar->setValue(8);
-				}
+				m_busy_bar->setValue(0);   // 背景讀取自行彈框:從頭開始
 			}
-			if (m_op_active && m_op_total > 0) {
-				// 使用者操作、已知步數:進度條以 已完成/預期 前進
-				if (m_op_done < m_op_total) ++m_op_done;
-				m_busy_bar->setValue(
-					qMin(99, m_op_done * 100 / m_op_total));
-			} else {
-				// 背景讀取/尾段重整:只往上漸進逼近 92,不倒退
-				const int v = m_busy_bar->value();
-				if (v < 92) m_busy_bar->setValue(v + (92 - v) / 3);
-			}
+			// 一個操作+它引發的重新查詢視為「同一段等待」:每個 git 步驟
+			// (不分操作或背景重整)都往上補 1/4 剩餘距離,連續漸進逼近
+			// 95%,不倒退;全部真的做完(allFinished)才補滿 100% 再收框。
+			const int v = m_busy_bar->value();
+			if (v < 95) m_busy_bar->setValue(v + (95 - v) / 4);
 			m_progress->setValue(m_busy_bar->value());
 			m_progress->show();
 			m_refresh_button->setEnabled(false);
