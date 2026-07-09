@@ -18,6 +18,7 @@
 #include "pdmdialog.h"
 
 #include "pdmgitworker.h"
+#include "pdmrevision.h"
 #include "pdmservice.h"
 #include "pdmsettings.h"
 #include "pdmversion.h"
@@ -40,8 +41,10 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QLabel>
+#include <QListWidget>
 #include <QMenu>
 #include <QMessageBox>
+#include <QPlainTextEdit>
 #include <QProgressBar>
 #include <QGroupBox>
 #include <QPainter>
@@ -1415,6 +1418,92 @@ void PdmDialog::checkOut()
 		});
 }
 
+bool PdmDialog::promptCheckinCommit(const QString &abs_path,
+				    const QString &title,
+				    const QString &summary_label,
+				    QString *commit_message,
+				    QString *human_summary)
+{
+	// 讀已存檔的工作區 .qet,收集各頁修訂欄的修訂項(Phase B:全收,
+	// 由使用者勾選;Phase C 會改以「上次發行日期」過濾)。
+	QList<PdmRevision::Entry> entries;
+	QString work_version;
+	{
+		QFile file(abs_path);
+		QDomDocument doc;
+		if (file.open(QIODevice::ReadOnly) && doc.setContent(&file)) {
+			entries = PdmRevision::collectChanges(doc, QDate());
+			work_version = PdmVersion::workVersion(doc);
+		}
+		file.close();
+	}
+
+	QDialog dialog(this);
+	dialog.setWindowTitle(title);
+	auto *layout = new QVBoxLayout(&dialog);
+
+	auto *summary_lbl = new QLabel(summary_label, &dialog);
+	layout->addWidget(summary_lbl);
+	auto *summary_edit = new QLineEdit(&dialog);
+	layout->addWidget(summary_edit);
+
+	QListWidget *list = nullptr;
+	if (entries.isEmpty()) {
+		auto *hint = new QLabel(
+			tr("(本檔各頁修訂欄沒有可帶入的修訂項;"
+			   "如需記錄,請先在圖框「本頁修訂」填寫。)"), &dialog);
+		hint->setWordWrap(true);
+		layout->addWidget(hint);
+	} else {
+		layout->addWidget(new QLabel(
+			tr("勾選要納入本次入庫記錄的修訂項:"), &dialog));
+		list = new QListWidget(&dialog);
+		for (const PdmRevision::Entry &e : entries) {
+			auto *it = new QListWidgetItem(
+				QStringLiteral("P%1  %2  %3")
+					.arg(e.folio).arg(e.date, e.desc), list);
+			it->setFlags(it->flags() | Qt::ItemIsUserCheckable);
+			it->setCheckState(Qt::Checked);
+		}
+		layout->addWidget(list);
+	}
+
+	layout->addWidget(new QLabel(tr("出入庫意見(選填,不進發行記錄):"),
+				     &dialog));
+	auto *comment_edit = new QPlainTextEdit(&dialog);
+	comment_edit->setMaximumHeight(80);
+	layout->addWidget(comment_edit);
+
+	auto *buttons = new QDialogButtonBox(
+		QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+	layout->addWidget(buttons);
+	connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+	connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+	if (dialog.exec() != QDialog::Accepted) return false;
+
+	const QString summary = summary_edit->text().trimmed();
+	if (summary.isEmpty()) {
+		QMessageBox::warning(this, title, tr("變更摘要不可空白。"));
+		return false;
+	}
+
+	PdmRevision::CommitMeta meta;
+	meta.work_version = work_version;
+	meta.comment = comment_edit->toPlainText().trimmed();
+	if (list) {
+		for (int i = 0; i < list->count(); ++i) {
+			if (list->item(i)->checkState() == Qt::Checked)
+				meta.changes.append(entries.at(i));
+		}
+	}
+
+	if (human_summary) *human_summary = summary;
+	if (commit_message)
+		*commit_message = PdmRevision::encodeCommit(summary, meta);
+	return true;
+}
+
 void PdmDialog::checkIn()
 {
 	if (busyGuard()) return;
@@ -1432,23 +1521,20 @@ void PdmDialog::checkIn()
 		return;
 	}
 
-	bool accepted = false;
-	const QString message = QInputDialog::getMultiLineText(this,
-		tr("入庫"), tr("變更說明(必填):"), QString(), &accepted);
-	if (!accepted) return;
-	if (message.trimmed().isEmpty()) {
-		QMessageBox::warning(this, tr("入庫"), tr("變更說明不可空白。"));
-		return;
-	}
+	// 入庫前先請編輯器把該檔存檔(同步),git 與修訂項收集才抓得到最新
+	// 編輯內容;存好後才彈變更說明對話框(需讀存檔後的修訂欄)。
+	const QString abs_path = worktree + '/' + rel_path;
+	emit requestSaveFile(abs_path);
 
-	// 入庫前先請編輯器把該檔存檔(同步),使用者不用手動 Cmd+S,
-	// git 才抓得到最新編輯內容。
-	emit requestSaveFile(worktree + '/' + rel_path);
+	QString message;
+	if (!promptCheckinCommit(abs_path, tr("入庫"),
+				 tr("變更摘要(必填):"), &message, nullptr))
+		return;
 
 	showBusy(true, true, 3);
 	// 版本已在出庫時寫入圖框、入庫直接沿用,不再進版。存檔後直接提交。
 	m_git->enqueue({"add", "--", rel_path}, worktree, {});
-	m_git->enqueue({"commit", "-m", message.trimmed()}, worktree,
+	m_git->enqueue({"commit", "-m", message}, worktree,
 		[this, rel_path, branch, worktree, vault]
 		(const PdmGitWorker::Result &result) {
 			const bool nothing_to_commit = !result.ok
@@ -1602,20 +1688,17 @@ void PdmDialog::checkInAndSubmit()
 		return;
 	}
 
-	bool accepted = false;
-	const QString body = QInputDialog::getMultiLineText(this,
-		tr("入庫送審"), tr("送審說明(必填,審核者會看到):"),
-		QString(), &accepted);
-	if (!accepted) return;
-	if (body.trimmed().isEmpty()) {
-		QMessageBox::warning(this, tr("入庫送審"), tr("送審說明不可空白。"));
-		return;
-	}
-	const QString msg = body.trimmed();
-
-	// 存檔 → 直接把「審核中」戳進圖框 → 單一 commit(內容+狀態一起,比「入庫
-	// 再送審」少一次 commit)→ push → 解鎖 → 開 PR。
+	// 先存檔,再彈變更說明(需讀存檔後的修訂欄)。commit 用結構化訊息,
+	// PR body 用純人類摘要(審核者看得清爽,不夾 pdm-meta 區塊)。
 	emit requestSaveFile(abs_path);
+
+	QString commit_msg, msg;
+	if (!promptCheckinCommit(abs_path, tr("入庫送審"),
+				 tr("送審說明(必填,審核者會看到):"),
+				 &commit_msg, &msg))
+		return;
+
+	// 把「審核中」戳進圖框 → 單一 commit(內容+狀態一起)→ push → 解鎖 → 開 PR。
 	if (!stampDocFields(abs_path, QString::fromUtf8(DOC_STATUS_REVIEWING),
 			    QString(), false)) {   // 保留出庫時的版本
 		fail(tr("寫入圖框欄位失敗"), abs_path);
@@ -1642,7 +1725,7 @@ void PdmDialog::checkInAndSubmit()
 			});
 	};
 	m_git->enqueue({"add", "--", rel_path}, worktree, {});
-	m_git->enqueue({"commit", "-m", tr("入庫送審：%1").arg(msg)}, worktree,
+	m_git->enqueue({"commit", "-m", commit_msg}, worktree,
 		[this, branch, worktree, vault, rel_path, open_pr]
 		(const PdmGitWorker::Result &commit_r) {
 			const bool nothing = !commit_r.ok

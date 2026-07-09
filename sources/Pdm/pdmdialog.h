@@ -145,6 +145,20 @@ class PdmDialog : public QDialog
 					    QMap<QString, QString>()) const;
 		// 版本進版邏輯已移至 PdmVersion::nextMinor / nextMajor
 
+		/**
+			入庫/送審前的變更說明對話框:列出本檔各頁修訂欄的修訂項
+			供勾選,並收「變更摘要」(必填)與「出入庫意見」(選填)。
+			@param abs_path 已存檔的工作區 .qet(呼叫前須先 requestSaveFile)
+			@param commit_message 回填:結構化 commit(含 pdm-meta,供 commit)
+			@param human_summary 回填:純人類摘要(供 PR body/顯示)
+			@return false = 使用者取消或摘要空白
+		*/
+		bool promptCheckinCommit(const QString &abs_path,
+					 const QString &title,
+					 const QString &summary_label,
+					 QString *commit_message,
+					 QString *human_summary);
+
 		void addNewDrawing();   ///< 新增一張圖檔到圖庫(建 work 分支、出庫編輯)
 		void checkOut();
 		void checkIn();

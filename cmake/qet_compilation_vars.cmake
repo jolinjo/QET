@@ -377,6 +377,8 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/Pdm/pdmgitworker.h
   ${QET_DIR}/sources/Pdm/pdmservice.cpp
   ${QET_DIR}/sources/Pdm/pdmservice.h
+  ${QET_DIR}/sources/Pdm/pdmrevision.cpp
+  ${QET_DIR}/sources/Pdm/pdmrevision.h
   ${QET_DIR}/sources/Pdm/pdmsettings.cpp
   ${QET_DIR}/sources/Pdm/pdmsettings.h
   ${QET_DIR}/sources/Pdm/pdmversion.cpp
