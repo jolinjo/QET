@@ -1619,7 +1619,7 @@ void PdmDialog::confirmDone()
 	const int pr_index = state.pr_index;
 	signoffOnWorkBranch(rel_path, QString(),
 		{{QStringLiteral("checked-by"), m_username}},
-		tr("確認者 %1 已確認完畢：%2").arg(m_username, note.trimmed()),
+		tr("確認完畢 by %1 / 意見：%2").arg(m_username, note.trimmed()),
 		[this, rel_path, pr_index]() {
 			showBusy(false);
 			m_status_label->setText(
@@ -1654,7 +1654,7 @@ void PdmDialog::rejectReview()
 	// 寫「退回修改」狀態 + commit(帶退回意見)到 work 分支,再送 REQUEST_CHANGES
 	signoffOnWorkBranch(rel_path, QString::fromUtf8(DOC_STATUS_REJECTED),
 		QMap<QString, QString>(),
-		tr("退回 by %1：%2").arg(m_username, trimmed),
+		tr("退回 by %1 / 意見：%2").arg(m_username, trimmed),
 		[this, rel_path, pr_index, trimmed]() {
 			m_service->submitReview(currentRepoFullName(), pr_index,
 				QStringLiteral("REQUEST_CHANGES"), trimmed,
@@ -1698,7 +1698,7 @@ void PdmDialog::approveAndRelease()
 	// 順序:先 commit(改 head)、後核准 → 不觸發「廢止過時核准」。
 	signoffOnWorkBranch(rel_path, QString::fromUtf8(DOC_STATUS_RELEASED),
 		{{QStringLiteral("approved-by"), m_username}},
-		tr("核准發行 by %1：%2").arg(m_username, msg),
+		tr("核准發行 by %1 / 意見：%2").arg(m_username, msg),
 		[this, rel_path, pr_index, stem, vault, msg]() {
 		// 推下一發行版次 → 合併 → 發行(核准成功或自我核准被拒都走這)
 		auto merge_and_release = [this, rel_path, pr_index, stem, vault]() {
