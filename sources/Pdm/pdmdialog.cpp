@@ -181,8 +181,10 @@ void PdmDialog::setUpWidget()
 	auto *top_row = new QHBoxLayout();
 	m_account_label = new QLabel(tr("尚未連線"), content);
 	m_add_button = new QPushButton(tr("新檔入庫…"), content);   // 放到「繪製」群組
+	m_view_released_button = new QPushButton(tr("不出庫檢視"), content);
 	m_refresh_button = new QPushButton(tr("重新整理"), content);
 	top_row->addWidget(m_account_label, 1);
+	top_row->addWidget(m_view_released_button);
 	top_row->addWidget(m_refresh_button);
 	layout->addLayout(top_row);
 
@@ -255,8 +257,7 @@ void PdmDialog::setUpWidget()
 		return box;
 	};
 
-	// 繪製（新檔入庫、出入庫、送審)
-	m_view_released_button = new QPushButton(tr("不出庫檢視"), content);
+	// 繪製（新檔入庫、出入庫、送審)。「不出庫檢視」移到上方與重新整理同列。
 	m_checkout_button = new QPushButton(tr("出庫開啟"), content);
 	m_checkin_button = new QPushButton(tr("入庫納管…"), content);
 	m_cancel_button = new QPushButton(tr("取消出庫"), content);
