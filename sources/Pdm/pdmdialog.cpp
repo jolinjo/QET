@@ -1727,7 +1727,10 @@ void PdmDialog::rejectReview()
 				QStringLiteral("REQUEST_CHANGES"), trimmed,
 				[this, rel_path](const PdmService::Reply &reply) {
 					showBusy(false);
-					if (!reply.ok) {
+					// 開發期單人測試:Gitea 擋「審自己的 PR」(422)。
+					// 退回意見與「退回修改」commit 已推上 work 分支
+					// (真正有意義的部分),422 視為已退回不再報錯。
+					if (!reply.ok && reply.http_status != 422) {
 						fail(tr("退回失敗"), reply.error);
 						return;
 					}
