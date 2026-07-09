@@ -177,7 +177,7 @@ class PdmDialog : public QDialog
 				const QString &commit_message);
 
 		/// 查登入者所屬 team,設定 m_is_confirmer / m_is_releaser
-		void loadUserRoles();
+		void loadUserRoles(int retries_left = 2);
 		/**
 			在 work 分支上簽核:準備 work 分支工作區→戳記(狀態/附加
 			欄位)→commit(帶簽核訊息)→push,成功後呼叫 after_push。

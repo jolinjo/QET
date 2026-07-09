@@ -492,20 +492,33 @@ void PdmDialog::refresh()
 					m_user_email = reply.json.object()
 						.value(QStringLiteral("email")).toString();
 			});
-		loadUserRoles();
+		// 角色(確認者/核准者)依「本 repo 所屬 org」判定,必須等 repo 確定
+		// 後才抓——放在 syncRepository()。這裡先抓會因 combo 尚未載入而拿到
+		// 空 org,導致第一次進來角色全為 false(管理員維護不出現)。
 		connectionRefreshed();
 	});
 }
 
-void PdmDialog::loadUserRoles()
+void PdmDialog::loadUserRoles(int retries_left)
 {
 	m_is_confirmer = false;
 	m_is_releaser = false;
 	// 本 repo 所屬組織(owner)底下的 team 才算數
 	const QString org = currentRepoFullName().section('/', 0, 0);
 	m_service->get(QStringLiteral("/user/teams?limit=50"),
-		[this, org](const PdmService::Reply &reply) {
-			if (!reply.ok) { updateButtons(); return; }
+		[this, org, retries_left](const PdmService::Reply &reply) {
+			// 暫時性失敗(網路抖動)不要讓角色永久歸零、按鈕整排消失:
+			// 隔一小段時間重試,重試用盡才放行。
+			if (!reply.ok) {
+				if (retries_left > 0)
+					QTimer::singleShot(1500, this,
+						[this, retries_left]() {
+							loadUserRoles(retries_left - 1);
+						});
+				else
+					updateButtons();
+				return;
+			}
 			const QJsonArray teams = reply.json.array();
 			for (const QJsonValue &value : teams) {
 				const QJsonObject team = value.toObject();
@@ -632,6 +645,7 @@ void PdmDialog::syncRepository()
 {
 	const QString repo = currentRepoFullName();
 	if (repo.isEmpty()) return;
+	loadUserRoles();         // repo 已確定,可正確依 org 判定確認者/核准者角色
 	showBusy(true, false);   // 背景同步:只用內嵌進度條,不彈模態框
 
 	const QString vault = vaultDir();
