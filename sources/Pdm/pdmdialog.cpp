@@ -184,6 +184,8 @@ void PdmDialog::setUpWidget()
 	m_view_released_button = new QPushButton(tr("不出庫檢視"), content);
 	m_refresh_button = new QPushButton(tr("重新整理"), content);
 	top_row->addWidget(m_account_label, 1);
+	m_view_released_button->setMinimumWidth(160);
+	m_view_released_button->setMinimumHeight(32);
 	top_row->addWidget(m_view_released_button);
 	top_row->addWidget(m_refresh_button);
 	layout->addLayout(top_row);
@@ -276,7 +278,7 @@ void PdmDialog::setUpWidget()
 
 	auto *stages = new QHBoxLayout();
 	stages->addWidget(make_stage(tr("繪製"),
-		{m_add_button, m_view_released_button, m_checkout_button,
+		{m_add_button, m_checkout_button,
 		 m_checkin_button, m_cancel_button, m_submit_direct_button,
 		 m_submit_button, m_force_unlock_button}), 1);
 	stages->addWidget(make_stage(tr("確認"),
@@ -432,7 +434,7 @@ void PdmDialog::refresh()
 		}
 		m_username = login_or_error;
 		PdmSettings::setUsername(m_username);
-		m_account_label->setText(tr("帳號:%1").arg(m_username));
+		m_account_label->setText(tr("操作者:%1").arg(m_username));
 		// 取 email 供比對 work 分支作者(判斷「繪製者本人」)
 		m_service->get(QStringLiteral("/user"),
 			[this](const PdmService::Reply &reply) {
