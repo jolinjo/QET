@@ -18,6 +18,8 @@
 #ifndef PDMDIALOG_H
 #define PDMDIALOG_H
 
+#include "pdmrevision.h"
+
 #include <QDialog>
 #include <QHash>
 #include <QMap>
@@ -159,6 +161,18 @@ class PdmDialog : public QDialog
 					 QString *commit_message,
 					 QString *human_summary);
 
+		/**
+			發行前:放行者從「自上次發行後的增修項」中勾選要寫入首頁
+			發行史的項目,並填簽核訊息(必填)。
+			@param entries 候選增修項(collectChanges 過濾後)
+			@param chosen  回填:勾選的項目
+			@param message 回填:簽核訊息
+			@return false = 取消或訊息空白
+		*/
+		bool promptReleaseSelection(
+			const QList<PdmRevision::Entry> &entries,
+			QList<PdmRevision::Entry> *chosen, QString *message);
+
 		void addNewDrawing();   ///< 新增一張圖檔到圖庫(建 work 分支、出庫編輯)
 		void checkOut();
 		void checkIn();
@@ -201,7 +215,11 @@ class PdmDialog : public QDialog
 			const std::function<void ()> &after_push,
 			bool set_revision = false,
 			const QString &revision = QString(),
-			int progress_steps = 5);
+			int progress_steps = 5,
+			// 戳記圖框後、commit 前的額外檔案編輯(發行時用來 append
+			// 發行史列);回 false 代表失敗、中止。null=不做。
+			const std::function<bool (const QString &abs_path)>
+				&post_stamp = nullptr);
 		/// op_steps=該操作預期的 git 步數(進度條以 已完成/預期 顯示;超出預期
 		/// 的尾段背景重整維持 100%)。0=背景讀取,用漸進逼近。
 		void showBusy(bool busy, bool with_dialog = true, int op_steps = 0);

@@ -18,6 +18,7 @@
 #include "pdmdialog.h"
 
 #include "pdmgitworker.h"
+#include "pdmreleasehistory.h"
 #include "pdmrevision.h"
 #include "pdmservice.h"
 #include "pdmsettings.h"
@@ -629,7 +630,8 @@ void PdmDialog::signoffOnWorkBranch(const QString &rel_path,
 	const QString &status, const QMap<QString, QString> &extra_fields,
 	const QString &commit_message,
 	const std::function<void ()> &after_push,
-	bool set_revision, const QString &revision, int progress_steps)
+	bool set_revision, const QString &revision, int progress_steps,
+	const std::function<bool (const QString &)> &post_stamp)
 {
 	const QString stem = sanitizedStem(rel_path);
 	const QString branch = workBranchOf(rel_path);
@@ -640,7 +642,7 @@ void PdmDialog::signoffOnWorkBranch(const QString &rel_path,
 	// 戳記→add→commit→push→after_push(工作區已在 origin/branch 最新狀態)
 	auto stamp_and_push = [this, rel_path, branch, worktree, abs_path,
 			       status, extra_fields, commit_message, after_push,
-			       set_revision, revision]
+			       set_revision, revision, post_stamp]
 		(const PdmGitWorker::Result &prep) {
 		if (!prep.ok) {
 			fail(tr("準備簽核工作區失敗"), prep.output);
@@ -650,6 +652,11 @@ void PdmDialog::signoffOnWorkBranch(const QString &rel_path,
 		if (!stampDocFields(abs_path, status, revision, set_revision,
 				    extra_fields)) {
 			fail(tr("寫入圖框欄位失敗"), abs_path);
+			return;
+		}
+		// 戳記後、commit 前的額外編輯(發行:append 發行史列)
+		if (post_stamp && !post_stamp(abs_path)) {
+			fail(tr("寫入發行記錄失敗"), abs_path);
 			return;
 		}
 		// 直接 commit 指定檔案(git commit -- <file> 會把工作區該檔內容一併
@@ -1428,11 +1435,16 @@ bool PdmDialog::promptCheckinCommit(const QString &abs_path,
 	// 由使用者勾選;Phase C 會改以「上次發行日期」過濾)。
 	QList<PdmRevision::Entry> entries;
 	QString work_version;
+	QString release_base_date;
 	{
 		QFile file(abs_path);
 		QDomDocument doc;
 		if (file.open(QIODevice::ReadOnly) && doc.setContent(&file)) {
-			entries = PdmRevision::collectChanges(doc, QDate());
+			// 只列「自上次發行後」的增修項(首次發行前發行史為空=全收)
+			release_base_date = PdmReleaseHistory::lastReleaseDate(doc);
+			const QDate since = QDate::fromString(
+				release_base_date, QStringLiteral("yyyy-MM-dd"));
+			entries = PdmRevision::collectChanges(doc, since);
 			work_version = PdmVersion::workVersion(doc);
 		}
 		file.close();
@@ -1490,6 +1502,7 @@ bool PdmDialog::promptCheckinCommit(const QString &abs_path,
 
 	PdmRevision::CommitMeta meta;
 	meta.work_version = work_version;
+	meta.release_base_date = release_base_date;
 	meta.comment = comment_edit->toPlainText().trimmed();
 	if (list) {
 		for (int i = 0; i < list->count(); ++i) {
@@ -1501,6 +1514,66 @@ bool PdmDialog::promptCheckinCommit(const QString &abs_path,
 	if (human_summary) *human_summary = summary;
 	if (commit_message)
 		*commit_message = PdmRevision::encodeCommit(summary, meta);
+	return true;
+}
+
+bool PdmDialog::promptReleaseSelection(
+	const QList<PdmRevision::Entry> &entries,
+	QList<PdmRevision::Entry> *chosen, QString *message)
+{
+	QDialog dialog(this);
+	dialog.setWindowTitle(tr("核准發行"));
+	auto *layout = new QVBoxLayout(&dialog);
+
+	QListWidget *list = nullptr;
+	if (entries.isEmpty()) {
+		auto *hint = new QLabel(
+			tr("(自上次發行後,各頁修訂欄沒有新的增修項;"
+			   "首頁發行記錄本次仍會新增一列,但異動摘要為空。)"),
+			&dialog);
+		hint->setWordWrap(true);
+		layout->addWidget(hint);
+	} else {
+		layout->addWidget(new QLabel(
+			tr("勾選要寫入首頁發行記錄的增修項:"), &dialog));
+		list = new QListWidget(&dialog);
+		for (const PdmRevision::Entry &e : entries) {
+			auto *it = new QListWidgetItem(
+				QStringLiteral("P%1  %2  %3")
+					.arg(e.folio).arg(e.date, e.desc), list);
+			it->setFlags(it->flags() | Qt::ItemIsUserCheckable);
+			it->setCheckState(Qt::Checked);
+		}
+		layout->addWidget(list);
+	}
+
+	layout->addWidget(new QLabel(tr("簽核訊息(必填,會寫入 commit):"),
+				     &dialog));
+	auto *msg_edit = new QPlainTextEdit(&dialog);
+	msg_edit->setMaximumHeight(80);
+	layout->addWidget(msg_edit);
+
+	auto *buttons = new QDialogButtonBox(
+		QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+	layout->addWidget(buttons);
+	connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+	connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+	if (dialog.exec() != QDialog::Accepted) return false;
+	const QString msg = msg_edit->toPlainText().trimmed();
+	if (msg.isEmpty()) {
+		QMessageBox::warning(this, tr("核准發行"), tr("簽核訊息不可空白。"));
+		return false;
+	}
+
+	chosen->clear();
+	if (list) {
+		for (int i = 0; i < list->count(); ++i) {
+			if (list->item(i)->checkState() == Qt::Checked)
+				chosen->append(entries.at(i));
+		}
+	}
+	*message = msg;
 	return true;
 }
 
@@ -1923,19 +1996,59 @@ void PdmDialog::approveAndRelease()
 	const QString stem = sanitizedStem(rel_path);
 	const QString vault = vaultDir();
 
-	bool accepted = false;
-	const QString note = QInputDialog::getMultiLineText(this,
-		tr("核准發行"), tr("簽核訊息(必填,會寫入 commit):"),
-		QString(), &accepted);
-	if (!accepted) return;
-	if (note.trimmed().isEmpty()) {
-		QMessageBox::warning(this, tr("核准發行"), tr("簽核訊息不可空白。"));
-		return;
-	}
-	const QString msg = note.trimmed();
+	const QString branch = workBranchOf(rel_path);
+	const QString release_version = PdmVersion::nextMajor(state.revision);
 
-	// 先在 work 分支寫核准者 + 已發行狀態 + commit,再核准最新 head 並合併發行。
-	// 順序:先 commit(改 head)、後核准 → 不觸發「廢止過時核准」。
+	// 讀 work 分支最終送審內容,算「自上次發行後的增修項」供放行者勾選。
+	m_git->enqueue({QStringLiteral("show"),
+		QStringLiteral("origin/%1:%2").arg(branch, rel_path)}, vault,
+		[this, rel_path, pr_index, stem, vault, branch, release_version]
+		(const PdmGitWorker::Result &show_r) {
+		QList<PdmRevision::Entry> entries;
+		if (show_r.ok) {
+			QDomDocument doc;
+			if (doc.setContent(show_r.output)) {
+				const QString last = PdmReleaseHistory::lastReleaseDate(doc);
+				const QDate since = QDate::fromString(
+					last, QStringLiteral("yyyy-MM-dd"));
+				entries = PdmRevision::collectChanges(doc, since);
+			}
+		}
+
+		QList<PdmRevision::Entry> chosen;
+		QString msg;
+		if (!promptReleaseSelection(entries, &chosen, &msg)) return;
+
+		const QString changes_str = PdmRevision::formatChanges(chosen);
+		const QString release_date =
+			QDate::currentDate().toString(QStringLiteral("yyyy-MM-dd"));
+
+		// 戳記後、commit 前:append 首頁發行史列 + 寫 pdm_release_version。
+		// 在 work 分支寫入,隨合併帶進受保護的 main。
+		auto post_stamp = [this, release_version, release_date, changes_str]
+			(const QString &abs_path) -> bool {
+			QFile f(abs_path);
+			QDomDocument doc;
+			const bool loaded = f.open(QIODevice::ReadOnly)
+				&& doc.setContent(&f);
+			f.close();
+			if (!loaded) return false;
+			PdmReleaseHistory::appendRelease(doc,
+				{release_version, release_date, m_username, changes_str});
+			PdmVersion::setProjectProperty(doc,
+				QLatin1String(PdmVersion::RELEASE_VERSION),
+				release_version);
+			QFile out(abs_path);
+			if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate))
+				return false;
+			QTextStream ts(&out);
+			ts << doc.toString(2);
+			out.close();
+			return true;
+		};
+
+	// 先在 work 分支寫核准者 + 已發行狀態 + 發行史 + commit,再核准最新 head
+	// 並合併發行。順序:先 commit(改 head)、後核准 → 不觸發「廢止過時核准」。
 	signoffOnWorkBranch(rel_path, QString::fromUtf8(DOC_STATUS_RELEASED),
 		{{QStringLiteral("approved-by"), m_username}},
 		tr("核准發行 by %1 / 意見：%2").arg(m_username, msg),
@@ -2011,7 +2124,8 @@ void PdmDialog::approveAndRelease()
 		});
 	// 發行進版:把版本推到下一個主版(0.x→1.0、1.x→2.0),再真正發行。
 	// 發行步驟多(簽核+合併+渲染 PDF+建 Release+清理),預期步數給大一點。
-	}, true, PdmVersion::nextMajor(state.revision), 15);
+	}, true, release_version, 15, post_stamp);
+	});   // 關閉 git show 回呼
 }
 
 /**
