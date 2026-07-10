@@ -2092,7 +2092,7 @@ void PdmDialog::approveAndRelease()
 			// 多行等寬文字圖元(見設計 §5.2)。等寬字型讓欄位對齊。
 			QFont mono(QStringLiteral("Menlo"));
 			mono.setStyleHint(QFont::Monospace);
-			mono.setPointSize(6);
+			mono.setPointSize(10);
 			PdmReleaseHistory::upsertHistoryTextItem(doc,
 				PdmReleaseHistory::formatHistoryText(
 					PdmReleaseHistory::readReleases(doc)),
@@ -2237,6 +2237,15 @@ void PdmDialog::finishRelease(const QString &rel_path, const QString &stem,
 						m_status_label->setText(
 							tr("「%1」已發行:%2")
 							.arg(rel_path, tag));
+						// 自動開啟已發行版(唯讀),讓使用者立即看到
+						// 首頁發行記錄;vault 此時在 main、已含合併進來
+						// 的發行內容。
+						const QString released =
+							vaultDir() + '/' + rel_path;
+						if (QFile::exists(released)) {
+							setFileWritable(released, false);
+							emit requestOpenFile(released);
+						}
 						refresh();
 					});
 			};
