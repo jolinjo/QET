@@ -687,10 +687,14 @@ void QETDiagramEditor::ensurePdmDialog()
 	if (m_pdm_dialog) return;
 
 	m_pdm_dialog = new PdmDialog(this);
+	// QueuedConnection:PDM 的開檔請求多半從 git 子行程回呼內發出,若在該
+	// 回呼堆疊上同步開啟重檔(27 頁),DialogWaiting 的 processEvents 會與
+	// git worker 相互 re-entrant,造成「建立頁面分頁」進度框卡在 100%。
+	// 佇列化 → 待回呼堆疊解開、事件迴圈乾淨後才開檔,徹底消除該卡頓。
 	connect(m_pdm_dialog, &PdmDialog::requestOpenFile, this,
 		[this](const QString &file_path) {
 			openAndAddProject(file_path, false);
-		});
+		}, Qt::QueuedConnection);
 	// 入庫前自動存檔(同步),免使用者手動 Cmd+S,git 才抓得到最新編輯。
 	connect(m_pdm_dialog, &PdmDialog::requestSaveFile, this,
 		[this](const QString &file_path) {

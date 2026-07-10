@@ -114,16 +114,20 @@ QString PdmReleaseHistory::formatHistoryText(const QList<Row> &rows)
 	// 已設為含中文的字型),避免中文變亂碼。標題列含 HISTORY_HEADER 供辨識。
 	QString html =
 		QStringLiteral("<table border=\"1\" cellspacing=\"0\" "
-			"cellpadding=\"3\">");
+			"cellpadding=\"4\" align=\"center\">");
 	html += QStringLiteral(
 		"<tr><td colspan=\"4\" align=\"center\"><b>%1</b></td></tr>")
 		.arg(QLatin1String(HISTORY_HEADER));
 	html += QStringLiteral(
-		"<tr><td><b>版本</b></td><td><b>日期</b></td>"
-		"<td><b>核准</b></td><td><b>異動</b></td></tr>");
+		"<tr><td align=\"center\"><b>版本</b></td>"
+		"<td align=\"center\"><b>日期</b></td>"
+		"<td align=\"center\"><b>核准</b></td>"
+		"<td align=\"center\"><b>異動</b></td></tr>");
 	for (const Row &r : rows) {
-		html += QStringLiteral("<tr><td>%1</td><td>%2</td>"
-			"<td>%3</td><td>%4</td></tr>")
+		html += QStringLiteral(
+			"<tr><td align=\"center\">%1</td>"
+			"<td align=\"center\">%2</td>"
+			"<td align=\"center\">%3</td><td>%4</td></tr>")
 			.arg(esc(r.version), esc(r.date),
 			     esc(r.approved_by), esc(r.changes));
 	}
@@ -159,9 +163,18 @@ bool PdmReleaseHistory::upsertHistoryTextItem(QDomDocument &doc,
 		}
 	}
 
-	// 沒有則新建一個,套用預設位置與(等寬)字型
+	// 沒有則新建一個。位置水平置中:由圖框寬度(cols×colsize)推頁寬,
+	// 減去表格估計寬度的一半當 x。估不到就退回 default_x。
+	double x = default_x;
+	const int cols = diagram.attribute(QStringLiteral("cols")).toInt();
+	const int colsize = diagram.attribute(QStringLiteral("colsize")).toInt();
+	const double page_w = double(cols) * double(colsize);
+	if (page_w > 0) {
+		const double est_table_w = 420.0;   // 表格估計寬度
+		x = qMax(10.0, page_w / 2.0 - est_table_w / 2.0);
+	}
 	QDomElement in = doc.createElement(QStringLiteral("input"));
-	in.setAttribute(QStringLiteral("x"), QString::number(default_x));
+	in.setAttribute(QStringLiteral("x"), QString::number(x));
 	in.setAttribute(QStringLiteral("y"), QString::number(default_y));
 	in.setAttribute(QStringLiteral("text"), history_text);
 	in.setAttribute(QStringLiteral("rotation"), QStringLiteral("0"));

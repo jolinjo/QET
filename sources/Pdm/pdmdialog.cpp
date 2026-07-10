@@ -2112,13 +2112,15 @@ void PdmDialog::approveAndRelease()
 				QLatin1String(PdmVersion::RELEASE_VERSION),
 				release_version);
 			// 首頁自動渲染:把整份發行史(含本次)寫成文件管制頁上的
-			// HTML 表格(見設計 §5.2)。不指定字型,交給圖元預設(公司版
-			// 已設為含中文的字型),避免中文亂碼;字型字串留空=不寫 font
-			// 屬性 → 用預設。
+			// HTML 表格(見設計 §5.2)。明確指定應用程式字型(公司版為
+			// 含中文的字型),烤進圖元 font 屬性——不能靠圖面預設字型,
+			// 那可能無中文字符而使中文變亂碼。
+			QFont hist_font = qApp->font();
+			hist_font.setPointSize(10);
 			PdmReleaseHistory::upsertHistoryTextItem(doc,
 				PdmReleaseHistory::formatHistoryText(
 					PdmReleaseHistory::readReleases(doc)),
-				QString(), 20.0, 20.0);
+				hist_font.toString(), 20.0, 40.0);
 			QFile out(abs_path);
 			if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate))
 				return false;
