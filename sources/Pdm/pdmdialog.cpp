@@ -2089,14 +2089,13 @@ void PdmDialog::approveAndRelease()
 				QLatin1String(PdmVersion::RELEASE_VERSION),
 				release_version);
 			// 首頁自動渲染:把整份發行史(含本次)寫成文件管制頁上的
-			// 多行等寬文字圖元(見設計 §5.2)。等寬字型讓欄位對齊。
-			QFont mono(QStringLiteral("Menlo"));
-			mono.setStyleHint(QFont::Monospace);
-			mono.setPointSize(10);
+			// HTML 表格(見設計 §5.2)。不指定字型,交給圖元預設(公司版
+			// 已設為含中文的字型),避免中文亂碼;字型字串留空=不寫 font
+			// 屬性 → 用預設。
 			PdmReleaseHistory::upsertHistoryTextItem(doc,
 				PdmReleaseHistory::formatHistoryText(
 					PdmReleaseHistory::readReleases(doc)),
-				mono.toString(), 20.0, 20.0);
+				QString(), 20.0, 20.0);
 			QFile out(abs_path);
 			if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate))
 				return false;
@@ -2235,17 +2234,13 @@ void PdmDialog::finishRelease(const QString &rel_path, const QString &stem,
 					[this, rel_path, tag]
 					(const PdmGitWorker::Result &) {
 						m_status_label->setText(
-							tr("「%1」已發行:%2")
+							tr("「%1」已發行:%2;可於右側發行"
+							   "歷史雙擊該版本檢視首頁發行記錄")
 							.arg(rel_path, tag));
-						// 自動開啟已發行版(唯讀),讓使用者立即看到
-						// 首頁發行記錄;vault 此時在 main、已含合併進來
-						// 的發行內容。
-						const QString released =
-							vaultDir() + '/' + rel_path;
-						if (QFile::exists(released)) {
-							setFileWritable(released, false);
-							emit requestOpenFile(released);
-						}
+						// 不在此自動開檔:從 git 回呼內同步開啟 27 頁
+						// 重檔會與後續 refresh 的 git 佇列相互干擾,
+						// 造成「建立頁面分頁」進度框卡住。改由使用者
+						// 於發行歷史雙擊開啟。
 						refresh();
 					});
 			};

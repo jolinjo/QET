@@ -37,8 +37,10 @@ namespace
 	const char *const HISTORY_PROP = "pdm_release_history";
 }
 
+// 兼作辨識標記:此字串會出現在 HTML 表格的標題列,存檔 toHtml round-trip
+// 後仍保留(是文件內容,非屬性),故可用「text 含此字串」認出既有的發行史表。
 const char *const PdmReleaseHistory::HISTORY_HEADER =
-	"【文件修訂記錄 Revision History】";
+	"文件修訂記錄 Revision History";
 
 QList<PdmReleaseHistory::Row> PdmReleaseHistory::readReleases(
 	const QDomDocument &doc)
@@ -92,18 +94,41 @@ bool PdmReleaseHistory::appendRelease(QDomDocument &doc, const Row &row)
 		QLatin1String(HISTORY_PROP), json);
 }
 
+namespace
+{
+	// 最小 HTML escape(避免異動摘要裡的 < > & 破壞表格)
+	QString esc(const QString &s)
+	{
+		QString o = s;
+		o.replace(QLatin1Char('&'), QLatin1String("&amp;"));
+		o.replace(QLatin1Char('<'), QLatin1String("&lt;"));
+		o.replace(QLatin1Char('>'), QLatin1String("&gt;"));
+		return o;
+	}
+}
+
 QString PdmReleaseHistory::formatHistoryText(const QList<Row> &rows)
 {
-	// 等寬字型下用空白對齊成類表格。版本/日期欄定寬,異動欄不截斷。
-	QString text = QLatin1String(HISTORY_HEADER);
+	// 產生真正的 HTML 表格(有框線),IndependentTextItem 會以 rich text
+	// 呈現。不指定 Menlo 之類無 CJK 字符的字型,交給圖元預設字型(公司版
+	// 已設為含中文的字型),避免中文變亂碼。標題列含 HISTORY_HEADER 供辨識。
+	QString html =
+		QStringLiteral("<table border=\"1\" cellspacing=\"0\" "
+			"cellpadding=\"3\">");
+	html += QStringLiteral(
+		"<tr><td colspan=\"4\" align=\"center\"><b>%1</b></td></tr>")
+		.arg(QLatin1String(HISTORY_HEADER));
+	html += QStringLiteral(
+		"<tr><td><b>版本</b></td><td><b>日期</b></td>"
+		"<td><b>核准</b></td><td><b>異動</b></td></tr>");
 	for (const Row &r : rows) {
-		text += QStringLiteral("\n%1  %2  %3  %4")
-			.arg(r.version, -6)      // 版本靠左補到 6 寬
-			.arg(r.date, -10)        // ISO 日期固定 10 寬
-			.arg(r.approved_by, -6)  // 核准者靠左補到 6 寬
-			.arg(r.changes);
+		html += QStringLiteral("<tr><td>%1</td><td>%2</td>"
+			"<td>%3</td><td>%4</td></tr>")
+			.arg(esc(r.version), esc(r.date),
+			     esc(r.approved_by), esc(r.changes));
 	}
-	return text;
+	html += QStringLiteral("</table>");
+	return html;
 }
 
 bool PdmReleaseHistory::upsertHistoryTextItem(QDomDocument &doc,
@@ -122,11 +147,12 @@ bool PdmReleaseHistory::upsertHistoryTextItem(QDomDocument &doc,
 		diagram.appendChild(inputs);
 	}
 
-	// 以「text 以 HISTORY_HEADER 起首」辨識既有的發行史文字圖元
+	// 以「text 含 HISTORY_HEADER」辨識既有的發行史表(HTML 會把標題包在
+	// 表格內,故用 contains 而非 startsWith)
 	const QString header = QLatin1String(HISTORY_HEADER);
 	for (QDomElement in = inputs.firstChildElement(QStringLiteral("input"));
 	     !in.isNull(); in = in.nextSiblingElement(QStringLiteral("input"))) {
-		if (in.attribute(QStringLiteral("text")).startsWith(header)) {
+		if (in.attribute(QStringLiteral("text")).contains(header)) {
 			// 只更新內容,保留使用者可能調整過的位置/字型
 			in.setAttribute(QStringLiteral("text"), history_text);
 			return true;
