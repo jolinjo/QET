@@ -115,6 +115,11 @@ QString PdmReleaseHistory::formatHistoryText(const QList<Row> &rows)
 	// 呈現。不指定 Menlo 之類無 CJK 字符的字型,交給圖元預設字型(公司版
 	// 已設為含中文的字型),避免中文變亂碼。標題列含 HISTORY_HEADER 供辨識。
 	// 固定表格寬度(每份發行表寬度一致,不隨內容變動),見 HISTORY_TABLE_WIDTH
+	// 明確欄寬(加總=HISTORY_TABLE_WIDTH)強制表格真的達到固定寬度——
+	// QTextDocument 對 <table width> 只當建議值,靠內容排(會縮成約內容寬,
+	// 看起來像左側多空白),故改為固定每欄寬度把表格撐滿。
+	const int w_ver = 50, w_date = 95, w_appr = 60,
+		  w_chg = int(HISTORY_TABLE_WIDTH) - 50 - 95 - 60;
 	QString html =
 		QStringLiteral("<table border=\"1\" cellspacing=\"0\" "
 			"cellpadding=\"4\" align=\"center\" width=\"%1\">")
@@ -125,15 +130,18 @@ QString PdmReleaseHistory::formatHistoryText(const QList<Row> &rows)
 		"<tr><td colspan=\"4\" align=\"center\"><b>%1</b></td></tr>")
 		.arg(QString::fromUtf8(HISTORY_HEADER));
 	html += QStringLiteral(
-		"<tr><td align=\"center\"><b>版本</b></td>"
-		"<td align=\"center\"><b>日期</b></td>"
-		"<td align=\"center\"><b>核准</b></td>"
-		"<td align=\"center\"><b>異動</b></td></tr>");
+		"<tr><td width=\"%1\" align=\"center\"><b>版本</b></td>"
+		"<td width=\"%2\" align=\"center\"><b>日期</b></td>"
+		"<td width=\"%3\" align=\"center\"><b>核准</b></td>"
+		"<td width=\"%4\" align=\"center\"><b>異動</b></td></tr>")
+		.arg(w_ver).arg(w_date).arg(w_appr).arg(w_chg);
 	for (const Row &r : rows) {
 		html += QStringLiteral(
-			"<tr><td align=\"center\">%1</td>"
-			"<td align=\"center\">%2</td>"
-			"<td align=\"center\">%3</td><td>%4</td></tr>")
+			"<tr><td width=\"%1\" align=\"center\">%5</td>"
+			"<td width=\"%2\" align=\"center\">%6</td>"
+			"<td width=\"%3\" align=\"center\">%7</td>"
+			"<td width=\"%4\">%8</td></tr>")
+			.arg(w_ver).arg(w_date).arg(w_appr).arg(w_chg)
 			.arg(esc(r.version), esc(r.date),
 			     esc(r.approved_by), esc(r.changes));
 	}

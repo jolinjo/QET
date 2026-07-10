@@ -2023,6 +2023,10 @@ bool QETDiagramEditor::addProject(QETProject *project, bool update_panel)
 	ProjectView *project_view = new ProjectView(project);
 	addProjectView(project_view);
 
+	// 折頁/分頁已建好(進度框的任務到此為止),立刻關框——後面「掛進元件庫
+	// 面板」等較慢的工作不該讓框一直停在「建立頁面分頁 100%」。
+	DialogWaiting::dropInstance();
+
 	// Make the new project's folio tabs and title bar follow the "project panel"
 	// font zone immediately (applyInterfaceFonts() only runs at startup / on pref
 	// change, so a freshly opened project would otherwise use the default size).
