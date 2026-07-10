@@ -115,9 +115,11 @@ QString PdmReleaseHistory::formatHistoryText(const QList<Row> &rows)
 	QString html =
 		QStringLiteral("<table border=\"1\" cellspacing=\"0\" "
 			"cellpadding=\"4\" align=\"center\">");
+	// HISTORY_HEADER 是 UTF-8 char*;必須用 fromUtf8 解碼,不能用
+	// QLatin1String(會把 UTF-8 位元組當 Latin-1 → 中文變亂碼)。
 	html += QStringLiteral(
 		"<tr><td colspan=\"4\" align=\"center\"><b>%1</b></td></tr>")
-		.arg(QLatin1String(HISTORY_HEADER));
+		.arg(QString::fromUtf8(HISTORY_HEADER));
 	html += QStringLiteral(
 		"<tr><td align=\"center\"><b>版本</b></td>"
 		"<td align=\"center\"><b>日期</b></td>"
@@ -153,7 +155,7 @@ bool PdmReleaseHistory::upsertHistoryTextItem(QDomDocument &doc,
 
 	// 以「text 含 HISTORY_HEADER」辨識既有的發行史表(HTML 會把標題包在
 	// 表格內,故用 contains 而非 startsWith)
-	const QString header = QLatin1String(HISTORY_HEADER);
+	const QString header = QString::fromUtf8(HISTORY_HEADER);
 	for (QDomElement in = inputs.firstChildElement(QStringLiteral("input"));
 	     !in.isNull(); in = in.nextSiblingElement(QStringLiteral("input"))) {
 		if (in.attribute(QStringLiteral("text")).contains(header)) {

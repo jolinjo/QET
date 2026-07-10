@@ -1974,7 +1974,11 @@ bool QETDiagramEditor::openAndAddProject(
 	}
 
 	//Create the project
-	DialogWaiting::instance(this);
+	// 只有使用者手動開檔才顯示「請稍等/建立頁面分頁」進度框。PDM 的程式化
+	// 開檔(interactive=false)多從 git 子行程回呼發出,該框的 processEvents
+	// 會與 git worker re-entrant 卡在 100%;PDM 本身已有進度提示,不需此框。
+	if (interactive)
+		DialogWaiting::instance(this);
 
 	QETProject *project = new QETProject(filepath);
 	if (project -> state() != QETProject::Ok)

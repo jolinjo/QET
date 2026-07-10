@@ -57,6 +57,12 @@ class DialogWaiting : public QDialog
 			if(m_static_dialog)
 			{
 				mutex.lock();
+				// 立即 hide()+close():只用 deleteLater() 的話,視窗會一直
+				// 留在畫面(卡在「建立頁面分頁 100%」),直到事件迴圈閒置才
+				// 真正銷毀;若後續還有忙碌工作(元件庫載入、git 佇列)就會
+				// 顯示成永遠關不掉。hide 讓它馬上消失。
+				m_static_dialog->hide();
+				m_static_dialog->close();
 				m_static_dialog->deleteLater();
 				m_static_dialog = nullptr;
 				mutex.unlock();
