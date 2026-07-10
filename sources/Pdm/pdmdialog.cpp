@@ -243,6 +243,27 @@ namespace
 		}
 		file.setPermissions(permissions);
 	}
+
+	// 在可勾選清單下方加「全部勾選 / 全部取消勾選」按鈕列
+	void addSelectAllButtons(QVBoxLayout *layout, QListWidget *list,
+				 QWidget *parent)
+	{
+		auto set_all = [list](Qt::CheckState s) {
+			for (int i = 0; i < list->count(); ++i)
+				list->item(i)->setCheckState(s);
+		};
+		auto *row = new QHBoxLayout();
+		auto *all = new QPushButton(QObject::tr("全部勾選"), parent);
+		auto *none = new QPushButton(QObject::tr("全部取消勾選"), parent);
+		QObject::connect(all, &QPushButton::clicked, parent,
+			[set_all]() { set_all(Qt::Checked); });
+		QObject::connect(none, &QPushButton::clicked, parent,
+			[set_all]() { set_all(Qt::Unchecked); });
+		row->addWidget(all);
+		row->addWidget(none);
+		row->addStretch();
+		layout->addLayout(row);
+	}
 }
 
 PdmDialog::PdmDialog(QWidget *parent) :
@@ -1528,6 +1549,7 @@ bool PdmDialog::promptCheckinCommit(const QString &abs_path,
 			it->setCheckState(Qt::Checked);
 		}
 		layout->addWidget(list);
+		addSelectAllButtons(layout, list, &dialog);
 	}
 
 	layout->addWidget(new QLabel(tr("出入庫意見(選填,不進發行記錄):"),
@@ -1595,6 +1617,7 @@ bool PdmDialog::promptReleaseSelection(
 			it->setCheckState(Qt::Checked);
 		}
 		layout->addWidget(list);
+		addSelectAllButtons(layout, list, &dialog);
 	}
 
 	layout->addWidget(new QLabel(tr("簽核訊息(必填,會寫入 commit):"),
