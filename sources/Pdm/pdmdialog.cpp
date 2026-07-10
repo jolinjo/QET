@@ -2118,20 +2118,18 @@ void PdmDialog::approveAndRelease()
 			hist_font.setPointSize(10);
 			const QString hist_html = PdmReleaseHistory::formatHistoryText(
 				PdmReleaseHistory::readReleases(doc));
-			// 水平置中:用 QTextDocument(與畫面同一排版引擎)實際量測表格
-			// 渲染寬度,再由圖框頁寬算置中 x,而非猜固定寬度。
-			QTextDocument measure;
-			measure.setDefaultFont(hist_font);
-			measure.setHtml(hist_html);
-			const double table_w = measure.idealWidth();
+			// 表格固定寬度(每份一致),故置中直接用固定寬度算,不量測。
+			// 由圖框頁寬(cols×colsize)算水平置中 x;y 固定放上方 100。
 			const QDomElement d0 = doc.documentElement()
 				.firstChildElement(QStringLiteral("diagram"));
 			const double page_w = d0.attribute(QStringLiteral("cols")).toDouble()
 				* d0.attribute(QStringLiteral("colsize")).toDouble();
 			const double cx = page_w > 0
-				? qMax(10.0, page_w / 2.0 - table_w / 2.0) : 20.0;
+				? qMax(10.0, page_w / 2.0
+					- PdmReleaseHistory::HISTORY_TABLE_WIDTH / 2.0)
+				: 20.0;
 			PdmReleaseHistory::upsertHistoryTextItem(doc, hist_html,
-				hist_font.toString(), cx, 40.0);
+				hist_font.toString(), cx, 100.0);
 			QFile out(abs_path);
 			if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate))
 				return false;

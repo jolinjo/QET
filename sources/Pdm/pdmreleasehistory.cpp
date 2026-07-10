@@ -42,6 +42,8 @@ namespace
 const char *const PdmReleaseHistory::HISTORY_HEADER =
 	"文件修訂記錄 Revision History";
 
+const double PdmReleaseHistory::HISTORY_TABLE_WIDTH = 460.0;
+
 QList<PdmReleaseHistory::Row> PdmReleaseHistory::readReleases(
 	const QDomDocument &doc)
 {
@@ -112,9 +114,11 @@ QString PdmReleaseHistory::formatHistoryText(const QList<Row> &rows)
 	// 產生真正的 HTML 表格(有框線),IndependentTextItem 會以 rich text
 	// 呈現。不指定 Menlo 之類無 CJK 字符的字型,交給圖元預設字型(公司版
 	// 已設為含中文的字型),避免中文變亂碼。標題列含 HISTORY_HEADER 供辨識。
+	// 固定表格寬度(每份發行表寬度一致,不隨內容變動),見 HISTORY_TABLE_WIDTH
 	QString html =
 		QStringLiteral("<table border=\"1\" cellspacing=\"0\" "
-			"cellpadding=\"4\" align=\"center\">");
+			"cellpadding=\"4\" align=\"center\" width=\"%1\">")
+			.arg(int(HISTORY_TABLE_WIDTH));
 	// HISTORY_HEADER 是 UTF-8 char*;必須用 fromUtf8 解碼,不能用
 	// QLatin1String(會把 UTF-8 位元組當 Latin-1 → 中文變亂碼)。
 	html += QStringLiteral(
