@@ -122,6 +122,9 @@ class PdmDialog : public QDialog
 		void connectionRefreshed();
 		void syncRepository();
 		void loadFileStates();
+		/// 檔案清單完成「發現」(main + work 分支上的新檔)後,套用鎖定/
+		/// 作者/work 分支內容等中繼資料,再讀 PR。
+		void applyFileMetadata(const QString &vault);
 		void loadPullRequests();
 		void rebuildTree();
 		void rebuildFolderTree();

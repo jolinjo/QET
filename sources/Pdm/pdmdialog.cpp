@@ -802,6 +802,76 @@ void PdmDialog::loadFileStates()
 			}
 		});
 
+	// 發現 work 分支;新檔(僅存在於 work 分支、尚未合併回 main)也要列出,
+	// 否則「新檔入庫」後在清單看不到自己剛出庫的檔。標記既有檔的
+	// has_work_branch,並對「孤兒 work 分支」(main 上沒有對應檔)ls-tree
+	// 取其 .qet 路徑補進清單。發現階段全部完成後才套用中繼資料。
+	m_git->enqueue({"ls-remote", "--heads", "origin", "refs/heads/work/*"},
+		vault,
+		[this, vault](const PdmGitWorker::Result &result) {
+			QStringList work_branches;   // work/<stem>
+			const QStringList lines = result.output.split('\n',
+				Qt::SkipEmptyParts);
+			for (const QString &line : lines) {
+				const int position = line.indexOf(
+					QStringLiteral("refs/heads/"));
+				if (position >= 0)
+					work_branches << line.mid(position + 11).trimmed();
+			}
+
+			QSet<QString> existing_stems;
+			for (auto it = m_files.constBegin();
+			     it != m_files.constEnd(); ++it)
+				existing_stems.insert(sanitizedStem(it.key()));
+
+			QStringList orphan_branches;
+			for (const QString &b : work_branches) {
+				const QString stem = b.startsWith(QLatin1String("work/"))
+					? b.mid(5) : b;
+				bool matched = false;
+				for (auto it = m_files.begin(); it != m_files.end(); ++it) {
+					if (sanitizedStem(it.key()) == stem) {
+						it->has_work_branch = true;
+						matched = true;
+					}
+				}
+				if (!matched && !existing_stems.contains(stem))
+					orphan_branches << b;
+			}
+
+			if (orphan_branches.isEmpty()) {
+				applyFileMetadata(vault);
+				return;
+			}
+			// 對每個孤兒分支 ls-tree 取實際 .qet 路徑(檔名含資料夾,
+			// 無法只由分支名還原,故要查樹)。
+			auto remaining =
+				std::make_shared<int>(orphan_branches.size());
+			for (const QString &b : orphan_branches) {
+				m_git->enqueue({"ls-tree", "-r", "--name-only",
+					QStringLiteral("origin/") + b, "--", "*.qet"},
+					vault,
+					[this, vault, remaining]
+					(const PdmGitWorker::Result &tree_r) {
+					const QStringList paths = tree_r.output.split('\n',
+						Qt::SkipEmptyParts);
+					for (const QString &p : paths) {
+						const QString rp = p.trimmed();
+						if (rp.isEmpty() || m_files.contains(rp))
+							continue;
+						FileState s;
+						s.rel_path = rp;
+						s.has_work_branch = true;
+						m_files.insert(rp, s);
+					}
+					if (--(*remaining) == 0) applyFileMetadata(vault);
+				});
+			}
+		});
+}
+
+void PdmDialog::applyFileMetadata(const QString &vault)
+{
 	// work 分支末次 commit 作者(判斷「繪製者本人」用,尤其入庫未送審時
 	// 已解鎖、無 PR,靠此認人)
 	m_git->enqueue({"for-each-ref",
@@ -840,50 +910,30 @@ void PdmDialog::loadFileStates()
 			}
 		});
 
-	m_git->enqueue({"ls-remote", "--heads", "origin", "refs/heads/work/*"},
-		vault,
-		[this](const PdmGitWorker::Result &result) {
-			QSet<QString> branches;
-			const QStringList lines = result.output.split('\n',
-				Qt::SkipEmptyParts);
-			for (const QString &line : lines) {
-				const int position = line.indexOf(
-					QStringLiteral("refs/heads/"));
-				if (position >= 0)
-					branches.insert(line.mid(position + 11).trimmed());
+	// 進行中的圖檔:版本/狀態/簽核者改讀 work 分支的圖框
+	//(這些值尚未合併回 main,清單直接讀 main 會顯示成舊值;新檔在 main
+	// 上根本不存在,更必須讀 work 分支)。
+	QStringList work_paths;
+	for (auto it = m_files.constBegin(); it != m_files.constEnd(); ++it)
+		if (it->has_work_branch) work_paths << it.key();
+	if (work_paths.isEmpty()) {
+		loadPullRequests();
+		return;
+	}
+	auto remaining = std::make_shared<int>(work_paths.size());
+	for (const QString &rp : work_paths) {
+		m_git->enqueue({"show", QStringLiteral("origin/")
+			+ workBranchOf(rp) + ':' + rp}, vault,
+			[this, rp, remaining](const PdmGitWorker::Result &show_r) {
+			QDomDocument doc;
+			if (doc.setContent(show_r.output)) {
+				auto it = m_files.find(rp);
+				if (it != m_files.end())
+					parseDocFields(doc, &(*it));
 			}
-			for (auto iterator = m_files.begin();
-			     iterator != m_files.end(); ++iterator) {
-				iterator->has_work_branch = branches.contains(
-					workBranchOf(iterator->rel_path));
-			}
-
-			// 進行中的圖檔:版本/狀態/簽核者改讀 work 分支的圖框
-			//(這些值尚未合併回 main,清單直接讀 main 會顯示成舊值)
-			QStringList work_paths;
-			for (auto it = m_files.constBegin();
-			     it != m_files.constEnd(); ++it)
-				if (it->has_work_branch) work_paths << it.key();
-			if (work_paths.isEmpty()) {
-				loadPullRequests();
-				return;
-			}
-			auto remaining = std::make_shared<int>(work_paths.size());
-			for (const QString &rp : work_paths) {
-				m_git->enqueue({"show", QStringLiteral("origin/")
-					+ workBranchOf(rp) + ':' + rp}, vaultDir(),
-					[this, rp, remaining]
-					(const PdmGitWorker::Result &show_r) {
-					QDomDocument doc;
-					if (doc.setContent(show_r.output)) {
-						auto it = m_files.find(rp);
-						if (it != m_files.end())
-							parseDocFields(doc, &(*it));
-					}
-					if (--(*remaining) == 0) loadPullRequests();
-				});
-			}
+			if (--(*remaining) == 0) loadPullRequests();
 		});
+	}
 }
 
 void PdmDialog::loadPullRequests()
