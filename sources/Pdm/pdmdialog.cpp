@@ -55,6 +55,7 @@
 #include <QRegularExpression>
 #include <QSettings>
 #include <QSplitter>
+#include <QTextDocument>
 #include <QTextStream>
 #include <QTreeWidget>
 #include <QUrl>
@@ -2111,16 +2112,26 @@ void PdmDialog::approveAndRelease()
 			PdmVersion::setProjectProperty(doc,
 				QLatin1String(PdmVersion::RELEASE_VERSION),
 				release_version);
-			// 首頁自動渲染:把整份發行史(含本次)寫成文件管制頁上的
-			// HTML 表格(見設計 §5.2)。明確指定應用程式字型(公司版為
-			// 含中文的字型),烤進圖元 font 屬性——不能靠圖面預設字型,
-			// 那可能無中文字符而使中文變亂碼。
+			// 首頁自動渲染:發行史 HTML 表格(見設計 §5.2)。字型用
+			// 應用程式字型(公司版含中文),烤進圖元 font 屬性。
 			QFont hist_font = qApp->font();
 			hist_font.setPointSize(10);
-			PdmReleaseHistory::upsertHistoryTextItem(doc,
-				PdmReleaseHistory::formatHistoryText(
-					PdmReleaseHistory::readReleases(doc)),
-				hist_font.toString(), 20.0, 40.0);
+			const QString hist_html = PdmReleaseHistory::formatHistoryText(
+				PdmReleaseHistory::readReleases(doc));
+			// 水平置中:用 QTextDocument(與畫面同一排版引擎)實際量測表格
+			// 渲染寬度,再由圖框頁寬算置中 x,而非猜固定寬度。
+			QTextDocument measure;
+			measure.setDefaultFont(hist_font);
+			measure.setHtml(hist_html);
+			const double table_w = measure.idealWidth();
+			const QDomElement d0 = doc.documentElement()
+				.firstChildElement(QStringLiteral("diagram"));
+			const double page_w = d0.attribute(QStringLiteral("cols")).toDouble()
+				* d0.attribute(QStringLiteral("colsize")).toDouble();
+			const double cx = page_w > 0
+				? qMax(10.0, page_w / 2.0 - table_w / 2.0) : 20.0;
+			PdmReleaseHistory::upsertHistoryTextItem(doc, hist_html,
+				hist_font.toString(), cx, 40.0);
 			QFile out(abs_path);
 			if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate))
 				return false;

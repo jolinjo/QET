@@ -153,30 +153,23 @@ bool PdmReleaseHistory::upsertHistoryTextItem(QDomDocument &doc,
 		diagram.appendChild(inputs);
 	}
 
-	// 以「text 含 HISTORY_HEADER」辨識既有的發行史表(HTML 會把標題包在
-	// 表格內,故用 contains 而非 startsWith)
+	// 位置(default_x/default_y)由呼叫端以實際量測的表格寬度算好置中值傳入。
+	// 既有項也重新套用位置 → 每次發行都重新置中(表格變寬時仍居中)。
 	const QString header = QString::fromUtf8(HISTORY_HEADER);
 	for (QDomElement in = inputs.firstChildElement(QStringLiteral("input"));
 	     !in.isNull(); in = in.nextSiblingElement(QStringLiteral("input"))) {
 		if (in.attribute(QStringLiteral("text")).contains(header)) {
-			// 只更新內容,保留使用者可能調整過的位置/字型
 			in.setAttribute(QStringLiteral("text"), history_text);
+			in.setAttribute(QStringLiteral("x"), QString::number(default_x));
+			in.setAttribute(QStringLiteral("y"), QString::number(default_y));
+			if (!font_string.isEmpty())
+				in.setAttribute(QStringLiteral("font"), font_string);
 			return true;
 		}
 	}
 
-	// 沒有則新建一個。位置水平置中:由圖框寬度(cols×colsize)推頁寬,
-	// 減去表格估計寬度的一半當 x。估不到就退回 default_x。
-	double x = default_x;
-	const int cols = diagram.attribute(QStringLiteral("cols")).toInt();
-	const int colsize = diagram.attribute(QStringLiteral("colsize")).toInt();
-	const double page_w = double(cols) * double(colsize);
-	if (page_w > 0) {
-		const double est_table_w = 420.0;   // 表格估計寬度
-		x = qMax(10.0, page_w / 2.0 - est_table_w / 2.0);
-	}
 	QDomElement in = doc.createElement(QStringLiteral("input"));
-	in.setAttribute(QStringLiteral("x"), QString::number(x));
+	in.setAttribute(QStringLiteral("x"), QString::number(default_x));
 	in.setAttribute(QStringLiteral("y"), QString::number(default_y));
 	in.setAttribute(QStringLiteral("text"), history_text);
 	in.setAttribute(QStringLiteral("rotation"), QStringLiteral("0"));
