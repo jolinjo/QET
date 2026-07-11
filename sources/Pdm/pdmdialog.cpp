@@ -1403,22 +1403,21 @@ void PdmDialog::addDrawingFromFile(const QString &source)
 		m_git->enqueue({"add", "--", rel_path}, worktree, {});
 		m_git->enqueue({"commit", "-m",
 			tr("新增圖檔：%1").arg(rel_path)}, worktree, {});
+		// 新檔入庫 = 加入圖庫並「完成入庫」:推送到 work 分支即可,不鎖定、
+		// 不開啟副本。完成後關閉來源檔(避免同一張圖同時開著來源與副本兩份),
+		// 清單顯示「已入庫未送審」。使用者要編輯再從清單出庫。
 		m_git->enqueue({"push", "-u", "origin", branch}, worktree,
-			[this, rel_path, abs_path, worktree]
+			[this, rel_path, abs_path, worktree, source]
 			(const PdmGitWorker::Result &push_r) {
 			if (!push_r.ok) {
 				fail(tr("推送失敗"), push_r.output);
 				return;
 			}
-			// 上鎖(從工作區,該檔在此分支存在)
-			m_git->enqueue({"lfs", "lock", rel_path}, worktree,
-				[this, abs_path](const PdmGitWorker::Result &lock_r) {
-				if (!lock_r.ok)
-					fail(tr("上鎖失敗(仍可編輯,請稍後於清單重試)"),
-					     lock_r.output);
-				emit requestOpenFile(abs_path);
-				refresh();
-			});
+			setFileWritable(abs_path, false);
+			emit requestCloseFile(source);
+			m_status_label->setText(
+				tr("「%1」已新增並入庫(未送審)").arg(rel_path));
+			refresh();
 		});
 	});
 }
