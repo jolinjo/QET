@@ -201,6 +201,7 @@ class QETDiagramEditor : public QETMainWindow
 		*m_export_to_images,		///< Export diagrams of the current project as imagess
 		*m_export_to_pdf = nullptr, ///< Export project to pdf.
 		*m_pdm_action = nullptr,	///< 開啟圖檔管理視窗
+		*m_pdm_add_new = nullptr,	///< 新檔入庫(把目前本地圖檔加進圖庫)
 		*m_pdm_checkin = nullptr,	///< 入庫(圖檔管理開啟的檔)
 		*m_pdm_submit = nullptr,	///< 入庫簽核(入庫並直接送審)
 		*m_pdm_cancel = nullptr,	///< 取消出庫

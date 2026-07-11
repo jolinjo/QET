@@ -870,8 +870,11 @@ void PdmDialog::loadFileStates()
 			auto remaining =
 				std::make_shared<int>(orphan_branches.size());
 			for (const QString &b : orphan_branches) {
+				// 不用 "-- *.qet" pathspec:ls-tree 的萬用字元不跨 "/",
+				// 子資料夾裡的 .qet(新檔常在設備資料夾下)會抓不到 →
+				// 新檔入庫後清單看不到。改列全部檔、在此篩 .qet。
 				m_git->enqueue({"ls-tree", "-r", "--name-only",
-					QStringLiteral("origin/") + b, "--", "*.qet"},
+					QStringLiteral("origin/") + b},
 					vault,
 					[this, vault, remaining]
 					(const PdmGitWorker::Result &tree_r) {
@@ -879,7 +882,9 @@ void PdmDialog::loadFileStates()
 						Qt::SkipEmptyParts);
 					for (const QString &p : paths) {
 						const QString rp = p.trimmed();
-						if (rp.isEmpty() || m_files.contains(rp))
+						if (rp.isEmpty()
+						    || !rp.endsWith(QLatin1String(".qet"))
+						    || m_files.contains(rp))
 							continue;
 						FileState s;
 						s.rel_path = rp;

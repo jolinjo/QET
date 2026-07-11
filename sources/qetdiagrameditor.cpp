@@ -735,6 +735,7 @@ void QETDiagramEditor::ensurePdmDialog()
 	connect(m_pdm_dialog, &PdmDialog::connectionReady, this,
 		[this](bool ok) {
 			if (m_pdm_action) m_pdm_action->setEnabled(ok);
+			if (m_pdm_add_new) m_pdm_add_new->setEnabled(ok);
 			// 連上後 m_files 就緒,重建歡迎頁讓 PDM 項目顯示正確的
 			// 專案資料夾/檔名(啟動早期建的清單解析不到)
 			if (ok) updateWelcomeWidget();
@@ -749,6 +750,7 @@ void QETDiagramEditor::ensurePdmDialog()
 void QETDiagramEditor::setUpPdmBackgroundConnect()
 {
 	if (m_pdm_action) m_pdm_action->setEnabled(false);
+	if (m_pdm_add_new) m_pdm_add_new->setEnabled(false);
 	ensurePdmDialog();
 	m_pdm_dialog->startBackgroundConnect();
 }
@@ -974,6 +976,24 @@ void QETDiagramEditor::setUpActions()
 	m_pdm_action->setStatusTip(tr("開啟圖檔管理視窗(出庫/入庫/送審/發行)"));
 	connect(m_pdm_action, &QAction::triggered,
 		this, &QETDiagramEditor::showPdmDialog);
+
+	// 新檔入庫:把目前用本地檔案開啟/新建的圖檔加進圖庫(免進圖檔管理視窗)
+	m_pdm_add_new = new QAction(QET::Icons::DocumentNew, tr("新檔入庫"), this);
+	m_pdm_add_new->setStatusTip(
+		tr("把目前開啟的本地圖檔加進圖庫並入庫(未送審)"));
+	connect(m_pdm_add_new, &QAction::triggered, this, [this]() {
+		ensurePdmDialog();
+		ProjectView *pv = currentProjectView();
+		if (!pv || !pv->project()) {
+			QET::QetMessageBox::warning(this, tr("新增圖檔"),
+				tr("請先開啟要加入圖庫的圖檔。"));
+			return;
+		}
+		pv->save();   // 未命名會跳另存;取消則路徑為空
+		const QString path = pv->project()->filePath();
+		if (!path.isEmpty())
+			m_pdm_dialog->addDrawingFromFile(path);
+	});
 
 	// 依開檔情境出現的圖檔管理工具列動作(對「目前作用中專案的檔」操作)
 	auto active_qet_path = [this]() -> QString {
@@ -1472,6 +1492,7 @@ void QETDiagramEditor::setUpToolBar()
 	main_tool_bar -> addAction(m_export_to_pdf);
 	main_tool_bar -> addSeparator();
 	main_tool_bar -> addAction(m_pdm_action);
+	main_tool_bar -> addAction(m_pdm_add_new);
 	// 圖檔管理右側:依開檔情境顯示的動作(預設隱藏,由 updatePdmToolbar 控制)
 	main_tool_bar -> addAction(m_pdm_checkin);
 	main_tool_bar -> addAction(m_pdm_submit);
