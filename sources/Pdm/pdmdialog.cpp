@@ -2073,21 +2073,35 @@ void PdmDialog::approveAndRelease()
 	const QString branch = workBranchOf(rel_path);
 	const QString release_version = PdmVersion::nextMajor(state.revision);
 
-	// 讀 work 分支最終送審內容,算「自上次發行後的增修項」供放行者勾選。
-	m_git->enqueue({QStringLiteral("show"),
-		QStringLiteral("origin/%1:%2").arg(branch, rel_path)}, vault,
+	// 供放行者勾選的增修項,來自 work 分支各 commit 於入庫/送審時記錄的
+	// pdm-meta changes(即使用者當時勾選過的),而非重掃全部頁面修訂欄。
+	// 取 main..work 之間的所有 commit(=本輪自上次發行後的所有入庫/送審),
+	// 解碼 pdm-meta 後聯集去重。
+	m_git->enqueue({QStringLiteral("log"), QStringLiteral("--format=%B%x1e"),
+		QStringLiteral("origin/%1..origin/%2")
+			.arg(QLatin1String(DEFAULT_BRANCH), branch)}, vault,
 		[this, rel_path, pr_index, stem, vault, branch, release_version]
-		(const PdmGitWorker::Result &show_r) {
+		(const PdmGitWorker::Result &log_r) {
 		QList<PdmRevision::Entry> entries;
-		if (show_r.ok) {
-			QDomDocument doc;
-			if (doc.setContent(show_r.output)) {
-				const QString last = PdmReleaseHistory::lastReleaseDate(doc);
-				const QDate since = QDate::fromString(
-					last, QStringLiteral("yyyy-MM-dd"));
-				entries = PdmRevision::collectChanges(doc, since);
+		QSet<QString> seen;
+		const QStringList msgs = log_r.output.split(
+			QChar(0x1e), Qt::SkipEmptyParts);
+		for (const QString &m : msgs) {
+			PdmRevision::CommitMeta meta;
+			if (!PdmRevision::decodeCommit(m, &meta)) continue;
+			for (const PdmRevision::Entry &e : meta.changes) {
+				const QString key = QStringLiteral("%1|%2|%3")
+					.arg(e.folio).arg(e.date, e.desc);
+				if (seen.contains(key)) continue;
+				seen.insert(key);
+				entries.append(e);
 			}
 		}
+		std::stable_sort(entries.begin(), entries.end(),
+			[](const PdmRevision::Entry &a, const PdmRevision::Entry &b) {
+				if (a.folio != b.folio) return a.folio < b.folio;
+				return a.parsed_date < b.parsed_date;
+			});
 
 		QList<PdmRevision::Entry> chosen;
 		QString msg;
@@ -2118,15 +2132,21 @@ void PdmDialog::approveAndRelease()
 			hist_font.setPointSize(10);
 			const QString hist_html = PdmReleaseHistory::formatHistoryText(
 				PdmReleaseHistory::readReleases(doc));
-			// 表格固定寬度(每份一致),故置中直接用固定寬度算,不量測。
-			// 由圖框頁寬(cols×colsize)算水平置中 x;y 固定放上方 100。
+			// 表格固定寬度(每份一致),置中直接用固定寬度算,不量測。
+			// 關鍵:繪圖區在場景座標不是從 x=0 起,而是偏移
+			// Diagram::margin(5)+ 列標頭寬(顯示列號時預設 20)。之前漏掉
+			// 這段偏移,表格才會偏左/偏右。頁寬 = cols×colsize。
 			const QDomElement d0 = doc.documentElement()
 				.firstChildElement(QStringLiteral("diagram"));
 			const double page_w = d0.attribute(QStringLiteral("cols")).toDouble()
 				* d0.attribute(QStringLiteral("colsize")).toDouble();
+			const bool disp_rows = d0.attribute(
+				QStringLiteral("displayrows"),
+				QStringLiteral("true")) != QLatin1String("false");
+			const double left_off = 5.0 + (disp_rows ? 20.0 : 0.0);
 			const double cx = page_w > 0
-				? qMax(10.0, page_w / 2.0
-					- PdmReleaseHistory::HISTORY_TABLE_WIDTH / 2.0)
+				? left_off + page_w / 2.0
+					- PdmReleaseHistory::HISTORY_TABLE_WIDTH / 2.0
 				: 20.0;
 			PdmReleaseHistory::upsertHistoryTextItem(doc, hist_html,
 				hist_font.toString(), cx, 100.0);
