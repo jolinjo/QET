@@ -34,10 +34,13 @@ namespace PdmRevision
 {
 	/// 一筆修訂項(讀自某頁圖框的 rev1..rev6 之一)
 	struct Entry {
-		int folio = 0;          ///< 頁碼(1-based;order 屬性或位置)
+		int folio = 0;          ///< 顯示用頁碼(order 屬性或位置+1)
+		int diagram_index = -1; ///< 0-based 頁位置(發行時回填核准者用,穩定)
+		int row = -1;           ///< rev 列 index(0..5;回填核准者用)
 		QString date;           ///< 原始日期字串(顯示用,如 2026/5/31)
 		QString desc;           ///< 修訂說明
-		QDate parsed_date;      ///< 解析後日期(比對用)
+		QString by;             ///< 修改者
+		QDate parsed_date;      ///< 解析後日期(排序用)
 
 		bool operator==(const Entry &o) const {
 			return folio == o.folio && date == o.date && desc == o.desc;
@@ -48,10 +51,18 @@ namespace PdmRevision
 	QDate parseRevDate(const QString &s);
 
 	/**
-		收集 .qet 各頁修訂欄中「日期 >= since」且說明非空的修訂項。
-		@param since 無效 QDate 代表全收(不過濾)。回傳依頁碼、日期排序。
+		收集「待發行」修訂項:各頁 rev1..rev6 中「說明非空且核准者(appd)
+		為空」者。核准者已填=已發行過,不再收。回傳依頁碼、日期排序。
+		見 doc/pdm-revision-design.md(核准者空=待發行狀態機)。
 	*/
-	QList<Entry> collectChanges(const QDomDocument &doc, const QDate &since);
+	QList<Entry> collectChanges(const QDomDocument &doc);
+
+	/**
+		發行時把選中修訂項的核准者(appd)欄位填上 @a approver。
+		依 Entry 的 diagram_index/row 定位到該頁該列。回傳是否有變更。
+	*/
+	bool fillApprover(QDomDocument &doc, const QList<Entry> &entries,
+			  const QString &approver);
 
 	/// 把一組修訂項組成單一 changes 字串:「P3.說明 P7.說明」,同頁以 ; 併
 	QString formatChanges(const QList<Entry> &entries);

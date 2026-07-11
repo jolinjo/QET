@@ -52,6 +52,41 @@ namespace
 		}
 		return QString();
 	}
+
+	// 寫某頁 <diagram> 的 <properties>/<property name>(找不到則建立);
+	// 回傳是否有實際變更
+	bool setDiagramProperty(QDomElement &diagram, const QString &name,
+				const QString &value)
+	{
+		QDomDocument doc = diagram.ownerDocument();
+		QDomElement properties = diagram.firstChildElement(
+			QStringLiteral("properties"));
+		if (properties.isNull()) {
+			properties = doc.createElement(QStringLiteral("properties"));
+			diagram.appendChild(properties);
+		}
+		QDomElement target;
+		for (QDomElement p = properties.firstChildElement(
+			QStringLiteral("property"));
+		     !p.isNull();
+		     p = p.nextSiblingElement(QStringLiteral("property"))) {
+			if (p.attribute(QStringLiteral("name")) == name) {
+				target = p;
+				break;
+			}
+		}
+		if (!target.isNull() && target.text() == value) return false;
+		if (target.isNull()) {
+			target = doc.createElement(QStringLiteral("property"));
+			target.setAttribute(QStringLiteral("name"), name);
+			target.setAttribute(QStringLiteral("show"), QStringLiteral("1"));
+			properties.appendChild(target);
+		}
+		while (target.hasChildNodes())
+			target.removeChild(target.firstChild());
+		target.appendChild(doc.createTextNode(value));
+		return true;
+	}
 }
 
 QDate PdmRevision::parseRevDate(const QString &s)
@@ -67,8 +102,7 @@ QDate PdmRevision::parseRevDate(const QString &s)
 	return QDate();
 }
 
-QList<PdmRevision::Entry> PdmRevision::collectChanges(const QDomDocument &doc,
-						     const QDate &since)
+QList<PdmRevision::Entry> PdmRevision::collectChanges(const QDomDocument &doc)
 {
 	QList<Entry> entries;
 	int position = 0;
@@ -76,8 +110,9 @@ QList<PdmRevision::Entry> PdmRevision::collectChanges(const QDomDocument &doc,
 		.firstChildElement(QStringLiteral("diagram"));
 	     !diagram.isNull();
 	     diagram = diagram.nextSiblingElement(QStringLiteral("diagram"))) {
+		const int index = position;   // 0-based 位置(回填核准者用)
 		++position;
-		// 頁碼:優先 order 屬性,否則用位置
+		// 頁碼:優先 order 屬性,否則用位置+1
 		bool order_ok = false;
 		const int order = diagram.attribute(QStringLiteral("order"))
 			.toInt(&order_ok);
@@ -87,18 +122,21 @@ QList<PdmRevision::Entry> PdmRevision::collectChanges(const QDomDocument &doc,
 			const QString desc = diagramProperty(diagram,
 				revKey(row, "desc")).trimmed();
 			if (desc.isEmpty()) continue;
+			// 核准者(appd)已填 = 已發行過,不再收;空 = 待發行。
+			const QString appd = diagramProperty(diagram,
+				revKey(row, "appd")).trimmed();
+			if (!appd.isEmpty()) continue;
+
 			const QString date_str = diagramProperty(diagram,
 				revKey(row, "date")).trimmed();
-			const QDate parsed = parseRevDate(date_str);
-			// since 有效才過濾;無效=全收。日期無法解析者一律收(保守,
-			// 寧可多列讓使用者取捨,也不要漏掉真的異動)。
-			if (since.isValid() && parsed.isValid() && parsed < since)
-				continue;
 			Entry e;
 			e.folio = folio;
+			e.diagram_index = index;
+			e.row = row;
 			e.date = date_str;
 			e.desc = desc;
-			e.parsed_date = parsed;
+			e.by = diagramProperty(diagram, revKey(row, "by")).trimmed();
+			e.parsed_date = parseRevDate(date_str);
 			entries.append(e);
 		}
 	}
@@ -109,6 +147,34 @@ QList<PdmRevision::Entry> PdmRevision::collectChanges(const QDomDocument &doc,
 			return a.parsed_date < b.parsed_date;
 		});
 	return entries;
+}
+
+bool PdmRevision::fillApprover(QDomDocument &doc, const QList<Entry> &entries,
+			      const QString &approver)
+{
+	if (approver.isEmpty() || entries.isEmpty()) return false;
+
+	// 依 diagram_index 分組要回填的 (row) 列
+	QMap<int, QList<int>> rows_by_diagram;
+	for (const Entry &e : entries)
+		if (e.diagram_index >= 0 && e.row >= 0)
+			rows_by_diagram[e.diagram_index].append(e.row);
+
+	bool changed = false;
+	int position = 0;
+	for (QDomElement diagram = doc.documentElement()
+		.firstChildElement(QStringLiteral("diagram"));
+	     !diagram.isNull();
+	     diagram = diagram.nextSiblingElement(QStringLiteral("diagram")),
+	     ++position) {
+		if (!rows_by_diagram.contains(position)) continue;
+		for (int row : rows_by_diagram.value(position)) {
+			if (setDiagramProperty(diagram, revKey(row, "appd"),
+					       approver))
+				changed = true;
+		}
+	}
+	return changed;
 }
 
 QString PdmRevision::formatChanges(const QList<Entry> &entries)

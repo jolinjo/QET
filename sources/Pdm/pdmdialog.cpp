@@ -1546,11 +1546,9 @@ bool PdmDialog::promptCheckinCommit(const QString &abs_path,
 		QFile file(abs_path);
 		QDomDocument doc;
 		if (file.open(QIODevice::ReadOnly) && doc.setContent(&file)) {
-			// 只列「自上次發行後」的增修項(首次發行前發行史為空=全收)
+			// 待發行增修項 = 核准者(appd)為空者(核准發行才會填 appd)
 			release_base_date = PdmReleaseHistory::lastReleaseDate(doc);
-			const QDate since = QDate::fromString(
-				release_base_date, QStringLiteral("yyyy-MM-dd"));
-			entries = PdmRevision::collectChanges(doc, since);
+			entries = PdmRevision::collectChanges(doc);
 			work_version = PdmVersion::workVersion(doc);
 		}
 		file.close();
@@ -2107,35 +2105,18 @@ void PdmDialog::approveAndRelease()
 	const QString branch = workBranchOf(rel_path);
 	const QString release_version = PdmVersion::nextMajor(state.revision);
 
-	// 供放行者勾選的增修項,來自 work 分支各 commit 於入庫/送審時記錄的
-	// pdm-meta changes(即使用者當時勾選過的),而非重掃全部頁面修訂欄。
-	// 取 main..work 之間的所有 commit(=本輪自上次發行後的所有入庫/送審),
-	// 解碼 pdm-meta 後聯集去重。
-	m_git->enqueue({QStringLiteral("log"), QStringLiteral("--format=%B%x1e"),
-		QStringLiteral("origin/%1..origin/%2")
-			.arg(QLatin1String(DEFAULT_BRANCH), branch)}, vault,
+	// 供放行者勾選的增修項 = work 分支最終版各頁「核准者(appd)為空」的
+	// 待發行修訂項。放行後由 post_stamp 把選中項的 appd 填上核准者。
+	m_git->enqueue({QStringLiteral("show"),
+		QStringLiteral("origin/%1:%2").arg(branch, rel_path)}, vault,
 		[this, rel_path, pr_index, stem, vault, branch, release_version]
-		(const PdmGitWorker::Result &log_r) {
+		(const PdmGitWorker::Result &show_r) {
 		QList<PdmRevision::Entry> entries;
-		QSet<QString> seen;
-		const QStringList msgs = log_r.output.split(
-			QChar(0x1e), Qt::SkipEmptyParts);
-		for (const QString &m : msgs) {
-			PdmRevision::CommitMeta meta;
-			if (!PdmRevision::decodeCommit(m, &meta)) continue;
-			for (const PdmRevision::Entry &e : meta.changes) {
-				const QString key = QStringLiteral("%1|%2|%3")
-					.arg(e.folio).arg(e.date, e.desc);
-				if (seen.contains(key)) continue;
-				seen.insert(key);
-				entries.append(e);
-			}
+		if (show_r.ok) {
+			QDomDocument doc;
+			if (doc.setContent(show_r.output))
+				entries = PdmRevision::collectChanges(doc);
 		}
-		std::stable_sort(entries.begin(), entries.end(),
-			[](const PdmRevision::Entry &a, const PdmRevision::Entry &b) {
-				if (a.folio != b.folio) return a.folio < b.folio;
-				return a.parsed_date < b.parsed_date;
-			});
 
 		QList<PdmRevision::Entry> chosen;
 		QString msg;
@@ -2145,16 +2126,19 @@ void PdmDialog::approveAndRelease()
 		const QString release_date =
 			QDate::currentDate().toString(QStringLiteral("yyyy-MM-dd"));
 
-		// 戳記後、commit 前:append 首頁發行史列 + 寫 pdm_release_version。
-		// 在 work 分支寫入,隨合併帶進受保護的 main。
-		auto post_stamp = [this, release_version, release_date, changes_str]
-			(const QString &abs_path) -> bool {
+		// 戳記後、commit 前:回填選中修訂項的核准者 + append 首頁發行史列
+		// + 寫 pdm_release_version。在 work 分支寫入,隨合併帶進受保護的 main。
+		auto post_stamp = [this, release_version, release_date, changes_str,
+				   chosen](const QString &abs_path) -> bool {
 			QFile f(abs_path);
 			QDomDocument doc;
 			const bool loaded = f.open(QIODevice::ReadOnly)
 				&& doc.setContent(&f);
 			f.close();
 			if (!loaded) return false;
+			// 核准者為空=待發行;發行時把選中項的 appd 填上核准者,
+			// 下次入庫/發行就不再列入(狀態機:appd 已填=已發行)。
+			PdmRevision::fillApprover(doc, chosen, m_username);
 			PdmReleaseHistory::appendRelease(doc,
 				{release_version, release_date, m_username, changes_str});
 			PdmVersion::setProjectProperty(doc,
