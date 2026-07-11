@@ -53,11 +53,12 @@ namespace PdmReleaseHistory
 	/// 依靠 text 內容辨識,因 QET 存檔會丟棄 <input> 的自訂屬性,但保留 text。
 	extern const char *const HISTORY_HEADER;
 
-	/// 發行史表格固定寬度(每份一致,不隨內容變動);置中亦依此值計算
-	extern const double HISTORY_TABLE_WIDTH;
+	/// 發行史表格左右各留的邊距(不貼齊繪圖區邊界)
+	extern const double HISTORY_TABLE_MARGIN;
 
-	/// 把發行史組成多行等寬文字(首行為 HISTORY_HEADER,其後每列一行)
-	QString formatHistoryText(const QList<Row> &rows);
+	/// 把發行史組成 HTML 表格;table_width = 表格總寬(欄寬加總),
+	/// 由呼叫端以「頁寬 - 2*邊距」算出,使表寬接近頁寬但不碰邊界。
+	QString formatHistoryText(const QList<Row> &rows, double table_width);
 
 	/**
 		在「文件管制頁」(目前取第一個 <diagram>)以 IndependentTextItem

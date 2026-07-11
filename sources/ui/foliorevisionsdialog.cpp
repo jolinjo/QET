@@ -17,6 +17,7 @@
 */
 #include "foliorevisionsdialog.h"
 
+#include "../Pdm/pdmsettings.h"
 #include "../diagram.h"
 #include "../qetproject.h"
 #include "../undocommand/changetitleblockcommand.h"
@@ -169,9 +170,19 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 	m_cur_rev_desc = new QLineEdit(cur_rev_group);
 	cur_rev_form->addRow(tr("Description de la révision"), m_cur_rev_desc);
 	m_cur_rev_by = new QLineEdit(cur_rev_group);
+	// 修改者:已登入 PDM 則自動填帳號且不可改;未登入(純本機用)才可手填。
+	{
+		const QString pdm_user = PdmSettings::username();
+		if (!pdm_user.isEmpty()) {
+			m_cur_rev_by->setText(pdm_user);
+			m_cur_rev_by->setReadOnly(true);
+		}
+	}
 	cur_rev_form->addRow(tr("Par"), m_cur_rev_by);
+	// 核准者由系統於「核准發行」時自動填,使用者不能設定 → 不在表單顯示。
+	// 保留物件供 editedProperties 讀取(永遠空值)。
 	m_cur_rev_appd = new QLineEdit(cur_rev_group);
-	cur_rev_form->addRow(tr("Approuvé"), m_cur_rev_appd);
+	m_cur_rev_appd->hide();
 
 	auto *buttons = new QDialogButtonBox(
 		m_diagram->isReadOnly()
@@ -250,9 +261,17 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 	m_all_rev_desc = new QLineEdit(rev_group);
 	rev_form->addRow(tr("Description de la révision"), m_all_rev_desc);
 	m_all_rev_by = new QLineEdit(rev_group);
+	{
+		const QString pdm_user = PdmSettings::username();
+		if (!pdm_user.isEmpty()) {
+			m_all_rev_by->setText(pdm_user);
+			m_all_rev_by->setReadOnly(true);
+		}
+	}
 	rev_form->addRow(tr("Par"), m_all_rev_by);
+	// 核准者由系統於核准發行時自動填,不在表單顯示(保留物件、空值)
 	m_all_rev_appd = new QLineEdit(rev_group);
-	rev_form->addRow(tr("Approuvé"), m_all_rev_appd);
+	m_all_rev_appd->hide();
 
 	auto *all_layout = new QVBoxLayout(all_page);
 	all_layout->addWidget(hint);

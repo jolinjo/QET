@@ -2164,12 +2164,8 @@ void PdmDialog::approveAndRelease()
 			// 應用程式字型(公司版含中文),烤進圖元 font 屬性。
 			QFont hist_font = qApp->font();
 			hist_font.setPointSize(10);
-			const QString hist_html = PdmReleaseHistory::formatHistoryText(
-				PdmReleaseHistory::readReleases(doc));
-			// 表格固定寬度(每份一致),置中直接用固定寬度算,不量測。
-			// 關鍵:繪圖區在場景座標不是從 x=0 起,而是偏移
-			// Diagram::margin(5)+ 列標頭寬(顯示列號時預設 20)。之前漏掉
-			// 這段偏移,表格才會偏左/偏右。頁寬 = cols×colsize。
+			// 頁寬 = cols×colsize;繪圖區左緣在場景座標偏移
+			// Diagram::margin(5)+ 列標頭寬(顯示列號時預設 20)。
 			const QDomElement d0 = doc.documentElement()
 				.firstChildElement(QStringLiteral("diagram"));
 			const double page_w = d0.attribute(QStringLiteral("cols")).toDouble()
@@ -2178,10 +2174,13 @@ void PdmDialog::approveAndRelease()
 				QStringLiteral("displayrows"),
 				QStringLiteral("true")) != QLatin1String("false");
 			const double left_off = 5.0 + (disp_rows ? 20.0 : 0.0);
-			const double cx = page_w > 0
-				? left_off + page_w / 2.0
-					- PdmReleaseHistory::HISTORY_TABLE_WIDTH / 2.0
-				: 20.0;
+			// 表寬≈頁寬,左右各留 HISTORY_TABLE_MARGIN(不碰邊界);置中。
+			const double gap = PdmReleaseHistory::HISTORY_TABLE_MARGIN;
+			const double table_w = page_w > 0
+				? qMax(300.0, page_w - 2.0 * gap) : 460.0;
+			const double cx = page_w > 0 ? left_off + gap : 20.0;
+			const QString hist_html = PdmReleaseHistory::formatHistoryText(
+				PdmReleaseHistory::readReleases(doc), table_w);
 			PdmReleaseHistory::upsertHistoryTextItem(doc, hist_html,
 				hist_font.toString(), cx, 100.0);
 			QFile out(abs_path);

@@ -42,7 +42,7 @@ namespace
 const char *const PdmReleaseHistory::HISTORY_HEADER =
 	"文件修訂記錄 Revision History";
 
-const double PdmReleaseHistory::HISTORY_TABLE_WIDTH = 460.0;
+const double PdmReleaseHistory::HISTORY_TABLE_MARGIN = 40.0;
 
 QList<PdmReleaseHistory::Row> PdmReleaseHistory::readReleases(
 	const QDomDocument &doc)
@@ -109,21 +109,23 @@ namespace
 	}
 }
 
-QString PdmReleaseHistory::formatHistoryText(const QList<Row> &rows)
+QString PdmReleaseHistory::formatHistoryText(const QList<Row> &rows,
+					    double table_width)
 {
 	// 產生真正的 HTML 表格(有框線),IndependentTextItem 會以 rich text
 	// 呈現。不指定 Menlo 之類無 CJK 字符的字型,交給圖元預設字型(公司版
 	// 已設為含中文的字型),避免中文變亂碼。標題列含 HISTORY_HEADER 供辨識。
-	// 固定表格寬度(每份發行表寬度一致,不隨內容變動),見 HISTORY_TABLE_WIDTH
-	// 明確欄寬(加總=HISTORY_TABLE_WIDTH)強制表格真的達到固定寬度——
-	// QTextDocument 對 <table width> 只當建議值,靠內容排(會縮成約內容寬,
-	// 看起來像左側多空白),故改為固定每欄寬度把表格撐滿。
-	const int w_ver = 50, w_date = 95, w_appr = 60,
-		  w_chg = int(HISTORY_TABLE_WIDTH) - 50 - 95 - 60;
+	// 表寬由呼叫端傳入(≈頁寬-2*邊距),各欄寬加總=table_width
+	// 明確欄寬(加總=table_width)強制表格達到指定總寬——QTextDocument 對
+	// <table width> 只當建議值、會縮成內容寬,故改為固定每欄寬度撐滿。
+	// 版本/日期/核准固定,異動(修改內容)吃剩餘寬度 → 表寬≈頁寬時異動欄很寬。
+	const int total = qMax(300, int(table_width));
+	const int w_ver = 90, w_date = 150, w_appr = 120,
+		  w_chg = qMax(100, total - 90 - 150 - 120);
 	QString html =
 		QStringLiteral("<table border=\"1\" cellspacing=\"0\" "
 			"cellpadding=\"4\" align=\"center\" width=\"%1\">")
-			.arg(int(HISTORY_TABLE_WIDTH));
+			.arg(total);
 	// HISTORY_HEADER 是 UTF-8 char*;必須用 fromUtf8 解碼,不能用
 	// QLatin1String(會把 UTF-8 位元組當 Latin-1 → 中文變亂碼)。
 	html += QStringLiteral(
