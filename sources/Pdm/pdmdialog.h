@@ -150,6 +150,10 @@ class PdmDialog : public QDialog
 					    QMap<QString, QString>()) const;
 		// 版本進版邏輯已移至 PdmVersion::nextMinor / nextMajor
 
+		/// 依目前發行史(含送審時的待發行列)把首頁的 HTML 表格重繪到
+		/// 文件管制頁。送審與核准發行都用它。@a doc 會被就地修改。
+		void renderReleaseTable(QDomDocument &doc) const;
+
 		/**
 			入庫/送審前的變更說明對話框:列出本檔各頁修訂欄的修訂項
 			供勾選,並收「變更摘要」(必填)與「出入庫意見」(選填)。

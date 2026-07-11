@@ -77,23 +77,57 @@ QString PdmReleaseHistory::lastReleaseDate(const QDomDocument &doc)
 	return latest;
 }
 
+namespace
+{
+	bool writeReleases(QDomDocument &doc, const QList<PdmReleaseHistory::Row> &rows)
+	{
+		QJsonArray arr;
+		for (const PdmReleaseHistory::Row &r : rows) {
+			arr.append(QJsonObject{
+				{QStringLiteral("version"),     r.version},
+				{QStringLiteral("date"),        r.date},
+				{QStringLiteral("approved_by"), r.approved_by},
+				{QStringLiteral("changes"),     r.changes}});
+		}
+		const QString json = QString::fromUtf8(
+			QJsonDocument(arr).toJson(QJsonDocument::Compact));
+		return PdmVersion::setProjectProperty(doc,
+			QLatin1String(HISTORY_PROP), json);
+	}
+}
+
 bool PdmReleaseHistory::appendRelease(QDomDocument &doc, const Row &row)
 {
 	QList<Row> rows = readReleases(doc);
 	rows.append(row);
+	return writeReleases(doc, rows);
+}
 
-	QJsonArray arr;
-	for (const Row &r : rows) {
-		arr.append(QJsonObject{
-			{QStringLiteral("version"),     r.version},
-			{QStringLiteral("date"),        r.date},
-			{QStringLiteral("approved_by"), r.approved_by},
-			{QStringLiteral("changes"),     r.changes}});
+bool PdmReleaseHistory::upsertPendingRow(QDomDocument &doc,
+					 const QString &changes)
+{
+	QList<Row> rows = readReleases(doc);
+	for (Row &r : rows) {
+		if (r.version.isEmpty()) {   // 已有待發行列 → 只更新異動
+			r.changes = changes;
+			return writeReleases(doc, rows);
+		}
 	}
-	const QString json = QString::fromUtf8(
-		QJsonDocument(arr).toJson(QJsonDocument::Compact));
-	return PdmVersion::setProjectProperty(doc,
-		QLatin1String(HISTORY_PROP), json);
+	rows.append({QString(), QString(), QString(), changes});  // 新增待發行列
+	return writeReleases(doc, rows);
+}
+
+bool PdmReleaseHistory::finalizePending(QDomDocument &doc, const Row &row)
+{
+	QList<Row> rows = readReleases(doc);
+	for (Row &r : rows) {
+		if (r.version.isEmpty()) {   // 待發行列 → 填上版本/日期/核准者/異動
+			r = row;
+			return writeReleases(doc, rows);
+		}
+	}
+	rows.append(row);   // 無待發行列(例如舊檔)→ 直接 append
+	return writeReleases(doc, rows);
 }
 
 namespace

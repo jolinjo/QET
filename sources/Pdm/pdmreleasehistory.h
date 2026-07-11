@@ -49,6 +49,18 @@ namespace PdmReleaseHistory
 	/// @return true 若成功寫入
 	bool appendRelease(QDomDocument &doc, const Row &row);
 
+	/**
+		送審時用:寫入/更新「待發行列」——只有異動(changes),版本/日期/
+		核准者留空。已有待發行列(version 空)則更新其 changes,否則新增。
+	*/
+	bool upsertPendingRow(QDomDocument &doc, const QString &changes);
+
+	/**
+		核准發行時用:把待發行列(version 空)填上版本/日期/核准者/異動;
+		沒有待發行列則直接 append 一列。
+	*/
+	bool finalizePending(QDomDocument &doc, const Row &row);
+
 	/// 首頁自動渲染用的固定標題(兼作 upsert 時辨識該文字圖元的標記)。
 	/// 依靠 text 內容辨識,因 QET 存檔會丟棄 <input> 的自訂屬性,但保留 text。
 	extern const char *const HISTORY_HEADER;

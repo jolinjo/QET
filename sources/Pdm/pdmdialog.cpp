@@ -1884,6 +1884,31 @@ void PdmDialog::checkInAndSubmit()
 		return;
 	}
 
+	// 送審時就把首頁增修記錄補上「修改內容」(版本/日期/核准者先留空,
+	// 待核准發行才填)。取本次 commit 帶的 changes(使用者勾選的)組成
+	// 待發行列,並重繪首頁表格,讓簽核者看得到會發行什麼。
+	{
+		QFile f(abs_path);
+		QDomDocument doc;
+		if (f.open(QIODevice::ReadOnly) && doc.setContent(&f)) {
+			f.close();
+			PdmRevision::CommitMeta meta;
+			PdmRevision::decodeCommit(commit_msg, &meta);
+			const QString changes_str =
+				PdmRevision::formatChanges(meta.changes);
+			PdmReleaseHistory::upsertPendingRow(doc, changes_str);
+			renderReleaseTable(doc);
+			QFile out(abs_path);
+			if (out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+				QTextStream ts(&out);
+				ts << doc.toString(2);
+				out.close();
+			}
+		} else {
+			f.close();
+		}
+	}
+
 	showBusy(true, true, 4);
 	auto open_pr = [this, rel_path, stem, branch, worktree, msg]() {
 		m_service->createPullRequest(currentRepoFullName(),
@@ -2090,6 +2115,30 @@ void PdmDialog::rejectReview()
 		});
 }
 
+void PdmDialog::renderReleaseTable(QDomDocument &doc) const
+{
+	// 字型用應用程式字型(公司版含中文),烤進圖元 font 屬性。
+	QFont hist_font = qApp->font();
+	hist_font.setPointSize(10);
+	// 頁寬 = cols×colsize;繪圖區左緣在場景座標偏移 Diagram::margin(5)+
+	// 列標頭寬(顯示列號時預設 20)。表寬≈頁寬,左右各留邊距、置中。
+	const QDomElement d0 = doc.documentElement()
+		.firstChildElement(QStringLiteral("diagram"));
+	const double page_w = d0.attribute(QStringLiteral("cols")).toDouble()
+		* d0.attribute(QStringLiteral("colsize")).toDouble();
+	const bool disp_rows = d0.attribute(QStringLiteral("displayrows"),
+		QStringLiteral("true")) != QLatin1String("false");
+	const double left_off = 5.0 + (disp_rows ? 20.0 : 0.0);
+	const double gap = PdmReleaseHistory::HISTORY_TABLE_MARGIN;
+	const double table_w = page_w > 0
+		? qMax(300.0, page_w - 2.0 * gap) : 460.0;
+	const double cx = page_w > 0 ? left_off + gap : 20.0;
+	const QString hist_html = PdmReleaseHistory::formatHistoryText(
+		PdmReleaseHistory::readReleases(doc), table_w);
+	PdmReleaseHistory::upsertHistoryTextItem(doc, hist_html,
+		hist_font.toString(), cx, 100.0);
+}
+
 void PdmDialog::approveAndRelease()
 {
 	if (busyGuard()) return;
@@ -2139,34 +2188,13 @@ void PdmDialog::approveAndRelease()
 			// 核准者為空=待發行;發行時把選中項的 appd 填上核准者,
 			// 下次入庫/發行就不再列入(狀態機:appd 已填=已發行)。
 			PdmRevision::fillApprover(doc, chosen, m_username);
-			PdmReleaseHistory::appendRelease(doc,
+			// 發行:把送審時的「待發行列」補上版本/日期/核准者;無則 append
+			PdmReleaseHistory::finalizePending(doc,
 				{release_version, release_date, m_username, changes_str});
 			PdmVersion::setProjectProperty(doc,
 				QLatin1String(PdmVersion::RELEASE_VERSION),
 				release_version);
-			// 首頁自動渲染:發行史 HTML 表格(見設計 §5.2)。字型用
-			// 應用程式字型(公司版含中文),烤進圖元 font 屬性。
-			QFont hist_font = qApp->font();
-			hist_font.setPointSize(10);
-			// 頁寬 = cols×colsize;繪圖區左緣在場景座標偏移
-			// Diagram::margin(5)+ 列標頭寬(顯示列號時預設 20)。
-			const QDomElement d0 = doc.documentElement()
-				.firstChildElement(QStringLiteral("diagram"));
-			const double page_w = d0.attribute(QStringLiteral("cols")).toDouble()
-				* d0.attribute(QStringLiteral("colsize")).toDouble();
-			const bool disp_rows = d0.attribute(
-				QStringLiteral("displayrows"),
-				QStringLiteral("true")) != QLatin1String("false");
-			const double left_off = 5.0 + (disp_rows ? 20.0 : 0.0);
-			// 表寬≈頁寬,左右各留 HISTORY_TABLE_MARGIN(不碰邊界);置中。
-			const double gap = PdmReleaseHistory::HISTORY_TABLE_MARGIN;
-			const double table_w = page_w > 0
-				? qMax(300.0, page_w - 2.0 * gap) : 460.0;
-			const double cx = page_w > 0 ? left_off + gap : 20.0;
-			const QString hist_html = PdmReleaseHistory::formatHistoryText(
-				PdmReleaseHistory::readReleases(doc), table_w);
-			PdmReleaseHistory::upsertHistoryTextItem(doc, hist_html,
-				hist_font.toString(), cx, 100.0);
+			renderReleaseTable(doc);
 			QFile out(abs_path);
 			if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate))
 				return false;
