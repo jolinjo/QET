@@ -2662,6 +2662,58 @@ void PdmDialog::loadReleaseHistory(const QString &rel_path)
 			});
 		}
 	});
+
+	// 審核中的檔:在歷程頂端加「本次送審修訂內容」折疊區,列出每頁的待發行
+	// 增修項(核准者為空者),讓簽核者知道改了什麼。每頁一個可折疊節點,
+	// 預設只展開含最新一筆修訂的那頁。
+	if (st.pr_index > 0 && st.has_work_branch) {
+		m_git->enqueue({QStringLiteral("show"),
+			ref + QLatin1Char(':') + rel_path}, vault,
+			[this, rel_path](const PdmGitWorker::Result &sr) {
+			const QTreeWidgetItem *cur = selectedFileItem();
+			if (!cur
+			    || cur->data(0, Qt::UserRole).toString() != rel_path)
+				return;
+			QDomDocument doc;
+			if (!doc.setContent(sr.output)) return;
+			const QList<PdmRevision::Entry> entries =
+				PdmRevision::collectChanges(doc);
+			if (entries.isEmpty()) return;
+
+			QMap<int, QList<PdmRevision::Entry>> by_folio;
+			for (const PdmRevision::Entry &e : entries)
+				by_folio[e.folio].append(e);
+
+			// 找含「最新一筆」修訂的頁(依日期),預設只展開它
+			int newest_folio = by_folio.constBegin().key();
+			QDate newest;
+			for (const PdmRevision::Entry &e : entries) {
+				if (e.parsed_date.isValid()
+				    && (!newest.isValid() || e.parsed_date > newest)) {
+					newest = e.parsed_date;
+					newest_folio = e.folio;
+				}
+			}
+
+			auto *root = new QTreeWidgetItem(
+				{tr("本次送審修訂內容")});
+			m_history_tree->insertTopLevelItem(0, root);
+			QFont rf = root->font(0); rf.setBold(true);
+			root->setFont(0, rf);
+			for (auto it = by_folio.constBegin();
+			     it != by_folio.constEnd(); ++it) {
+				auto *page = new QTreeWidgetItem(root,
+					{tr("第 %1 頁(%2 筆)")
+						.arg(it.key())
+						.arg(it.value().size())});
+				for (const PdmRevision::Entry &e : it.value())
+					new QTreeWidgetItem(page,
+						{QString(), e.date, e.by, e.desc});
+				page->setExpanded(it.key() == newest_folio);
+			}
+			root->setExpanded(true);
+		});
+	}
 }
 
 void PdmDialog::openReleaseRevision(const QString &tag, const QString &rel_path)
