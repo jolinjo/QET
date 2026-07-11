@@ -2567,17 +2567,71 @@ void PdmDialog::loadReleaseHistory(const QString &rel_path)
 		? QStringLiteral("origin/") + workBranchOf(rel_path)
 		: QStringLiteral("origin/") + QLatin1String(DEFAULT_BRANCH);
 	const QString vault = vaultDir();
+
+	// 審核中的檔:先抓 work 分支內容,存下「待發行(核准者空)」修訂項,
+	// 待歷程樹建好後,於頂端插入「本次送審修訂內容」折疊區(見下方 lambda)。
+	// 必須先抓、後於建樹回呼內插入——否則會被建樹的 m_history_tree->clear() 清掉。
+	auto review_entries = std::make_shared<QList<PdmRevision::Entry>>();
+	if (st.pr_index > 0 && st.has_work_branch) {
+		m_git->enqueue({QStringLiteral("show"),
+			ref + QLatin1Char(':') + rel_path}, vault,
+			[review_entries](const PdmGitWorker::Result &sr) {
+			QDomDocument doc;
+			if (doc.setContent(sr.output))
+				*review_entries = PdmRevision::collectChanges(doc);
+		});
+	}
+
 	// %H hash, %s subject, %cd 日期時間, %cn 提交者, %D refs
 	m_git->enqueue({QStringLiteral("log"),
 		QStringLiteral("--date=format:%Y-%m-%d %H:%M"),
 		QStringLiteral("--format=%H%x1f%s%x1f%cd%x1f%cn%x1f%D"),
 		ref, QStringLiteral("--"), rel_path}, vault,
-		[this, rel_path, stem, vault](const PdmGitWorker::Result &r) {
+		[this, rel_path, stem, vault, review_entries]
+		(const PdmGitWorker::Result &r) {
+		// 於歷程樹頂端插入「本次送審修訂內容」(每頁一折疊節點,預設只展開
+		// 含最新一筆的那頁)。在樹建好之後呼叫,才不會被 clear 清掉。
+		auto insert_review_section = [this]
+			(const QList<PdmRevision::Entry> &entries) {
+			if (entries.isEmpty()) return;
+			QMap<int, QList<PdmRevision::Entry>> by_folio;
+			for (const PdmRevision::Entry &e : entries)
+				by_folio[e.folio].append(e);
+			int newest_folio = by_folio.constBegin().key();
+			QDate newest;
+			for (const PdmRevision::Entry &e : entries)
+				if (e.parsed_date.isValid()
+				    && (!newest.isValid()
+					|| e.parsed_date > newest)) {
+					newest = e.parsed_date;
+					newest_folio = e.folio;
+				}
+			auto *root = new QTreeWidgetItem({tr("本次送審修訂內容")});
+			m_history_tree->insertTopLevelItem(0, root);
+			QFont rf = root->font(0); rf.setBold(true);
+			root->setFont(0, rf);
+			for (auto it = by_folio.constBegin();
+			     it != by_folio.constEnd(); ++it) {
+				auto *page = new QTreeWidgetItem(root,
+					{tr("第 %1 頁(%2 筆)")
+						.arg(it.key()).arg(it.value().size())});
+				for (const PdmRevision::Entry &e : it.value())
+					new QTreeWidgetItem(page,
+						{QString(), e.date, e.by, e.desc});
+				page->setExpanded(it.key() == newest_folio);
+			}
+			root->setExpanded(true);
+		};
+
 		const QTreeWidgetItem *current = selectedFileItem();
 		if (!current
 		    || current->data(0, Qt::UserRole).toString() != rel_path)
 			return;
-		if (!r.ok) { m_history_tree->clear(); return; }
+		if (!r.ok) {
+			m_history_tree->clear();
+			insert_review_section(*review_entries);
+			return;
+		}
 
 		struct Rec { QString subject, datetime, committer, rel_tag, version; };
 		auto recs = std::make_shared<QVector<Rec>>();
@@ -2605,7 +2659,11 @@ void PdmDialog::loadReleaseHistory(const QString &rel_path)
 			recs->append(rec);
 			hashes->append(f.at(0));
 		}
-		if (recs->isEmpty()) { m_history_tree->clear(); return; }
+		if (recs->isEmpty()) {
+			m_history_tree->clear();
+			insert_review_section(*review_entries);
+			return;
+		}
 
 		// 逐 commit 讀出當下的 indexrev 當版本號(出庫領號、每次入庫都有),
 		// 全部讀完再一次建樹
@@ -2613,7 +2671,8 @@ void PdmDialog::loadReleaseHistory(const QString &rel_path)
 		for (int i = 0; i < recs->size(); ++i) {
 			m_git->enqueue({QStringLiteral("show"),
 				hashes->at(i) + QLatin1Char(':') + rel_path}, vault,
-				[this, rel_path, stem, recs, remaining, i]
+				[this, rel_path, stem, recs, remaining, i,
+				 review_entries, insert_review_section]
 				(const PdmGitWorker::Result &sr) {
 				QDomDocument doc;
 				if (doc.setContent(sr.output))
@@ -2669,61 +2728,11 @@ void PdmDialog::loadReleaseHistory(const QString &rel_path)
 				}
 				if (pending->childCount() == 0) delete pending;
 				m_history_tree->expandAll();
+				// 樹建好後才插入送審修訂區(才不會被上面的 clear 清掉)
+				insert_review_section(*review_entries);
 			});
 		}
 	});
-
-	// 審核中的檔:在歷程頂端加「本次送審修訂內容」折疊區,列出每頁的待發行
-	// 增修項(核准者為空者),讓簽核者知道改了什麼。每頁一個可折疊節點,
-	// 預設只展開含最新一筆修訂的那頁。
-	if (st.pr_index > 0 && st.has_work_branch) {
-		m_git->enqueue({QStringLiteral("show"),
-			ref + QLatin1Char(':') + rel_path}, vault,
-			[this, rel_path](const PdmGitWorker::Result &sr) {
-			const QTreeWidgetItem *cur = selectedFileItem();
-			if (!cur
-			    || cur->data(0, Qt::UserRole).toString() != rel_path)
-				return;
-			QDomDocument doc;
-			if (!doc.setContent(sr.output)) return;
-			const QList<PdmRevision::Entry> entries =
-				PdmRevision::collectChanges(doc);
-			if (entries.isEmpty()) return;
-
-			QMap<int, QList<PdmRevision::Entry>> by_folio;
-			for (const PdmRevision::Entry &e : entries)
-				by_folio[e.folio].append(e);
-
-			// 找含「最新一筆」修訂的頁(依日期),預設只展開它
-			int newest_folio = by_folio.constBegin().key();
-			QDate newest;
-			for (const PdmRevision::Entry &e : entries) {
-				if (e.parsed_date.isValid()
-				    && (!newest.isValid() || e.parsed_date > newest)) {
-					newest = e.parsed_date;
-					newest_folio = e.folio;
-				}
-			}
-
-			auto *root = new QTreeWidgetItem(
-				{tr("本次送審修訂內容")});
-			m_history_tree->insertTopLevelItem(0, root);
-			QFont rf = root->font(0); rf.setBold(true);
-			root->setFont(0, rf);
-			for (auto it = by_folio.constBegin();
-			     it != by_folio.constEnd(); ++it) {
-				auto *page = new QTreeWidgetItem(root,
-					{tr("第 %1 頁(%2 筆)")
-						.arg(it.key())
-						.arg(it.value().size())});
-				for (const PdmRevision::Entry &e : it.value())
-					new QTreeWidgetItem(page,
-						{QString(), e.date, e.by, e.desc});
-				page->setExpanded(it.key() == newest_folio);
-			}
-			root->setExpanded(true);
-		});
-	}
 }
 
 void PdmDialog::openReleaseRevision(const QString &tag, const QString &rel_path)
