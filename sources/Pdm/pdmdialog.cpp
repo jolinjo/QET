@@ -1403,34 +1403,56 @@ void PdmDialog::addDrawingFromFile(const QString &source)
 		}
 		setFileWritable(abs_path, true);
 		// 初版 0.1、編輯中、清空確認/核准欄位
-		stampDocFields(abs_path, QString::fromUtf8(DOC_STATUS_EDITING),
+		if (!stampDocFields(abs_path, QString::fromUtf8(DOC_STATUS_EDITING),
 			PdmVersion::nextMinor(QString()), true,
 			{{QStringLiteral("checked-by"), QString()},
-			 {QStringLiteral("approved-by"), QString()}});
+			 {QStringLiteral("approved-by"), QString()}})) {
+			fail(tr("寫入圖框欄位失敗"), abs_path);
+			return;
+		}
 
-		m_git->enqueue({"add", "--", rel_path}, worktree, {});
-		m_git->enqueue({"commit", "-m",
-			tr("新增圖檔：%1").arg(rel_path)}, worktree, {});
-		// 新檔入庫 = 加入圖庫並「完成入庫」:推送到 work 分支即可,不鎖定、
-		// 不開啟副本。完成後關閉來源檔(避免同一張圖同時開著來源與副本兩份),
-		// 清單顯示「已入庫未送審」。使用者要編輯再從清單出庫。
-		m_git->enqueue({"push", "-u", "origin", branch}, worktree,
-			[this, rel_path, abs_path, worktree, source]
-			(const PdmGitWorker::Result &push_r) {
-			if (!push_r.ok) {
-				fail(tr("推送失敗"), push_r.output);
+		// 逐步錯誤檢查:先前版本用空回呼的 add + commit,若 add 未 stage
+		// 或 commit 失敗會「靜默」——分支被 push 但裡面沒有新檔(git 端 0
+		// commit)。改為 add→(檢查)→commit -- <file>→(檢查)→push,任何
+		// 一步失敗都明確報錯,不再默默推空分支。
+		m_git->enqueue({"add", "--", rel_path}, worktree,
+			[this, rel_path, abs_path, worktree, branch, source]
+			(const PdmGitWorker::Result &add_r) {
+			if (!add_r.ok) {
+				fail(tr("新檔加入暫存失敗:%1").arg(rel_path),
+				     add_r.output);
 				return;
 			}
-			setFileWritable(abs_path, false);
-			emit requestCloseFile(source);
-			m_status_label->setText(
-				tr("「%1」已新增並入庫(未送審)").arg(rel_path));
-			// 重整後自動切到新檔所在資料夾,否則清單停在別的資料夾會
-			// 看不到剛入庫的新檔。
-			const QString dir = QFileInfo(rel_path).path();
-			m_pending_folder = (dir == QLatin1String("."))
-				? tr("(根目錄)") : dir;
-			refresh();
+			m_git->enqueue({"commit", "-m",
+				tr("新增圖檔：%1").arg(rel_path), "--", rel_path},
+				worktree,
+				[this, rel_path, abs_path, worktree, branch, source]
+				(const PdmGitWorker::Result &commit_r) {
+				if (!commit_r.ok) {
+					fail(tr("新檔提交失敗(檔案未進版):%1")
+						.arg(rel_path), commit_r.output);
+					return;
+				}
+				m_git->enqueue({"push", "-u", "origin", branch},
+					worktree,
+					[this, rel_path, abs_path, source]
+					(const PdmGitWorker::Result &push_r) {
+					if (!push_r.ok) {
+						fail(tr("推送失敗"), push_r.output);
+						return;
+					}
+					setFileWritable(abs_path, false);
+					emit requestCloseFile(source);
+					m_status_label->setText(
+						tr("「%1」已新增並入庫(未送審)")
+							.arg(rel_path));
+					const QString dir = QFileInfo(rel_path).path();
+					m_pending_folder =
+						(dir == QLatin1String("."))
+						? tr("(根目錄)") : dir;
+					refresh();
+				});
+			});
 		});
 	});
 }
