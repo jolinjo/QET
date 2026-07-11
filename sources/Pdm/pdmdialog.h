@@ -258,6 +258,7 @@ class PdmDialog : public QDialog
 		QTreeWidget *m_tree = nullptr;          ///< 中:所選資料夾的圖檔清單
 		QTreeWidget *m_history_tree = nullptr;  ///< 右:所選圖檔的發行歷史
 		QString m_current_folder;               ///< 目前選取的資料夾(相對路徑)
+		QString m_pending_folder;               ///< 下次重建資料夾樹時要自動選中的資料夾(如新檔入庫後跳到新檔所在夾)
 		QStringList m_extra_folders;            ///< 有 .gitkeep 的空資料夾
 		QPushButton *m_checkout_button = nullptr,
 			    *m_checkin_button = nullptr,

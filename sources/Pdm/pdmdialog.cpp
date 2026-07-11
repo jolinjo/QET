@@ -1169,7 +1169,10 @@ void PdmDialog::rebuildTree()
 
 void PdmDialog::rebuildFolderTree()
 {
-	const QString previous = m_current_folder;
+	// 有待選資料夾(如新檔入庫後)則優先選它,否則沿用先前選取
+	const QString previous = m_pending_folder.isEmpty()
+		? m_current_folder : m_pending_folder;
+	m_pending_folder.clear();
 	const QSignalBlocker blocker(m_folder_tree);
 	m_folder_tree->clear();
 
@@ -1422,6 +1425,11 @@ void PdmDialog::addDrawingFromFile(const QString &source)
 			emit requestCloseFile(source);
 			m_status_label->setText(
 				tr("「%1」已新增並入庫(未送審)").arg(rel_path));
+			// 重整後自動切到新檔所在資料夾,否則清單停在別的資料夾會
+			// 看不到剛入庫的新檔。
+			const QString dir = QFileInfo(rel_path).path();
+			m_pending_folder = (dir == QLatin1String("."))
+				? tr("(根目錄)") : dir;
 			refresh();
 		});
 	});
