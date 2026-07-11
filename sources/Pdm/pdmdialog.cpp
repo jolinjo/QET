@@ -1442,7 +1442,17 @@ void PdmDialog::addDrawingFromFile(const QString &source)
 						return;
 					}
 					setFileWritable(abs_path, false);
+					// 先關閉編輯器裡的來源檔(同步),再刪除本地來源檔
+					// ——圖已在圖庫,本地來源檔多餘。只刪 PDM 工作區以外
+					// 的來源(避免誤刪 vault/worktree 內的管理檔)。
 					emit requestCloseFile(source);
+					const QString work_root = QDir::cleanPath(
+						PdmSettings::workRoot());
+					if (!QDir::cleanPath(source).startsWith(work_root)
+					    && QFile::exists(source)) {
+						setFileWritable(source, true);
+						QFile::remove(source);
+					}
 					m_status_label->setText(
 						tr("「%1」已新增並入庫(未送審)")
 							.arg(rel_path));
