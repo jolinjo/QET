@@ -2074,6 +2074,9 @@ void PdmDialog::openReviewView()
 		setFileWritable(review_dir + '/' + rel_path, false);
 		emit requestOpenFile(review_dir + '/' + rel_path);
 		showBusy(false);
+		// 開啟審核/核准檢視後關閉圖檔管理視窗,讓唯讀圖檔露出來
+		//(非強制關閉;使用者可再由工具列開啟)
+		hide();
 	};
 	if (QDir(review_dir).exists()) {
 		m_git->enqueue({"checkout", "--detach", review_ref},
