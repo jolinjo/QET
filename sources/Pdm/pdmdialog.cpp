@@ -1215,9 +1215,11 @@ void PdmDialog::populateFileList()
 	const auto lifecycleStatus = [this](const FileState &state) -> QString {
 		const QString owner = state.lock_owner;
 		if (state.pr_index > 0)
-			// 不顯示 PR 編號;確認者確認後(pr_approved)= 等待核准者核准,
-			// 否則 = 等待確認者確認。
-			return state.pr_approved
+			// 不顯示 PR 編號;確認者已簽核(work 分支 checked-by 非空,
+			// 即「確認者」欄有值)= 等待核准者核准,否則 = 等待確認者確認。
+			// 註:確認動作只在 work 分支寫 checked-by、不做 Gitea APPROVE,
+			// 故以 checked_by 判定,不用 pr_approved。
+			return !state.checked_by.isEmpty()
 				? tr("審核中(等待核准)")
 				: tr("審核中(等待確認)");
 		if (owner == m_username && !owner.isEmpty())
