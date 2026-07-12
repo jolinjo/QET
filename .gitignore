@@ -13,6 +13,7 @@ QElectroTech.tag
 !doc/pdm-user-tutorial.md
 !doc/pdm-release-flow.md
 !doc/macos-build-pitfalls.md
+!doc/feature-導線自動編號帶顏色.md
 
 # Local-only fonts: proprietary (YaHei/PingFang/LiHei/Monaco) or unused
 # experiments. Kept out of the public repo. The committed custom fonts are

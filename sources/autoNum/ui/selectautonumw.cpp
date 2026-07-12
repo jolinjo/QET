@@ -92,36 +92,6 @@ SelectAutonumW::SelectAutonumW(int type, QWidget *parent) :
 }
 
 /**
-	@brief SelectAutonumW::SelectAutonumW
-	Constructor
-	@param context : NumerotationContext
-	@param type : int m_edited_type
-	@param parent : QWidget
-*/
-SelectAutonumW::SelectAutonumW(const NumerotationContext &context,
-			       int type,
-			       QWidget *parent) :
-	QWidget(parent),
-	ui(new Ui::SelectAutonumW),
-	m_edited_type(type)
-{
-	if (m_edited_type == 0)
-	{
-		m_feaw = new FormulaAutonumberingW();
-		m_feaw->ui->label->setHidden(true);
-		ui->m_widget->layout()->addWidget(m_feaw);
-	}
-	else if (m_edited_type == 1)
-	{
-		m_fcaw = new FormulaAutonumberingW();
-		m_fcaw->ui->label->setHidden(true);
-		ui->m_widget->layout()->addWidget(m_fcaw);
-	}
-	ui->setupUi(this);
-	setContext(context);
-}
-
-/**
 	@brief SelectAutonumW::~SelectAutonumW
 	Destructor
 */
