@@ -3020,7 +3020,7 @@ void QETDiagramEditor::promptNewFolioBasics(Diagram *diagram)
 	const QString orig_doc_type =
 		tbp.context.value(QStringLiteral("doc-type")).toString();
 	auto *type_tree = new QTreeWidget(&dlg);
-	type_tree->setMaximumHeight(220);
+	type_tree->setMinimumHeight(420);   // 加高,一次看到多數分類/代碼
 	DccCodes::populateTree(type_tree);
 	DccCodes::setCurrentCode(type_tree, orig_doc_type);
 	form->addRow(tr("文件類別"), type_tree);
