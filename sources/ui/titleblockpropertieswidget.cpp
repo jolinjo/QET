@@ -187,6 +187,12 @@ void TitleBlockPropertiesWidget::setProperties(
 				.value(QStringLiteral("doc-id")).toString();
 		m_project_doc_id_le->setText(m_orig_doc_id);
 	}
+	for (auto it = m_project_fields.constBegin();
+	     it != m_project_fields.constEnd(); ++it) {
+		const QString v = properties.context.value(it.key()).toString();
+		m_orig_project_fields.insert(it.key(), v);
+		it.value()->setText(v);
+	}
 
 	/* les cles de revision sont editees via le dialogue dedie et les
 	 * champs societe via les champs ci-dessus ; l'onglet
@@ -203,6 +209,7 @@ void TitleBlockPropertiesWidget::setProperties(
 			m_reserved_context.addValue(
 				key, properties.context.value(key), show);
 		} else if (!m_company_fields.contains(key)
+			   && !m_project_fields.contains(key)
 			   && key != QLatin1String("doc-type")
 			   && !(m_project_doc_id_le
 				&& key == QLatin1String("doc-id"))) {
@@ -263,6 +270,21 @@ TitleBlockProperties TitleBlockPropertiesWidget::properties() const
 				TitleBlockProperties p =
 					d->border_and_titleblock.exportTitleBlock();
 				p.context.addValue(QStringLiteral("doc-id"), doc_id);
+				d->border_and_titleblock.importTitleBlock(p);
+				d->update();
+			}
+		}
+		// 專案共用欄位:有變更即套用到全專案所有頁(同 doc-id)
+		for (auto it = m_project_fields.constBegin();
+		     it != m_project_fields.constEnd(); ++it) {
+			if (it.value()->text()
+			    == m_orig_project_fields.value(it.key()))
+				continue;
+			const auto diagram_list = m_project->diagrams();
+			for (Diagram *d : diagram_list) {
+				TitleBlockProperties p =
+					d->border_and_titleblock.exportTitleBlock();
+				p.context.addValue(it.key(), it.value()->text());
 				d->border_and_titleblock.importTitleBlock(p);
 				d->update();
 			}
@@ -473,6 +495,19 @@ void TitleBlockPropertiesWidget::initDialog(
 		project_form->addRow(tr("Titre du projet :"), m_project_title_le);
 		m_project_doc_id_le = new QLineEdit(project_page);
 		project_form->addRow(tr("Numéro de document :"), m_project_doc_id_le);
+		// 專案共用欄位(對應封面圖框變數):改一次套用到全專案所有頁
+		const struct { QString key; QString label; } proj_fields[] = {
+			{QStringLiteral("customer"), tr("客戶名稱 :")},
+			{QStringLiteral("pm"),       tr("專案管理 :")},
+			{QStringLiteral("mech"),     tr("機構擔當 :")},
+			{QStringLiteral("elec"),     tr("電控擔當 :")},
+			{QStringLiteral("sw"),       tr("軟體擔當 :")},
+		};
+		for (const auto &f : proj_fields) {
+			auto *le = new QLineEdit(project_page);
+			project_form->addRow(f.label, le);
+			m_project_fields.insert(f.key, le);
+		}
 		auto *note = new QLabel(
 			tr("Ces champs sont communs à tous les folios du projet."),
 			project_page);
@@ -672,5 +707,9 @@ void TitleBlockPropertiesWidget::applyCompanyFields(TitleBlockProperties &proper
 	if (m_project_doc_id_le) {
 		properties.context.addValue(QStringLiteral("doc-id"),
 					    m_project_doc_id_le->text());
+	}
+	for (auto it = m_project_fields.constBegin();
+	     it != m_project_fields.constEnd(); ++it) {
+		properties.context.addValue(it.key(), it.value()->text());
 	}
 }

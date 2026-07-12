@@ -119,6 +119,10 @@ class TitleBlockPropertiesWidget : public QWidget
 		QLineEdit *m_project_doc_id_le = nullptr;
 		QString m_orig_project_title;
 		QString m_orig_doc_id;
+		/// 專案共用欄位(封面圖框變數:customer/pm/mech/elec/sw):
+		/// 改一次套用到全專案所有頁,機制同 doc-id。key=圖框變數名。
+		QHash<QString, QLineEdit *> m_project_fields;
+		QHash<QString, QString> m_orig_project_fields;
 };
 
 #endif // TITLEBLOCKPROPERTIESWIDGET_H
