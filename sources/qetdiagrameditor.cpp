@@ -1538,6 +1538,9 @@ void QETDiagramEditor::setUpToolBar()
 	main_tool_bar -> addActions(m_file_actions_group.actions());
 	// 列印按鈕自工具列移除(仍保留「檔案」選單項與 ⌘P 快捷鍵)
 	main_tool_bar -> addAction(m_export_to_pdf);
+	// 新增/刪除頁面移到匯出 PDF 右側(依 editable_project enable/disable)
+	main_tool_bar -> addAction(m_project_add_diagram);
+	main_tool_bar -> addAction(m_remove_diagram_from_project);
 	main_tool_bar -> addSeparator();
 	// 修訂紀錄放在「圖檔管理」左方
 	main_tool_bar -> addAction(m_edit_folio_revisions);
@@ -1550,9 +1553,7 @@ void QETDiagramEditor::setUpToolBar()
 	main_tool_bar -> addAction(m_pdm_confirm);
 	main_tool_bar -> addAction(m_pdm_release);
 	// 編輯類動作獨立成 edit_tool_bar,方便無開圖/唯讀時整條隱藏
-	edit_tool_bar -> addAction(m_project_add_diagram);
-	edit_tool_bar -> addAction(m_remove_diagram_from_project);
-	edit_tool_bar -> addSeparator();
+	// (新增/刪除頁面已移至 main_tool_bar 匯出 PDF 右側)
 	edit_tool_bar -> addAction(undo);
 	edit_tool_bar -> addAction(redo);
 	edit_tool_bar -> addSeparator();
