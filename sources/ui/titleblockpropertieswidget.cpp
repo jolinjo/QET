@@ -17,6 +17,7 @@
 */
 #include "titleblockpropertieswidget.h"
 
+#include "../Pdm/pdmsettings.h"
 #include "../diagram.h"
 #include "../qetapp.h"
 #include "../qeticons.h"
@@ -119,7 +120,9 @@ TitleBlockPropertiesWidget::~TitleBlockPropertiesWidget()
 void TitleBlockPropertiesWidget::setProperties(
 		const TitleBlockProperties &properties) {
 	ui -> m_title_le      -> setText (properties.title);
-	ui -> m_author_le     -> setText (properties.author);
+	// 登入 PDM:作者固定為使用者帳號(建構子已設),不用檔案裡的舊作者覆蓋
+	if (PdmSettings::username().isEmpty())
+		ui -> m_author_le     -> setText (properties.author);
 	ui -> m_file_le       -> setText (properties.filename);
 	ui -> m_plant         -> setText (properties.plant);
 	ui -> m_loc           -> setText (properties.locmach);
@@ -420,18 +423,30 @@ void TitleBlockPropertiesWidget::initDialog(
 		{QStringLiteral("approved-by"), tr("Approuvé par :")},
 		{QStringLiteral("remarks"),     tr("Remarques :")},
 	};
+	const bool pdm_logged_in = !PdmSettings::username().isEmpty();
 	for (const auto &pair : company_keys) {
 		auto *edit = new QLineEdit(this);
 		m_company_fields.insert(pair.first, edit);
-		// 審核者/核准者由圖檔管理(PDM)於審核流程自動寫入,UI 一律唯讀,
-		// 不允許任何人手動填改(既有值仍會顯示並原樣保留)。
-		if (pair.first == QLatin1String("checked-by")
-		    || pair.first == QLatin1String("approved-by")) {
+		const bool signing = pair.first == QLatin1String("checked-by")
+			|| pair.first == QLatin1String("approved-by");
+		// 登入 PDM:審核者/核准者/備註由系統於審核發行流程管理,整列隱藏
+		//(欄位物件保留,既有值原樣 round-trip 保存);未登入才顯示唯讀簽核欄。
+		if (pdm_logged_in
+		    && (signing || pair.first == QLatin1String("remarks"))) {
+			edit->hide();
+			continue;
+		}
+		if (signing) {
 			edit->setReadOnly(true);
 			edit->setToolTip(
 				tr("由圖檔管理自動設定,不可手動修改"));
 		}
 		company_form->addRow(pair.second, edit);
+	}
+	// 登入 PDM:作者自動帶入使用者帳號且不可修改
+	if (pdm_logged_in) {
+		ui->m_author_le->setText(PdmSettings::username());
+		ui->m_author_le->setReadOnly(true);
 	}
 	ui -> verticalLayout_2 -> addLayout(company_form);
 
