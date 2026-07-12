@@ -777,6 +777,7 @@ void QETDiagramEditor::ensurePdmDialog()
 	// 背景連線結果決定工具列「圖檔管理」按鈕啟用與否:連上並取回資料才啟用。
 	connect(m_pdm_dialog, &PdmDialog::connectionReady, this,
 		[this](bool ok) {
+			m_pdm_connected = ok;
 			if (m_pdm_action) m_pdm_action->setEnabled(ok);
 			if (m_pdm_add_new) m_pdm_add_new->setEnabled(ok);
 			// 連上後 m_files 就緒,重建歡迎頁讓 PDM 項目顯示正確的
@@ -3200,6 +3201,20 @@ void QETDiagramEditor::removeDiagram(Diagram *diagram)
 void QETDiagramEditor::removeDiagrams(const QList<Diagram *> &diagrams)
 {
 	if (diagrams.isEmpty()) return;
+
+	// 連線圖檔管理時,第一頁(圖目錄)不允許刪除:PDM 圖檔首頁固定為圖目錄。
+	if (m_pdm_connected) {
+		for (Diagram *diagram : diagrams) {
+			QETProject *proj = diagram ? diagram->project() : nullptr;
+			if (proj && !proj->diagrams().isEmpty()
+			    && proj->diagrams().first() == diagram) {
+				QMessageBox::information(this,
+					tr("Supprimer le folio"),
+					tr("已連線圖檔管理,第一頁(圖目錄)不可刪除。"));
+				return;
+			}
+		}
+	}
 
 	if (diagrams.count() == 1) {
 		QMessageBox::StandardButton reply;

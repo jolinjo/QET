@@ -279,6 +279,7 @@ class QETDiagramEditor : public QETMainWindow
 		QUndoGroup undo_group;
 		AutoNumberingDockWidget *m_autonumbering_dock;
 		PdmDialog *m_pdm_dialog = nullptr;
+		bool m_pdm_connected = false;   ///< 已連上圖檔管理(connectionReady ok)
 		int activeSubWindowIndex;
 		bool m_first_show = true;
 		SearchAndReplaceWidget m_search_and_replace_widget;
