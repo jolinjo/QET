@@ -68,6 +68,14 @@ namespace PdmRevision
 	/// 把一組修訂項組成單一 changes 字串:「P3.說明 P7.說明」,同頁以 ; 併
 	QString formatChanges(const QList<Entry> &entries);
 
+	/**
+		檢查各頁修訂列是否有「填一半」的情況:某列已有日期或座標,卻沒有
+		修改內容(或反之有內容卻缺日期)。回傳每個問題的人類可讀說明
+		(如「第 3 頁(子圖名) 第 3 列:有日期但缺『修改內容』」)。
+		空清單 = 全部完整。送審前用來卡控,要求使用者補齊或刪除。
+	*/
+	QStringList incompleteRows(const QDomDocument &doc);
+
 	/// 結構化 commit 內容(§4)
 	struct CommitMeta {
 		QString work_version;

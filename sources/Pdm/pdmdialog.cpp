@@ -1572,6 +1572,25 @@ bool PdmDialog::ensureHasPendingChanges(const QDomDocument &doc,
 	return false;
 }
 
+bool PdmDialog::ensureRevisionRowsComplete(const QDomDocument &doc,
+					   const QString &title)
+{
+	const QStringList problems = PdmRevision::incompleteRows(doc);
+	if (problems.isEmpty()) return true;   // 全部完整,放行
+
+	QMessageBox box(this);
+	box.setIcon(QMessageBox::Warning);
+	box.setWindowTitle(title);
+	box.setText(tr("無法送審:有修訂列尚未填寫完整。"));
+	box.setInformativeText(tr(
+		"下列修訂列有欄位缺漏(有日期/座標卻沒有「修改內容」,或有內容卻\n"
+		"沒有日期)。請開啟該頁圖框的「修訂紀錄」對話框補齊,或刪除該列後\n"
+		"再送審:\n\n%1").arg(problems.join(QLatin1Char('\n'))));
+	box.setStandardButtons(QMessageBox::Ok);
+	box.exec();
+	return false;
+}
+
 bool PdmDialog::promptCheckinCommit(const QString &abs_path,
 				    const QString &title,
 				    const QString &summary_label,
@@ -1598,12 +1617,16 @@ bool PdmDialog::promptCheckinCommit(const QString &abs_path,
 
 	// 送審類流程(require_changes)才卡控:沒有待發行修訂項就禁止並說明。
 	// 一般入庫納管不卡(允許只是存進度)。
-	if (require_changes && entries.isEmpty()) {
+	if (require_changes) {
 		QDomDocument doc;
 		QFile file(abs_path);
 		if (file.open(QIODevice::ReadOnly)) { doc.setContent(&file); file.close(); }
-		ensureHasPendingChanges(doc, title);   // 一定回 false(entries 空)
-		return false;
+		if (entries.isEmpty()) {
+			ensureHasPendingChanges(doc, title); // 一定回 false(entries 空)
+			return false;
+		}
+		// 有待發行修訂,但仍要擋「填一半」的列(有日期缺內容等)
+		if (!ensureRevisionRowsComplete(doc, title)) return false;
 	}
 
 	QDialog dialog(this);
@@ -1855,6 +1878,7 @@ void PdmDialog::submitForReview()
 		QFile f(abs_path);
 		if (f.open(QIODevice::ReadOnly)) { doc.setContent(&f); f.close(); }
 		if (!ensureHasPendingChanges(doc, tr("送審"))) return;
+		if (!ensureRevisionRowsComplete(doc, tr("送審"))) return;
 	}
 
 	bool accepted = false;

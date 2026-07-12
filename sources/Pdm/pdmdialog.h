@@ -175,6 +175,11 @@ class PdmDialog : public QDialog
 		bool ensureHasPendingChanges(const QDomDocument &doc,
 					     const QString &title);
 
+		/// 檢查修訂列是否有「填一半」(有日期/座標卻缺修改內容,或反之)。
+		/// 有缺漏則跳訊息列出並回 false(呼叫端據此中止送審)。
+		bool ensureRevisionRowsComplete(const QDomDocument &doc,
+						const QString &title);
+
 		/**
 			發行前:放行者從「自上次發行後的增修項」中勾選要寫入首頁
 			發行史的項目,並填簽核訊息(必填)。

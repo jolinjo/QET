@@ -19,6 +19,8 @@
 
 #include <QDomDocument>
 #include <QJsonArray>
+#include <QObject>
+#include <QStringList>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMap>
@@ -193,6 +195,51 @@ QString PdmRevision::formatChanges(const QList<Entry> &entries)
 			.arg(it.key()).arg(it.value().join(QLatin1Char(';'))));
 	}
 	return parts.join(QLatin1Char(' '));
+}
+
+QStringList PdmRevision::incompleteRows(const QDomDocument &doc)
+{
+	QStringList problems;
+	int position = 0;
+	for (QDomElement diagram = doc.documentElement()
+		.firstChildElement(QStringLiteral("diagram"));
+	     !diagram.isNull();
+	     diagram = diagram.nextSiblingElement(QStringLiteral("diagram"))) {
+		++position;
+		bool order_ok = false;
+		const int order = diagram.attribute(QStringLiteral("order"))
+			.toInt(&order_ok);
+		const int folio = order_ok && order > 0 ? order : position;
+		const QString title = diagram.attribute(QStringLiteral("title"))
+			.trimmed();
+		const QString folio_label = title.isEmpty()
+			? QObject::tr("第 %1 頁").arg(folio)
+			: QObject::tr("第 %1 頁(%2)").arg(folio).arg(title);
+
+		for (int row = 0; row < ROW_COUNT; ++row) {
+			const QString date = diagramProperty(diagram,
+				revKey(row, "date")).trimmed();
+			const QString zone = diagramProperty(diagram,
+				revKey(row, "zone")).trimmed();
+			const QString desc = diagramProperty(diagram,
+				revKey(row, "desc")).trimmed();
+			// 「有動過」= 日期、座標或修改內容任一非空;版次/修改者為系統
+			// 自動帶入,不作為判斷依據。
+			const bool touched = !date.isEmpty() || !zone.isEmpty()
+					     || !desc.isEmpty();
+			if (!touched) continue;
+			if (desc.isEmpty()) {
+				problems << QObject::tr(
+					"%1 第 %2 列:有資料但缺「修改內容」")
+					.arg(folio_label).arg(row + 1);
+			} else if (date.isEmpty()) {
+				problems << QObject::tr(
+					"%1 第 %2 列:有修改內容但缺「日期」")
+					.arg(folio_label).arg(row + 1);
+			}
+		}
+	}
+	return problems;
 }
 
 QString PdmRevision::encodeCommit(const QString &human_summary,
