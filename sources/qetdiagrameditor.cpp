@@ -17,6 +17,8 @@
 */
 #include "qetdiagrameditor.h"
 
+#include "dcccodes.h"
+
 #include <QListWidget>
 #include <QMessageBox>
 #include <QPushButton>
@@ -3014,16 +3016,10 @@ void QETDiagramEditor::promptNewFolioBasics(Diagram *diagram)
 	title_cb->setCurrentText(tbp.title);
 	form->addRow(tr("分頁圖名"), title_cb);
 
-	// 文件類別:可編輯下拉,DCC 代碼(與圖框屬性對話框一致)
+	// 文件類別:可編輯下拉,DCC 代碼(與圖框屬性對話框共用同一清單)
 	auto *type_cb = new QComboBox(&dlg);
 	type_cb->setEditable(true);
-	type_cb->addItems({
-		QStringLiteral("&EFS 電路圖"),
-		QStringLiteral("&EPB 零件清單"),
-		QStringLiteral("&ELD 佈置圖"),
-		QStringLiteral("&EMB 接線表"),
-		QStringLiteral("&EMA 接線圖"),
-		QStringLiteral("&EFA 概觀圖/單線圖") });
+	DccCodes::populate(type_cb);
 	type_cb->setCurrentText(
 		tbp.context.value(QStringLiteral("doc-type")).toString());
 	form->addRow(tr("文件類別"), type_cb);

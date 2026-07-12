@@ -17,6 +17,8 @@
 */
 #include "titleblockpropertieswidget.h"
 
+#include "../dcccodes.h"
+
 #include <algorithm>
 
 #include "../Pdm/pdmsettings.h"
@@ -432,14 +434,7 @@ void TitleBlockPropertiesWidget::initDialog(
 	/* type de document : codes DCC (IEC 61355, §5.2 du guide societe) */
 	m_doc_type_cb = new QComboBox(this);
 	m_doc_type_cb->setEditable(true);
-	m_doc_type_cb->addItems({
-		QStringLiteral("&EFS 電路圖"),
-		QStringLiteral("&EPB 零件清單"),
-		QStringLiteral("&ELD 佈置圖"),
-		QStringLiteral("&EMB 接線表"),
-		QStringLiteral("&EMA 接線圖"),
-		QStringLiteral("&EFA 概觀圖/單線圖"),
-	});
+	DccCodes::populate(m_doc_type_cb);   // IEC 61355-1 DCC 清單(含說明 tooltip)
 	company_form->addRow(tr("Type de document :"), m_doc_type_cb);
 	const QList<QPair<QString, QString>> company_keys {
 		{QStringLiteral("techref"),     tr("Référence technique :")},
