@@ -1982,7 +1982,8 @@ void PdmDialog::checkInAndSubmit()
 			PdmRevision::decodeCommit(commit_msg, &meta);
 			const QString changes_str =
 				PdmRevision::formatChanges(meta.changes);
-			PdmReleaseHistory::upsertPendingRow(doc, changes_str);
+			PdmReleaseHistory::upsertPendingRow(doc, changes_str,
+				m_username, QString::fromUtf8(DOC_STATUS_REVIEWING));
 			renderReleaseTable(doc);
 			QFile out(abs_path);
 			if (out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
@@ -2285,9 +2286,19 @@ void PdmDialog::approveAndRelease()
 			// 核准者為空=待發行;發行時把選中項的 appd 填上核准者,
 			// 下次入庫/發行就不再列入(狀態機:appd 已填=已發行)。
 			PdmRevision::fillApprover(doc, chosen, m_username);
-			// 發行:把送審時的「待發行列」補上版本/日期/核准者;無則 append
+			// 修改者:彙整本次選中修訂項的修改者(去重、保留出現順序)
+			QStringList modifiers;
+			for (const PdmRevision::Entry &e : chosen) {
+				const QString by = e.by.trimmed();
+				if (!by.isEmpty() && !modifiers.contains(by))
+					modifiers << by;
+			}
+			const QString modified_by = modifiers.join(QStringLiteral("、"));
+			// 發行:把送審時的「待發行列」補上版本/日期/修改者/核准者/狀態;
+			// 無待發行列則直接 append。
 			PdmReleaseHistory::finalizePending(doc,
-				{release_version, release_date, m_username, changes_str});
+				{release_version, release_date, modified_by, m_username,
+				 QString::fromUtf8(DOC_STATUS_RELEASED), changes_str});
 			PdmVersion::setProjectProperty(doc,
 				QLatin1String(PdmVersion::RELEASE_VERSION),
 				release_version);

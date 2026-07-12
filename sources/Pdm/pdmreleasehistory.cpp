@@ -59,7 +59,9 @@ QList<PdmReleaseHistory::Row> PdmReleaseHistory::readReleases(
 		Row row;
 		row.version     = o.value(QStringLiteral("version")).toString();
 		row.date        = o.value(QStringLiteral("date")).toString();
+		row.modified_by = o.value(QStringLiteral("modified_by")).toString();
 		row.approved_by = o.value(QStringLiteral("approved_by")).toString();
+		row.status      = o.value(QStringLiteral("status")).toString();
 		row.changes     = o.value(QStringLiteral("changes")).toString();
 		rows.append(row);
 	}
@@ -86,7 +88,9 @@ namespace
 			arr.append(QJsonObject{
 				{QStringLiteral("version"),     r.version},
 				{QStringLiteral("date"),        r.date},
+				{QStringLiteral("modified_by"), r.modified_by},
 				{QStringLiteral("approved_by"), r.approved_by},
+				{QStringLiteral("status"),      r.status},
 				{QStringLiteral("changes"),     r.changes}});
 		}
 		const QString json = QString::fromUtf8(
@@ -104,16 +108,21 @@ bool PdmReleaseHistory::appendRelease(QDomDocument &doc, const Row &row)
 }
 
 bool PdmReleaseHistory::upsertPendingRow(QDomDocument &doc,
-					 const QString &changes)
+					 const QString &changes,
+					 const QString &modified_by,
+					 const QString &status)
 {
 	QList<Row> rows = readReleases(doc);
 	for (Row &r : rows) {
-		if (r.version.isEmpty()) {   // 已有待發行列 → 只更新異動
+		if (r.version.isEmpty()) {   // 已有待發行列 → 更新異動/修改者/狀態
 			r.changes = changes;
+			r.modified_by = modified_by;
+			r.status = status;
 			return writeReleases(doc, rows);
 		}
 	}
-	rows.append({QString(), QString(), QString(), changes});  // 新增待發行列
+	// 新增待發行列(版本/日期/核准者留空)
+	rows.append({QString(), QString(), modified_by, QString(), status, changes});
 	return writeReleases(doc, rows);
 }
 
@@ -154,8 +163,9 @@ QString PdmReleaseHistory::formatHistoryText(const QList<Row> &rows,
 	// <table width> 只當建議值、會縮成內容寬,故改為固定每欄寬度撐滿。
 	// 版本/日期/核准固定,異動(修改內容)吃剩餘寬度 → 表寬≈頁寬時異動欄很寬。
 	const int total = qMax(300, int(table_width));
-	const int w_ver = 90, w_date = 150, w_appr = 120,
-		  w_chg = qMax(100, total - 90 - 150 - 120);
+	// 固定欄:版本/日期/修改者/核准/文件狀態;異動吃剩餘寬度。
+	const int w_ver = 70, w_date = 110, w_by = 90, w_appr = 90, w_status = 110,
+		  w_chg = qMax(100, total - w_ver - w_date - w_by - w_appr - w_status);
 	QString html =
 		QStringLiteral("<table border=\"1\" cellspacing=\"0\" "
 			"cellpadding=\"4\" align=\"center\" width=\"%1\">")
@@ -163,23 +173,28 @@ QString PdmReleaseHistory::formatHistoryText(const QList<Row> &rows,
 	// HISTORY_HEADER 是 UTF-8 char*;必須用 fromUtf8 解碼,不能用
 	// QLatin1String(會把 UTF-8 位元組當 Latin-1 → 中文變亂碼)。
 	html += QStringLiteral(
-		"<tr><td colspan=\"4\" align=\"center\"><b>%1</b></td></tr>")
+		"<tr><td colspan=\"6\" align=\"center\"><b>%1</b></td></tr>")
 		.arg(QString::fromUtf8(HISTORY_HEADER));
 	html += QStringLiteral(
 		"<tr><td width=\"%1\" align=\"center\"><b>版本</b></td>"
 		"<td width=\"%2\" align=\"center\"><b>日期</b></td>"
-		"<td width=\"%3\" align=\"center\"><b>核准</b></td>"
-		"<td width=\"%4\" align=\"center\"><b>異動</b></td></tr>")
-		.arg(w_ver).arg(w_date).arg(w_appr).arg(w_chg);
+		"<td width=\"%3\" align=\"center\"><b>修改者</b></td>"
+		"<td width=\"%4\" align=\"center\"><b>核准</b></td>"
+		"<td width=\"%5\" align=\"center\"><b>文件狀態</b></td>"
+		"<td width=\"%6\" align=\"center\"><b>異動</b></td></tr>")
+		.arg(w_ver).arg(w_date).arg(w_by).arg(w_appr).arg(w_status).arg(w_chg);
 	for (const Row &r : rows) {
 		html += QStringLiteral(
-			"<tr><td width=\"%1\" align=\"center\">%5</td>"
-			"<td width=\"%2\" align=\"center\">%6</td>"
-			"<td width=\"%3\" align=\"center\">%7</td>"
-			"<td width=\"%4\">%8</td></tr>")
-			.arg(w_ver).arg(w_date).arg(w_appr).arg(w_chg)
-			.arg(esc(r.version), esc(r.date),
-			     esc(r.approved_by), esc(r.changes));
+			"<tr><td width=\"%1\" align=\"center\">%7</td>"
+			"<td width=\"%2\" align=\"center\">%8</td>"
+			"<td width=\"%3\" align=\"center\">%9</td>"
+			"<td width=\"%4\" align=\"center\">%10</td>"
+			"<td width=\"%5\" align=\"center\">%11</td>"
+			"<td width=\"%6\">%12</td></tr>")
+			.arg(w_ver).arg(w_date).arg(w_by).arg(w_appr)
+			.arg(w_status).arg(w_chg)
+			.arg(esc(r.version), esc(r.date), esc(r.modified_by),
+			     esc(r.approved_by), esc(r.status), esc(r.changes));
 	}
 	html += QStringLiteral("</table>");
 	return html;

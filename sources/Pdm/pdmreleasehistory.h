@@ -35,7 +35,9 @@ namespace PdmReleaseHistory
 	struct Row {
 		QString version;      ///< 發行版本(pdm_release_version,如 1.0)
 		QString date;         ///< 發行日期(ISO yyyy-MM-dd)
+		QString modified_by;  ///< 修改者(彙整本次各頁修訂的修改者)
 		QString approved_by;  ///< 核准/放行者
+		QString status;       ///< 文件狀態(如「正式發行 Released」「審核中」)
 		QString changes;      ///< 異動摘要單一字串:P3.說明 P7.說明
 	};
 
@@ -50,10 +52,11 @@ namespace PdmReleaseHistory
 	bool appendRelease(QDomDocument &doc, const Row &row);
 
 	/**
-		送審時用:寫入/更新「待發行列」——只有異動(changes),版本/日期/
-		核准者留空。已有待發行列(version 空)則更新其 changes,否則新增。
+		送審時用:寫入/更新「待發行列」——填入異動(changes)、修改者、文件
+		狀態,版本/日期/核准者留空。已有待發行列(version 空)則更新,否則新增。
 	*/
-	bool upsertPendingRow(QDomDocument &doc, const QString &changes);
+	bool upsertPendingRow(QDomDocument &doc, const QString &changes,
+			      const QString &modified_by, const QString &status);
 
 	/**
 		核准發行時用:把待發行列(version 空)填上版本/日期/核准者/異動;
