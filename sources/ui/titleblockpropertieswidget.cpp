@@ -424,6 +424,10 @@ void TitleBlockPropertiesWidget::initDialog(
 		{QStringLiteral("remarks"),     tr("Remarques :")},
 	};
 	const bool pdm_logged_in = !PdmSettings::username().isEmpty();
+	// 唯讀欄位改用視窗底色(非白),讓使用者一眼看出不可編輯。
+	const QString readonly_style =
+		QStringLiteral("QLineEdit{background-color:palette(window);"
+			       "color:palette(dark);}");
 	for (const auto &pair : company_keys) {
 		auto *edit = new QLineEdit(this);
 		m_company_fields.insert(pair.first, edit);
@@ -438,6 +442,7 @@ void TitleBlockPropertiesWidget::initDialog(
 		}
 		if (signing) {
 			edit->setReadOnly(true);
+			edit->setStyleSheet(readonly_style);
 			edit->setToolTip(
 				tr("由圖檔管理自動設定,不可手動修改"));
 		}
@@ -447,6 +452,7 @@ void TitleBlockPropertiesWidget::initDialog(
 	if (pdm_logged_in) {
 		ui->m_author_le->setText(PdmSettings::username());
 		ui->m_author_le->setReadOnly(true);
+		ui->m_author_le->setStyleSheet(readonly_style);
 	}
 	ui -> verticalLayout_2 -> addLayout(company_form);
 

@@ -167,9 +167,14 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 	 * automatiquement a la validation */
 	auto *cur_rev_group = new QGroupBox(tr("Ajouter une révision"), this);
 	auto *cur_rev_form = new QFormLayout(cur_rev_group);
+	// 唯讀欄位改用視窗底色(非白),讓使用者一眼看出不可編輯。
+	const QString readonly_style =
+		QStringLiteral("QLineEdit{background-color:palette(window);"
+			       "color:palette(dark);}");
 	// 版次(修訂索引):系統自動由下方表格現有版次累加,使用者不可設定。
 	auto *cur_rev_idx = new QLineEdit(cur_rev_group);
 	cur_rev_idx->setReadOnly(true);
+	cur_rev_idx->setStyleSheet(readonly_style);
 	cur_rev_form->addRow(tr("Indice"), cur_rev_idx);
 	m_cur_rev_date = new QDateEdit(cur_rev_group);
 	m_cur_rev_date->setCalendarPopup(true);
@@ -188,6 +193,7 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 		if (!pdm_user.isEmpty()) {
 			m_cur_rev_by->setText(pdm_user);
 			m_cur_rev_by->setReadOnly(true);
+			m_cur_rev_by->setStyleSheet(readonly_style);
 		}
 	}
 	cur_rev_form->addRow(tr("Par"), m_cur_rev_by);
