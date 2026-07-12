@@ -2013,25 +2013,36 @@ void PdmDialog::viewReleased()
 	const QTreeWidgetItem *item = selectedFileItem();
 	if (!item) return;
 	const QString rel_path = item->data(0, Qt::UserRole).toString();
+	const FileState st = m_files.value(rel_path);
 	const QString vault = vaultDir();
-	// main 上最後發行版,以 detached worktree 唯讀開啟(含完整倉庫上下文,
-	// 開檔乾淨無整合提示;與唯讀瀏覽、發行版檢視一致)。不用 git show 到
-	// 孤立暫存檔——那缺元件庫/圖框範本,且暫存檔設唯讀後再開會「無法建立
-	// 暫存檔」。
+	// 不出庫檢視:抓「該檔目前最新版」以 detached worktree 唯讀開啟。
+	// 進行中的圖(已入庫未送審/審核中)最新版在 work 分支、尚未合併回 main,
+	// 若只看 main 會找不到檔而「沒有動作」;故有 work 分支就看 work 分支,
+	// 否則看 main(已發行版)。worktree 含完整倉庫上下文,開檔乾淨無提示。
+	const QString ref = st.has_work_branch
+		? QStringLiteral("origin/") + workBranchOf(rel_path)
+		: QStringLiteral("origin/") + QLatin1String(DEFAULT_BRANCH);
 	const QString view_dir = PdmSettings::workRoot() + '/' + currentRepoFullName()
 		+ QStringLiteral("/latest-view");
 	showBusy(true, true, 3);
 	m_git->enqueue({"fetch", "origin", "--prune"}, vault, {});
 	if (QDir(view_dir).exists())
 		m_git->enqueue({"worktree", "remove", "--force", view_dir}, vault, {});
-	m_git->enqueue({"worktree", "add", "--detach", view_dir,
-		QStringLiteral("origin/") + QLatin1String(DEFAULT_BRANCH)}, vault,
-		[this, rel_path, view_dir](const PdmGitWorker::Result &r) {
-			if (!r.ok) { fail(tr("讀取發行版失敗"), r.output); return; }
-			setFileWritable(view_dir + '/' + rel_path, false);
-			emit requestOpenFile(view_dir + '/' + rel_path);
-			m_status_label->setText(
-				tr("已開啟「%1」發行版(唯讀)").arg(rel_path));
+	m_git->enqueue({"worktree", "add", "--detach", view_dir, ref}, vault,
+		[this, rel_path, view_dir, st](const PdmGitWorker::Result &r) {
+			if (!r.ok) { fail(tr("讀取檢視版本失敗"), r.output); return; }
+			const QString fp = view_dir + '/' + rel_path;
+			if (!QFile::exists(fp)) {
+				showBusy(false);
+				fail(tr("無可檢視的版本"),
+				     tr("「%1」在目前版本中不存在。").arg(rel_path));
+				return;
+			}
+			setFileWritable(fp, false);
+			emit requestOpenFile(fp);
+			m_status_label->setText(tr("已開啟「%1」%2(唯讀)")
+				.arg(rel_path, st.has_work_branch
+					? tr("最新版") : tr("發行版")));
 		});
 }
 
