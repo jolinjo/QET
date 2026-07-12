@@ -18,8 +18,9 @@
 #ifndef DCCCODES_H
 #define DCCCODES_H
 
-#include <QComboBox>
 #include <QString>
+#include <QTreeWidget>
+#include <QTreeWidgetItem>
 #include <QVector>
 
 /**
@@ -113,17 +114,68 @@ namespace DccCodes {
 		};
 	}
 
-	/// 把 DCC 清單填入下拉:逐項加入、設 tooltip(說明/情境)、組間插分隔線。
-	inline void populate(QComboBox *cb)
+	/// 群組代碼→顯示名稱。
+	inline QString sectionName(const QString &s)
 	{
+		if (s == QStringLiteral("E"))
+			return QStringLiteral("電控與自動化 (E)");
+		if (s == QStringLiteral("M"))
+			return QStringLiteral("機械與機構 (M)");
+		return QStringLiteral("專案管理／品質／維運 (B·C·D)");
+	}
+
+	/// 取 label 的 DCC 代碼(第一個空白前,如「&EFS」)。
+	inline QString codeOf(const QString &label)
+	{
+		return label.section(QLatin1Char(' '), 0, 0);
+	}
+
+	/// 以樹狀列表呈現:分類為父節點、代碼縮排於下,tooltip 帶說明/情境。
+	inline void populateTree(QTreeWidget *tree)
+	{
+		tree->clear();
+		tree->setColumnCount(1);
+		tree->setHeaderHidden(true);
+		tree->setRootIsDecorated(true);
+		QTreeWidgetItem *parent = nullptr;
 		QString last_section;
 		for (const Entry &e : entries()) {
-			if (!last_section.isEmpty() && e.section != last_section
-			    && cb->count() > 0)
-				cb->insertSeparator(cb->count());
-			last_section = e.section;
-			cb->addItem(e.label);
-			cb->setItemData(cb->count() - 1, e.tip, Qt::ToolTipRole);
+			if (e.section != last_section) {
+				parent = new QTreeWidgetItem(
+					tree, {sectionName(e.section)});
+				// 分類節點僅供分組,不可被選取
+				parent->setFlags(Qt::ItemIsEnabled);
+				last_section = e.section;
+			}
+			auto *child = new QTreeWidgetItem(parent, {e.label});
+			child->setToolTip(0, e.tip);
+			child->setData(0, Qt::UserRole, codeOf(e.label));
+		}
+		tree->expandAll();
+	}
+
+	/// 目前選取的文件類別(完整 label);未選或選到分類節點回空字串。
+	inline QString currentCode(QTreeWidget *tree)
+	{
+		QTreeWidgetItem *it = tree->currentItem();
+		if (!it || it->childCount() > 0) return QString();
+		return it->text(0);
+	}
+
+	/// 依既有值(可為舊短名)以 DCC 代碼比對,選取對應項。
+	inline void setCurrentCode(QTreeWidget *tree, const QString &value)
+	{
+		const QString code = codeOf(value);
+		if (code.isEmpty()) return;
+		for (int i = 0; i < tree->topLevelItemCount(); ++i) {
+			QTreeWidgetItem *p = tree->topLevelItem(i);
+			for (int j = 0; j < p->childCount(); ++j) {
+				QTreeWidgetItem *c = p->child(j);
+				if (c->data(0, Qt::UserRole).toString() == code) {
+					tree->setCurrentItem(c);
+					return;
+				}
+			}
 		}
 	}
 }

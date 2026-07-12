@@ -3016,13 +3016,14 @@ void QETDiagramEditor::promptNewFolioBasics(Diagram *diagram)
 	title_cb->setCurrentText(tbp.title);
 	form->addRow(tr("分頁圖名"), title_cb);
 
-	// 文件類別:可編輯下拉,DCC 代碼(與圖框屬性對話框共用同一清單)
-	auto *type_cb = new QComboBox(&dlg);
-	type_cb->setEditable(true);
-	DccCodes::populate(type_cb);
-	type_cb->setCurrentText(
-		tbp.context.value(QStringLiteral("doc-type")).toString());
-	form->addRow(tr("文件類別"), type_cb);
+	// 文件類別:分類縮排的樹狀列表(DCC,與圖框屬性對話框共用同一清單)
+	const QString orig_doc_type =
+		tbp.context.value(QStringLiteral("doc-type")).toString();
+	auto *type_tree = new QTreeWidget(&dlg);
+	type_tree->setMaximumHeight(220);
+	DccCodes::populateTree(type_tree);
+	DccCodes::setCurrentCode(type_tree, orig_doc_type);
+	form->addRow(tr("文件類別"), type_tree);
 
 	auto *buttons = new QDialogButtonBox(
 		QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
@@ -3034,8 +3035,10 @@ void QETDiagramEditor::promptNewFolioBasics(Diagram *diagram)
 
 	TitleBlockProperties new_tbp = tbp;
 	new_tbp.title = title_cb->currentText().trimmed();
+	// 選到才用選取值;未選則保留原值
+	const QString picked = DccCodes::currentCode(type_tree);
 	new_tbp.context.addValue(QStringLiteral("doc-type"),
-				 type_cb->currentText().trimmed());
+				 picked.isEmpty() ? orig_doc_type : picked);
 	if (new_tbp != tbp)
 		diagram->undoStack().push(
 			new ChangeTitleBlockCommand(diagram, tbp, new_tbp));

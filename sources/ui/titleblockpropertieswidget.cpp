@@ -180,9 +180,10 @@ void TitleBlockPropertiesWidget::setProperties(
 		it.value()->setText(
 			properties.context.value(it.key()).toString());
 	}
-	if (m_doc_type_cb) {
-		m_doc_type_cb->setEditText(properties.context
-			.value(QStringLiteral("doc-type")).toString());
+	if (m_doc_type_tree) {
+		m_orig_doc_type = properties.context
+			.value(QStringLiteral("doc-type")).toString();
+		DccCodes::setCurrentCode(m_doc_type_tree, m_orig_doc_type);
 	}
 	if (m_project_doc_id_le) {
 		m_orig_doc_id = properties.context
@@ -432,10 +433,11 @@ void TitleBlockPropertiesWidget::initDialog(
 
 	auto *company_form = new QFormLayout();
 	/* type de document : codes DCC (IEC 61355, §5.2 du guide societe) */
-	m_doc_type_cb = new QComboBox(this);
-	m_doc_type_cb->setEditable(true);
-	DccCodes::populate(m_doc_type_cb);   // IEC 61355-1 DCC 清單(含說明 tooltip)
-	company_form->addRow(tr("Type de document :"), m_doc_type_cb);
+	// 文件類別:改用分類縮排的樹狀列表(IEC 61355-1 DCC,含說明 tooltip)
+	m_doc_type_tree = new QTreeWidget(this);
+	m_doc_type_tree->setMaximumHeight(200);
+	DccCodes::populateTree(m_doc_type_tree);
+	company_form->addRow(tr("Type de document :"), m_doc_type_tree);
 	const QList<QPair<QString, QString>> company_keys {
 		{QStringLiteral("techref"),     tr("Référence technique :")},
 		{QStringLiteral("checked-by"),  tr("Vérifié par :")},
@@ -695,9 +697,11 @@ void TitleBlockPropertiesWidget::applyCompanyFields(TitleBlockProperties &proper
 	     it != m_company_fields.constEnd() ; ++it) {
 		properties.context.addValue(it.key(), it.value()->text());
 	}
-	if (m_doc_type_cb) {
+	if (m_doc_type_tree) {
+		// 選到才用選取值;未選(如舊值不在清單)保留原值不遺失
+		const QString dt = DccCodes::currentCode(m_doc_type_tree);
 		properties.context.addValue(QStringLiteral("doc-type"),
-					    m_doc_type_cb->currentText());
+					    dt.isEmpty() ? m_orig_doc_type : dt);
 	}
 	if (m_project_doc_id_le) {
 		properties.context.addValue(QStringLiteral("doc-id"),

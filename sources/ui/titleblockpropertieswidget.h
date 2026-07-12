@@ -29,6 +29,7 @@
 
 class QComboBox;
 class QLineEdit;
+class QTreeWidget;
 
 class NumerotationContext;
 class QETProject;
@@ -111,7 +112,8 @@ class TitleBlockPropertiesWidget : public QWidget
 		DiagramContext m_reserved_context;
 
 		/// type de document : liste DCC (IEC 61355, codes societe)
-	QComboBox *m_doc_type_cb = nullptr;
+	QTreeWidget *m_doc_type_tree = nullptr;
+	QString m_orig_doc_type;   ///< 載入時的文件類別(未選到時回存,避免遺失非標準值)
 
 	/// champs communs a tous les folios du projet
 		QETProject *m_project = nullptr;
