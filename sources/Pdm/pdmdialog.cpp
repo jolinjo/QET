@@ -2286,6 +2286,11 @@ void PdmDialog::approveAndRelease()
 			// 核准者為空=待發行;發行時把選中項的 appd 填上核准者,
 			// 下次入庫/發行就不再列入(狀態機:appd 已填=已發行)。
 			PdmRevision::fillApprover(doc, chosen, m_username);
+			// 子頁圖框:本次異動的頁填上發行日期(yyyyMMdd)與修訂索引
+			PdmRevision::stampReleaseInfo(doc, chosen,
+				QDate::fromString(release_date,
+					QStringLiteral("yyyy-MM-dd"))
+					.toString(QStringLiteral("yyyyMMdd")));
 			// 修改者:彙整本次選中修訂項的修改者(去重、保留出現順序)
 			QStringList modifiers;
 			for (const PdmRevision::Entry &e : chosen) {

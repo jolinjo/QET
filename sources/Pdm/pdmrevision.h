@@ -66,6 +66,14 @@ namespace PdmRevision
 	bool fillApprover(QDomDocument &doc, const QList<Entry> &entries,
 			  const QString &approver);
 
+	/**
+		核准發行時,對本次有異動的各子頁(@a released 內出現的 diagram_index)
+		寫入圖框的「發行日期」(date 屬性,yyyyMMdd)與「修訂索引」(indexrev
+		屬性,取該頁修訂列最大版次,如 1、2、3)。回傳是否有變更。
+	*/
+	bool stampReleaseInfo(QDomDocument &doc, const QList<Entry> &released,
+			      const QString &release_date_yyyymmdd);
+
 	/// 把一組修訂項組成單一 changes 字串:「P3.說明 P7.說明」,同頁以 ; 併
 	QString formatChanges(const QList<Entry> &entries);
 

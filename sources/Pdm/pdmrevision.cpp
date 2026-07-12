@@ -20,6 +20,7 @@
 #include <QDomDocument>
 #include <QJsonArray>
 #include <QObject>
+#include <QSet>
 #include <QStringList>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -181,6 +182,53 @@ bool PdmRevision::fillApprover(QDomDocument &doc, const QList<Entry> &entries,
 		}
 	}
 	return changed;
+}
+
+bool PdmRevision::stampReleaseInfo(QDomDocument &doc,
+				   const QList<Entry> &released,
+				   const QString &release_date_yyyymmdd)
+{
+	if (release_date_yyyymmdd.isEmpty() || released.isEmpty()) return false;
+	QSet<int> changed;
+	for (const Entry &e : released)
+		if (e.diagram_index >= 0) changed.insert(e.diagram_index);
+
+	bool any = false;
+	int position = 0;
+	for (QDomElement diagram = doc.documentElement()
+		.firstChildElement(QStringLiteral("diagram"));
+	     !diagram.isNull();
+	     diagram = diagram.nextSiblingElement(QStringLiteral("diagram")),
+	     ++position) {
+		if (!changed.contains(position)) continue;
+		// 發行日期:圖框 date 屬性存 yyyyMMdd
+		diagram.setAttribute(QStringLiteral("date"), release_date_yyyymmdd);
+		// 修訂索引:取該頁「有修改內容」之修訂列的最大版次
+		int max_num = -1; bool has_num = false;
+		QChar max_alpha; bool has_alpha = false;
+		for (int row = 0; row < ROW_COUNT; ++row) {
+			if (diagramProperty(diagram, revKey(row, "desc"))
+				.trimmed().isEmpty()) continue;
+			const QString idx = diagramProperty(diagram,
+				revKey(row, "idx")).trimmed();
+			if (idx.isEmpty()) continue;
+			bool ok = false;
+			const int n = idx.toInt(&ok);
+			if (ok) { has_num = true; if (n > max_num) max_num = n; }
+			else if (idx.size() == 1 && idx.at(0).isLetter()) {
+				has_alpha = true;
+				const QChar c = idx.at(0).toUpper();
+				if (max_alpha.isNull() || c > max_alpha) max_alpha = c;
+			}
+		}
+		QString indexrev;
+		if (has_num) indexrev = QString::number(max_num);
+		else if (has_alpha) indexrev = QString(max_alpha);
+		if (!indexrev.isEmpty())
+			diagram.setAttribute(QStringLiteral("indexrev"), indexrev);
+		any = true;
+	}
+	return any;
 }
 
 QString PdmRevision::formatChanges(const QList<Entry> &entries)
