@@ -87,6 +87,11 @@ public:
 #include <QMenu>
 #include "qetversion.h"
 #include "qetlibraryrequirement.h"
+#include "changetitleblockcommand.h"
+#include "Pdm/pdmsettings.h"
+#include <QComboBox>
+#include <QFormLayout>
+#include <QDialogButtonBox>
 #include <QCoreApplication>
 #include "ElementsCollection/elementscollectionwidget.h"
 #include "QWidgetAnimation/qwidgetanimation.h"
@@ -1185,7 +1190,12 @@ void QETDiagramEditor::setUpActions()
 				current_project->project()->addNewDiagram();
 			//ouvrir directement le cartouche du nouveau folio
 			if (diagram) {
-				editDiagramProperties(diagram);
+				// 已登入 PDM:只跳簡化設定(分頁圖名+文件類別),
+				// 其餘欄位由系統管理;未登入才開完整圖框屬性。
+				if (!PdmSettings::username().isEmpty())
+					promptNewFolioBasics(diagram);
+				else
+					editDiagramProperties(diagram);
 			}
 		}
 	});
@@ -2968,6 +2978,69 @@ void QETDiagramEditor::editDiagramProperties(Diagram *diagram)
 		activateProject(project_view);
 		project_view -> editDiagramProperties(diagram);
 	}
+}
+
+/**
+	@brief QETDiagramEditor::promptNewFolioBasics
+	新增頁面(PDM 模式)用的簡化設定:只讓使用者選「分頁圖名」與「文件
+	類別」兩個下拉,其餘圖框欄位由系統管理。套用方式與完整圖框屬性對話框
+	一致(ChangeTitleBlockCommand,可復原)。
+*/
+void QETDiagramEditor::promptNewFolioBasics(Diagram *diagram)
+{
+	if (!diagram) return;
+	const TitleBlockProperties tbp =
+		diagram->border_and_titleblock.exportTitleBlock();
+
+	QDialog dlg(this);
+	dlg.setWindowTitle(tr("新增頁面"));
+	auto *form = new QFormLayout(&dlg);
+
+	// 分頁圖名:可編輯下拉,選項帶入專案內既有頁名(去重)方便沿用
+	auto *title_cb = new QComboBox(&dlg);
+	title_cb->setEditable(true);
+	QStringList titles;
+	if (QETProject *prj = diagram->project()) {
+		const QList<Diagram *> ds = prj->diagrams();
+		for (Diagram *d : ds) {
+			const QString t = d->border_and_titleblock
+				.exportTitleBlock().title.trimmed();
+			if (!t.isEmpty() && !titles.contains(t)) titles << t;
+		}
+	}
+	title_cb->addItems(titles);
+	title_cb->setCurrentText(tbp.title);
+	form->addRow(tr("分頁圖名"), title_cb);
+
+	// 文件類別:可編輯下拉,DCC 代碼(與圖框屬性對話框一致)
+	auto *type_cb = new QComboBox(&dlg);
+	type_cb->setEditable(true);
+	type_cb->addItems({
+		QStringLiteral("&EFS 電路圖"),
+		QStringLiteral("&EPB 零件清單"),
+		QStringLiteral("&ELD 佈置圖"),
+		QStringLiteral("&EMB 接線表"),
+		QStringLiteral("&EMA 接線圖"),
+		QStringLiteral("&EFA 概觀圖/單線圖") });
+	type_cb->setCurrentText(
+		tbp.context.value(QStringLiteral("doc-type")).toString());
+	form->addRow(tr("文件類別"), type_cb);
+
+	auto *buttons = new QDialogButtonBox(
+		QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+	connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+	connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+	form->addRow(buttons);
+
+	if (dlg.exec() != QDialog::Accepted) return;
+
+	TitleBlockProperties new_tbp = tbp;
+	new_tbp.title = title_cb->currentText().trimmed();
+	new_tbp.context.addValue(QStringLiteral("doc-type"),
+				 type_cb->currentText().trimmed());
+	if (new_tbp != tbp)
+		diagram->undoStack().push(
+			new ChangeTitleBlockCommand(diagram, tbp, new_tbp));
 }
 
 /**
