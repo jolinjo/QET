@@ -167,6 +167,10 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 	 * automatiquement a la validation */
 	auto *cur_rev_group = new QGroupBox(tr("Ajouter une révision"), this);
 	auto *cur_rev_form = new QFormLayout(cur_rev_group);
+	// 版次(修訂索引):系統自動由下方表格現有版次累加,使用者不可設定。
+	auto *cur_rev_idx = new QLineEdit(cur_rev_group);
+	cur_rev_idx->setReadOnly(true);
+	cur_rev_form->addRow(tr("Indice"), cur_rev_idx);
 	m_cur_rev_date = new QDateEdit(cur_rev_group);
 	m_cur_rev_date->setCalendarPopup(true);
 	m_cur_rev_date->setMinimumDate(QDate(1900, 1, 1));
@@ -191,6 +195,81 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 	// 保留物件供 editedProperties 讀取(永遠空值)。
 	m_cur_rev_appd = new QLineEdit(cur_rev_group);
 	m_cur_rev_appd->hide();
+
+	// 由下方表格現有版次自動推算「下一個版次」:全數字→最大值+1;
+	// 單一字母→下一字母;皆無→從 1 起。使用者不需(也不能)手動設定。
+	auto computeNextIdx = [this]() -> QString {
+		int max_num = -1; bool has_num = false;
+		QChar max_alpha; bool has_alpha = false;
+		for (int row = 0 ; row < ROW_COUNT ; ++row) {
+			const QString v = m_table->item(row, 0)->text().trimmed();
+			if (v.isEmpty()) continue;
+			bool ok = false;
+			const int n = v.toInt(&ok);
+			if (ok) { has_num = true; if (n > max_num) max_num = n; }
+			else if (v.size() == 1 && v.at(0).isLetter()) {
+				has_alpha = true;
+				const QChar c = v.at(0).toUpper();
+				if (max_alpha.isNull() || c > max_alpha) max_alpha = c;
+			}
+		}
+		if (has_num) return QString::number(max_num + 1);
+		if (has_alpha && max_alpha < QLatin1Char('Z'))
+			return QString(QChar(max_alpha.unicode() + 1));
+		if (has_alpha) return QString(max_alpha);   // 已到 Z:不再遞增
+		return QStringLiteral("1");
+	};
+	cur_rev_idx->setText(computeNextIdx());
+
+	// 「加入修訂記錄」:把目前表單的一筆寫進下方表格,清空表單以便再加下一筆
+	//(可一次加多筆);按「確定」時 editedProperties 會把表格所有列存回。
+	auto *add_rev_button = new QPushButton(tr("加入修訂記錄"), cur_rev_group);
+	add_rev_button->setEnabled(!m_diagram->isReadOnly());
+	cur_rev_form->addRow(QString(), add_rev_button);
+	connect(add_rev_button, &QPushButton::clicked, this,
+		[this, cur_rev_idx, computeNextIdx]() {
+		const QString desc = m_cur_rev_desc->text().trimmed();
+		if (desc.isEmpty()) {
+			QMessageBox::warning(this, tr("加入修訂記錄"),
+				tr("請先填寫「修改內容」。"));
+			return;
+		}
+		const QString date =
+			(m_cur_rev_date->date() == m_cur_rev_date->minimumDate())
+				? QString()
+				: m_cur_rev_date->date().toString(
+					  QStringLiteral("yyyy/M/d"));
+		const QStringList vals {
+			cur_rev_idx->text().trimmed(), date,
+			m_cur_rev_zone->text().trimmed(), desc,
+			m_cur_rev_by->text().trimmed(),
+			m_cur_rev_appd->text().trimmed() };
+		// 找第一列全空的,滿了就滾動(移除最舊、寫最後一列)
+		int free_row = -1;
+		for (int row = 0 ; row < ROW_COUNT ; ++row) {
+			bool empty = true;
+			for (int c = 0 ; c < REV_FIELD_COUNT ; ++c)
+				if (!m_table->item(row, c)->text().isEmpty()) {
+					empty = false; break;
+				}
+			if (empty) { free_row = row; break; }
+		}
+		if (free_row == -1) {
+			for (int row = 0 ; row < ROW_COUNT - 1 ; ++row)
+				for (int c = 0 ; c < REV_FIELD_COUNT ; ++c)
+					m_table->item(row, c)->setText(
+						m_table->item(row + 1, c)->text());
+			free_row = ROW_COUNT - 1;
+		}
+		for (int c = 0 ; c < REV_FIELD_COUNT ; ++c)
+			m_table->item(free_row, c)->setText(vals.at(c));
+		// 清空表單以便再加下一筆(修改者保留;日期回今天);版次重新推算
+		m_cur_rev_desc->clear();
+		m_cur_rev_zone->clear();
+		m_cur_rev_date->setDate(QDate::currentDate());
+		cur_rev_idx->setText(computeNextIdx());
+		m_cur_rev_desc->setFocus();
+	});
 
 	auto *buttons = new QDialogButtonBox(
 		m_diagram->isReadOnly()
@@ -531,8 +610,31 @@ TitleBlockProperties FolioRevisionsDialog::editedProperties() const
 			? QString()
 			: m_cur_rev_date->date().toString(
 				  QStringLiteral("yyyy/M/d"));
+	// 版次由表格現有值自動累加(與「加入修訂記錄」按鈕一致),使用者不設定
+	QString auto_idx;
+	{
+		int max_num = -1; bool has_num = false;
+		QChar max_alpha; bool has_alpha = false;
+		for (int row = 0 ; row < ROW_COUNT ; ++row) {
+			const QString v = m_table->item(row, 0)->text().trimmed();
+			if (v.isEmpty()) continue;
+			bool ok = false;
+			const int n = v.toInt(&ok);
+			if (ok) { has_num = true; if (n > max_num) max_num = n; }
+			else if (v.size() == 1 && v.at(0).isLetter()) {
+				has_alpha = true;
+				const QChar c = v.at(0).toUpper();
+				if (max_alpha.isNull() || c > max_alpha) max_alpha = c;
+			}
+		}
+		if (has_num) auto_idx = QString::number(max_num + 1);
+		else if (has_alpha && max_alpha < QLatin1Char('Z'))
+			auto_idx = QString(QChar(max_alpha.unicode() + 1));
+		else if (has_alpha) auto_idx = QString(max_alpha);
+		else auto_idx = QStringLiteral("1");
+	}
 	QStringList new_rev {
-		m_indexrev->text().trimmed(),
+		auto_idx,
 		new_rev_date,
 		m_cur_rev_zone->text().trimmed(),
 		m_cur_rev_desc->text().trimmed(),
