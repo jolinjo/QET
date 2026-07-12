@@ -89,6 +89,7 @@ class QETDiagramEditor : public QETMainWindow
 		void updateWelcomeWidget();
 		void setUpElementsPanel ();
 		void setUpElementsCollectionWidget();
+		void checkLibraryRequirements();
 		void setUpUndoStack     ();
 		void setUpSelectionPropertiesEditor();
 		void setUpAutonumberingWidget();

@@ -59,6 +59,8 @@ class ElementsCollectionWidget : public QWidget
 		void highlightUnusedElement();
 		void setCurrentLocation(const ElementsLocation &location);
 		void applyLibraryFont(const QFont &font);
+		/// 線上更新公司元件庫(啟動提醒的一鍵更新亦呼叫此)
+		void updateLibraryFromGit();
 
 	protected:
 		void leaveEvent(QEvent *event) override;
@@ -68,7 +70,6 @@ class ElementsCollectionWidget : public QWidget
 		void placeElementAtIndex(const QModelIndex &index);
 		void updateGridRoot(const QModelIndex &index);
 		void hideElementRows(const QModelIndex &parent = QModelIndex());
-		void updateLibraryFromGit();
 		void applyGridDisplaySettings();
 		void updateGridGeometry();
 		void setUpAction();

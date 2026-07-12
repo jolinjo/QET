@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/">
+        <file alias="library-requirements.json">misc/library-requirements.json</file>
         <file>ico/128x128/diagram.png</file>
         <file>ico/128x128/settings.png</file>
         <file>ico/128x128/document-export.png</file>

@@ -86,6 +86,7 @@ public:
 #include <QMenuBar>
 #include <QMenu>
 #include "qetversion.h"
+#include "qetlibraryrequirement.h"
 #include <QCoreApplication>
 #include "ElementsCollection/elementscollectionwidget.h"
 #include "QWidgetAnimation/qwidgetanimation.h"
@@ -225,6 +226,43 @@ QETDiagramEditor::QETDiagramEditor(const QStringList &files, QWidget *parent) :
 
 	slot_updateActions();
 	updateWelcomeWidget();
+
+	// 啟動時(僅一次)檢查本機元件庫版本是否落後於此軟體版本綁定的需求,
+	// 過舊則提醒使用者更新。延後到事件迴圈,避免拖慢視窗顯示。
+	static bool library_checked = false;
+	if (!library_checked) {
+		library_checked = true;
+		QTimer::singleShot(0, this, &QETDiagramEditor::checkLibraryRequirements);
+	}
+}
+
+void QETDiagramEditor::checkLibraryRequirements()
+{
+	const QList<QetLibraryRequirement::Outdated> items =
+		QetLibraryRequirement::outdated();
+	if (items.isEmpty()) return;
+
+	QStringList lines;
+	for (const QetLibraryRequirement::Outdated &o : items) {
+		lines << tr("• %1:本機 %2,需求 %3")
+			.arg(o.display,
+			     o.local.isEmpty() ? tr("(未安裝)") : o.local,
+			     o.required);
+	}
+
+	QMessageBox box(this);
+	box.setIcon(QMessageBox::Warning);
+	box.setWindowTitle(tr("元件庫需要更新"));
+	box.setText(tr("本機元件庫版本低於此程式版本所需,建議立即更新以確保"
+		       "範本與圖框正確。"));
+	box.setInformativeText(lines.join(QLatin1Char('\n')));
+	QPushButton *update_btn = box.addButton(
+		tr("立即更新元件庫"), QMessageBox::AcceptRole);
+	box.addButton(tr("稍後"), QMessageBox::RejectRole);
+	box.setDefaultButton(update_btn);
+	box.exec();
+	if (box.clickedButton() == update_btn && m_element_collection_widget)
+		m_element_collection_widget->updateLibraryFromGit();
 }
 
 /**
