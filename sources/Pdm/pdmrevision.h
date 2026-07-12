@@ -39,6 +39,7 @@ namespace PdmRevision
 		int row = -1;           ///< rev 列 index(0..5;回填核准者用)
 		QString title;          ///< 子圖名(diagram 的 title 屬性)
 		QString date;           ///< 原始日期字串(顯示用,如 2026/5/31)
+		QString zone;           ///< 座標(修訂位置)
 		QString desc;           ///< 修訂說明
 		QString by;             ///< 修改者
 		QDate parsed_date;      ///< 解析後日期(排序用)

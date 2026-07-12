@@ -139,6 +139,7 @@ QList<PdmRevision::Entry> PdmRevision::collectChanges(const QDomDocument &doc)
 			e.row = row;
 			e.title = title;
 			e.date = date_str;
+			e.zone = diagramProperty(diagram, revKey(row, "zone")).trimmed();
 			e.desc = desc;
 			e.by = diagramProperty(diagram, revKey(row, "by")).trimmed();
 			e.parsed_date = parseRevDate(date_str);
@@ -184,15 +185,21 @@ bool PdmRevision::fillApprover(QDomDocument &doc, const QList<Entry> &entries,
 
 QString PdmRevision::formatChanges(const QList<Entry> &entries)
 {
-	// 同頁多筆併進同一段:P3.a;b;c   跨頁以空白分隔
+	// 格式:P{頁碼}.座標-修改內容/座標-修改內容 …,同頁多筆以 / 分隔,
+	// 跨頁以空白分隔。座標為空則只列修改內容(避免出現前導「-」)。
 	QMap<int, QStringList> by_folio;   // QMap 依 key 排序 = 依頁碼
-	for (const Entry &e : entries)
-		by_folio[e.folio].append(e.desc);
+	for (const Entry &e : entries) {
+		const QString zone = e.zone.trimmed();
+		const QString item = zone.isEmpty()
+			? e.desc
+			: QStringLiteral("%1-%2").arg(zone, e.desc);
+		by_folio[e.folio].append(item);
+	}
 
 	QStringList parts;
 	for (auto it = by_folio.constBegin(); it != by_folio.constEnd(); ++it) {
 		parts.append(QStringLiteral("P%1.%2")
-			.arg(it.key()).arg(it.value().join(QLatin1Char(';'))));
+			.arg(it.key()).arg(it.value().join(QLatin1Char('/'))));
 	}
 	return parts.join(QLatin1Char(' '));
 }
@@ -250,6 +257,7 @@ QString PdmRevision::encodeCommit(const QString &human_summary,
 		changes.append(QJsonObject{
 			{QStringLiteral("folio"), e.folio},
 			{QStringLiteral("date"),  e.date},
+			{QStringLiteral("zone"),  e.zone},
 			{QStringLiteral("desc"),  e.desc}});
 	}
 	const QJsonObject root{
@@ -292,6 +300,7 @@ bool PdmRevision::decodeCommit(const QString &commit_message, CommitMeta *out)
 		Entry e;
 		e.folio = o.value(QStringLiteral("folio")).toInt();
 		e.date  = o.value(QStringLiteral("date")).toString();
+		e.zone  = o.value(QStringLiteral("zone")).toString();
 		e.desc  = o.value(QStringLiteral("desc")).toString();
 		e.parsed_date = parseRevDate(e.date);
 		out->changes.append(e);
