@@ -604,50 +604,9 @@ TitleBlockProperties FolioRevisionsDialog::editedProperties() const
 			}
 		}
 	}
-	//nouvelle revision saisie dans le formulaire d'ajout
-	const QString new_rev_date =
-		(m_cur_rev_date->date() == m_cur_rev_date->minimumDate())
-			? QString()
-			: m_cur_rev_date->date().toString(
-				  QStringLiteral("yyyy/M/d"));
-	// 版次由表格現有值自動累加(與「加入修訂記錄」按鈕一致),使用者不設定
-	QString auto_idx;
-	{
-		int max_num = -1; bool has_num = false;
-		QChar max_alpha; bool has_alpha = false;
-		for (int row = 0 ; row < ROW_COUNT ; ++row) {
-			const QString v = m_table->item(row, 0)->text().trimmed();
-			if (v.isEmpty()) continue;
-			bool ok = false;
-			const int n = v.toInt(&ok);
-			if (ok) { has_num = true; if (n > max_num) max_num = n; }
-			else if (v.size() == 1 && v.at(0).isLetter()) {
-				has_alpha = true;
-				const QChar c = v.at(0).toUpper();
-				if (max_alpha.isNull() || c > max_alpha) max_alpha = c;
-			}
-		}
-		if (has_num) auto_idx = QString::number(max_num + 1);
-		else if (has_alpha && max_alpha < QLatin1Char('Z'))
-			auto_idx = QString(QChar(max_alpha.unicode() + 1));
-		else if (has_alpha) auto_idx = QString(max_alpha);
-		else auto_idx = QStringLiteral("1");
-	}
-	QStringList new_rev {
-		auto_idx,
-		new_rev_date,
-		m_cur_rev_zone->text().trimmed(),
-		m_cur_rev_desc->text().trimmed(),
-		m_cur_rev_by->text().trimmed(),
-		m_cur_rev_appd->text().trimmed() };
-	/* la date seule (pre-remplie a aujourd'hui) et l'indice repris du
-	 * champ du haut ne suffisent pas a vouloir une nouvelle ligne */
-	const bool new_rev_wanted = !new_rev.at(2).isEmpty()
-				    || !new_rev.at(3).isEmpty()
-				    || !new_rev.at(4).isEmpty()
-				    || !new_rev.at(5).isEmpty();
-
-	if (any_value || new_rev_wanted
+	/* 只保存表格內容:新增修訂一律透過「加入修訂記錄」按鈕寫入表格,
+	 * 按「確定」不再自行補一列(使用者要求:確定後直接關閉即可)。 */
+	if (any_value
 	    || properties.context.keys().contains(QStringLiteral("rev1-idx"))) {
 		//contenu du tableau (lignes existantes, deja compactees)
 		QList<QStringList> lines;
@@ -662,13 +621,6 @@ TitleBlockProperties FolioRevisionsDialog::editedProperties() const
 				values << value;
 			}
 			if (!empty) lines << values;
-		}
-		if (new_rev_wanted) {
-			if (lines.count() >= ROW_COUNT) {
-				//defilement : la plus ancienne disparait
-				lines.removeFirst();
-			}
-			lines << new_rev;
 		}
 		for (int row = 0 ; row < ROW_COUNT ; ++row) {
 			for (int column = 0 ; column < REV_FIELD_COUNT ;
