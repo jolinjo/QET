@@ -289,7 +289,9 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 
 	m_tabs = new QTabWidget(this);
 	m_tabs->addTab(current_page, tr("Ce folio"));
-	m_tabs->addTab(all_page, tr("Tous les folios"));
+	// 登入 PDM 時不顯示「全部頁面」批次頁籤(修訂逐頁記錄,避免整批套用)
+	if (PdmSettings::username().isEmpty())
+		m_tabs->addTab(all_page, tr("Tous les folios"));
 	if (m_diagram->isReadOnly()) {
 		all_page->setEnabled(false);
 	}
