@@ -37,6 +37,7 @@ namespace PdmRevision
 		int folio = 0;          ///< 顯示用頁碼(order 屬性或位置+1)
 		int diagram_index = -1; ///< 0-based 頁位置(發行時回填核准者用,穩定)
 		int row = -1;           ///< rev 列 index(0..5;回填核准者用)
+		QString title;          ///< 子圖名(diagram 的 title 屬性)
 		QString date;           ///< 原始日期字串(顯示用,如 2026/5/31)
 		QString desc;           ///< 修訂說明
 		QString by;             ///< 修改者

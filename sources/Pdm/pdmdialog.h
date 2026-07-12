@@ -166,7 +166,14 @@ class PdmDialog : public QDialog
 					 const QString &title,
 					 const QString &summary_label,
 					 QString *commit_message,
-					 QString *human_summary);
+					 QString *human_summary,
+					 bool require_changes = false);
+
+		/// 送審類流程用:檢查該檔是否有「待發行修訂項」(核准者為空者);
+		/// 沒有則跳詳細說明並回 false(呼叫端據此中止送審)。@a doc 為已載入
+		/// 的 .qet 文件。
+		bool ensureHasPendingChanges(const QDomDocument &doc,
+					     const QString &title);
 
 		/**
 			發行前:放行者從「自上次發行後的增修項」中勾選要寫入首頁

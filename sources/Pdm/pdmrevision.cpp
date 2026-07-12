@@ -117,6 +117,8 @@ QList<PdmRevision::Entry> PdmRevision::collectChanges(const QDomDocument &doc)
 		const int order = diagram.attribute(QStringLiteral("order"))
 			.toInt(&order_ok);
 		const int folio = order_ok && order > 0 ? order : position;
+		const QString title = diagram.attribute(QStringLiteral("title"))
+			.trimmed();
 
 		for (int row = 0; row < ROW_COUNT; ++row) {
 			const QString desc = diagramProperty(diagram,
@@ -133,6 +135,7 @@ QList<PdmRevision::Entry> PdmRevision::collectChanges(const QDomDocument &doc)
 			e.folio = folio;
 			e.diagram_index = index;
 			e.row = row;
+			e.title = title;
 			e.date = date_str;
 			e.desc = desc;
 			e.by = diagramProperty(diagram, revKey(row, "by")).trimmed();

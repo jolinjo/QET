@@ -1215,9 +1215,11 @@ void PdmDialog::populateFileList()
 	const auto lifecycleStatus = [this](const FileState &state) -> QString {
 		const QString owner = state.lock_owner;
 		if (state.pr_index > 0)
+			// 不顯示 PR 編號;確認者確認後(pr_approved)= 等待核准者核准,
+			// 否則 = 等待確認者確認。
 			return state.pr_approved
-				? tr("已確認待發行(#%1)").arg(state.pr_index)
-				: tr("審核中(#%1)").arg(state.pr_index);
+				? tr("審核中(等待核准)")
+				: tr("審核中(等待確認)");
 		if (owner == m_username && !owner.isEmpty())
 			return tr("編輯中(我)");
 		if (!owner.isEmpty()) return tr("出庫中");
@@ -1541,11 +1543,38 @@ void PdmDialog::checkOut()
 		});
 }
 
+bool PdmDialog::ensureHasPendingChanges(const QDomDocument &doc,
+				       const QString &title)
+{
+	if (!PdmRevision::collectChanges(doc).isEmpty())
+		return true;   // 有待發行修訂項,放行
+
+	QMessageBox box(this);
+	box.setIcon(QMessageBox::Warning);
+	box.setWindowTitle(title);
+	box.setText(tr("無法送審:找不到本次的修訂內容。"));
+	box.setInformativeText(tr(
+		"送審前必須先記錄「這次改了什麼」——系統在各頁圖框的「本頁修訂」\n"
+		"欄找不到任何待發行的修訂項(核准者欄位為空者),簽核者將無從得知\n"
+		"改了什麼。\n\n"
+		"請這樣做:\n"
+		"1. 在有改動的每一頁,開啟圖框的「本頁修訂」對話框。\n"
+		"2. 新增一筆修訂,填寫「修改內容」(修改者會自動帶入你的帳號)。\n"
+		"3. 完成後再送審。\n\n"
+		"說明:核准者欄位為空 = 尚未發行的修訂;核准發行時系統才會填上\n"
+		"核准者,之後那筆就不再算「待發行」。這樣每次送審/發行都有明確\n"
+		"的修訂紀錄可供簽核與追溯。"));
+	box.setStandardButtons(QMessageBox::Ok);
+	box.exec();
+	return false;
+}
+
 bool PdmDialog::promptCheckinCommit(const QString &abs_path,
 				    const QString &title,
 				    const QString &summary_label,
 				    QString *commit_message,
-				    QString *human_summary)
+				    QString *human_summary,
+				    bool require_changes)
 {
 	// 讀已存檔的工作區 .qet,收集各頁修訂欄的修訂項(Phase B:全收,
 	// 由使用者勾選;Phase C 會改以「上次發行日期」過濾)。
@@ -1562,6 +1591,16 @@ bool PdmDialog::promptCheckinCommit(const QString &abs_path,
 			work_version = PdmVersion::workVersion(doc);
 		}
 		file.close();
+	}
+
+	// 送審類流程(require_changes)才卡控:沒有待發行修訂項就禁止並說明。
+	// 一般入庫納管不卡(允許只是存進度)。
+	if (require_changes && entries.isEmpty()) {
+		QDomDocument doc;
+		QFile file(abs_path);
+		if (file.open(QIODevice::ReadOnly)) { doc.setContent(&file); file.close(); }
+		ensureHasPendingChanges(doc, title);   // 一定回 false(entries 空)
+		return false;
 	}
 
 	QDialog dialog(this);
@@ -1802,6 +1841,18 @@ void PdmDialog::submitForReview()
 	if (!item) return;
 	const QString rel_path = item->data(0, Qt::UserRole).toString();
 	const QString stem = sanitizedStem(rel_path);
+	const QString branch = workBranchOf(rel_path);
+	const QString worktree = worktreeDir(sanitizedStem(rel_path));
+	const QString abs_path = worktree + '/' + rel_path;
+
+	// 完成送審卡控:沒有待發行修訂項就擋並詳細說明。讀工作區檔(已入庫未
+	// 送審一定有 worktree);換機無 worktree 則略過此檢查(少見)。
+	if (QFile::exists(abs_path)) {
+		QDomDocument doc;
+		QFile f(abs_path);
+		if (f.open(QIODevice::ReadOnly)) { doc.setContent(&f); f.close(); }
+		if (!ensureHasPendingChanges(doc, tr("送審"))) return;
+	}
 
 	bool accepted = false;
 	const QString body = QInputDialog::getMultiLineText(this,
@@ -1814,10 +1865,6 @@ void PdmDialog::submitForReview()
 	}
 
 	showBusy(true, true, 3);
-
-	const QString branch = workBranchOf(rel_path);
-	const QString worktree = worktreeDir(sanitizedStem(rel_path));
-	const QString abs_path = worktree + '/' + rel_path;
 
 	auto open_pull_request = [this, rel_path, stem, branch,
 				  body = body.trimmed()]() {
@@ -1884,7 +1931,7 @@ void PdmDialog::checkInAndSubmit()
 	QString commit_msg, msg;
 	if (!promptCheckinCommit(abs_path, tr("入庫送審"),
 				 tr("送審說明(必填,審核者會看到):"),
-				 &commit_msg, &msg))
+				 &commit_msg, &msg, /*require_changes=*/true))
 		return;
 
 	// 把「審核中」戳進圖框 → 單一 commit(內容+狀態一起)→ push → 解鎖 → 開 PR。
@@ -2608,28 +2655,23 @@ void PdmDialog::loadReleaseHistory(const QString &rel_path)
 			QMap<int, QList<PdmRevision::Entry>> by_folio;
 			for (const PdmRevision::Entry &e : entries)
 				by_folio[e.folio].append(e);
-			int newest_folio = by_folio.constBegin().key();
-			QDate newest;
-			for (const PdmRevision::Entry &e : entries)
-				if (e.parsed_date.isValid()
-				    && (!newest.isValid()
-					|| e.parsed_date > newest)) {
-					newest = e.parsed_date;
-					newest_folio = e.folio;
-				}
 			auto *root = new QTreeWidgetItem({tr("本次送審修訂內容")});
 			m_history_tree->insertTopLevelItem(0, root);
 			QFont rf = root->font(0); rf.setBold(true);
 			root->setFont(0, rf);
 			for (auto it = by_folio.constBegin();
 			     it != by_folio.constEnd(); ++it) {
+				// 括號內顯示子圖名(diagram title),而非筆數
+				const QString title = it.value().first().title;
 				auto *page = new QTreeWidgetItem(root,
-					{tr("第 %1 頁(%2 筆)")
-						.arg(it.key()).arg(it.value().size())});
+					{title.isEmpty()
+						? tr("第 %1 頁").arg(it.key())
+						: tr("第 %1 頁(%2)")
+							.arg(it.key()).arg(title)});
 				for (const PdmRevision::Entry &e : it.value())
 					new QTreeWidgetItem(page,
 						{QString(), e.date, e.by, e.desc});
-				page->setExpanded(it.key() == newest_folio);
+				page->setExpanded(true);   // 每頁都展開
 			}
 			root->setExpanded(true);
 		};
