@@ -117,7 +117,8 @@ QList<QetLibraryRequirement::Outdated> QetLibraryRequirement::outdated(
 	// 公司圖框:titleblocks-company 內檔名版本
 	if (!req.titleblock.isEmpty()) {
 		const QString local = localVersion(
-			QStringLiteral("titleblocks-company"), QStringLiteral("*"));
+			QStringLiteral("titleblocks-company"),
+			QStringLiteral("*.titleblock"));
 		if (!local.isEmpty() && compareVersion(local, req.titleblock) < 0) {
 			result << Outdated{
 				QObject::tr("公司圖框"), req.titleblock, local};

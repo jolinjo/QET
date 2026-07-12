@@ -1,5 +1,5 @@
 {
   "_comment": "此軟體版本綁定的元件庫最低版本。每次 OTA 發行時,把當前隨附的專案範本(Project-Example)與公司圖框(titleblocks-company)版本一併填入。啟動時若本機元件庫版本低於此處,會提醒使用者更新。版本字串沿用檔名版本 token(如 v0.6);留空字串則不檢查該項。",
   "project_template": "v0.6",
-  "titleblock": ""
+  "titleblock": "v0.0.3"
 }
