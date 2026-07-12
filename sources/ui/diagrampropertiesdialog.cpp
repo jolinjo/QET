@@ -69,7 +69,9 @@ DiagramPropertiesDialog::DiagramPropertiesDialog(Diagram *diagram, QWidget *pare
 	m_cpw -> setReadOnly(diagram_is_read_only);
 
 	QComboBox *autonum_combobox = m_cpw->autonumComboBox();
-	autonum_combobox->addItems(diagram->project()->conductorAutoNum().keys());
+	QStringList autonum_keys(diagram->project()->conductorAutoNum().keys());
+	autonum_keys.sort();
+	autonum_combobox->addItems(autonum_keys);
 	autonum_combobox->setCurrentIndex(autonum_combobox->findText(diagram->conductorsAutonumName()));
 
 	connect(m_cpw->editAutonumPushButton(), &QPushButton::clicked, this, &DiagramPropertiesDialog::editAutonum);
@@ -143,7 +145,9 @@ void DiagramPropertiesDialog::editAutonum()
 	ppd.setCurrentPage(ProjectPropertiesDialog::Autonum);
 	ppd.exec();
 	m_cpw->autonumComboBox()->clear();
-	m_cpw->autonumComboBox()->addItems(m_diagram->project()->conductorAutoNum().keys());
+	QStringList autonum_keys(m_diagram->project()->conductorAutoNum().keys());
+	autonum_keys.sort();
+	m_cpw->autonumComboBox()->addItems(autonum_keys);
 }
 
 /**

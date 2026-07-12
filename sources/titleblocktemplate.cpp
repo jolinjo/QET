@@ -1681,13 +1681,24 @@ void TitleBlockTemplate::renderCell(QPainter &painter,
 			 *    since they offer a potentially better
 			 *    (or, at least, not resolution-limited) rendering
 			 */
+			/* logo 依原始長寬比縮放到格子內最大尺寸並置中,
+			 * 避免橫式 logo 被拉伸變形(維持比例、四周留白)。*/
 			if (vector_logos_.contains(cell.logo_reference)) {
-				vector_logos_[cell.logo_reference] -> render(
-							&painter,
-							cell_rect);
+				QSvgRenderer *svg =
+						vector_logos_[cell.logo_reference];
+				QSize sz = svg->defaultSize();
+				sz.scale(cell_rect.size(), Qt::KeepAspectRatio);
+				QRect target(QPoint(0, 0), sz);
+				target.moveCenter(cell_rect.center());
+				svg->render(&painter, target);
 			} else if (bitmap_logos_.contains(cell.logo_reference)) {
-				painter.drawPixmap(cell_rect,
-						   bitmap_logos_[cell.logo_reference]);
+				const QPixmap &px =
+						bitmap_logos_[cell.logo_reference];
+				QSize sz = px.size();
+				sz.scale(cell_rect.size(), Qt::KeepAspectRatio);
+				QRect target(QPoint(0, 0), sz);
+				target.moveCenter(cell_rect.center());
+				painter.drawPixmap(target, px);
 			}
 		}
 	} else if (cell.type() == TitleBlockCell::TextCell) {

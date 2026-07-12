@@ -17,6 +17,8 @@
 */
 #include "titleblockpropertieswidget.h"
 
+#include <algorithm>
+
 #include "../Pdm/pdmsettings.h"
 #include "../diagram.h"
 #include "../qetapp.h"
@@ -509,6 +511,7 @@ void TitleBlockPropertiesWidget::initDialog(
 
 	if (project!= nullptr){
 		keys_2 = project -> folioAutoNum().keys();
+		std::sort(keys_2.begin(), keys_2.end());   // 規則清單依名稱排序
 		foreach (QString str, keys_2) { ui -> auto_page_cb -> addItem(str); }
 		if (ui->auto_page_cb->currentText()==nullptr)
 			ui->auto_page_cb->addItem(tr("Créer un Folio Numérotation Auto"));

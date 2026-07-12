@@ -313,20 +313,23 @@ void ProjectAutoNumConfigPage::initWidgets()
 */
 void ProjectAutoNumConfigPage::readValuesFromProject()
 {
-		//Conductor Tab
-	const QStringList strlc(m_project->conductorAutoNum().keys());
+		//Conductor Tab（規則清單依名稱排序，避免 QHash 隨機序）
+	QStringList strlc(m_project->conductorAutoNum().keys());
+	strlc.sort();
 	m_saw_conductor->contextComboBox()->addItems(strlc);
-	
+
 		//Element Tab
-	const QStringList strle(m_project->elementAutoNum().keys());
+	QStringList strle(m_project->elementAutoNum().keys());
+	strle.sort();
 	m_saw_element->contextComboBox()->addItems(strle);
-	
+
 		//Folio Tab
-	const QStringList strlf(m_project->folioAutoNum().keys());
+	QStringList strlf(m_project->folioAutoNum().keys());
+	strlf.sort();
 	m_saw_folio->contextComboBox()->addItems(strlf);
-	
+
 		//Folio AutoNumbering Tab
-	m_faw->setContext(m_project->folioAutoNum().keys());
+	m_faw->setContext(strlf);
 }
 
 /**

@@ -17,6 +17,8 @@
 */
 #include "autonumberingdockwidget.h"
 
+#include <algorithm>
+
 #include "../../diagram.h"
 #include "../../diagramview.h"
 #include "../../qetapp.h"
@@ -166,6 +168,7 @@ void AutoNumberingDockWidget::setContext()
 	//Conductor Combobox
 	ui->m_conductor_cb->addItem("");
 	QList <QString> keys_conductor = m_project->conductorAutoNum().keys();
+	std::sort(keys_conductor.begin(), keys_conductor.end());
 	if (!keys_conductor.isEmpty()) {
 		foreach (QString str, keys_conductor)
 		{ ui->m_conductor_cb-> addItem(str); }
@@ -174,6 +177,7 @@ void AutoNumberingDockWidget::setContext()
 	//Element Combobox
 	ui->m_element_cb->addItem("");
 	QList <QString> keys_element = m_project->elementAutoNum().keys();
+	std::sort(keys_element.begin(), keys_element.end());
 	if (!keys_element.isEmpty()) {
 		foreach (QString str, keys_element)
 		{ui->m_element_cb -> addItem(str);}
@@ -182,6 +186,7 @@ void AutoNumberingDockWidget::setContext()
 	//Folio Combobox
 	ui->m_folio_cb->addItem("");
 	QList <QString> keys_folio = m_project->folioAutoNum().keys();
+	std::sort(keys_folio.begin(), keys_folio.end());
 	if (!keys_folio.isEmpty()) {
 		foreach (QString str, keys_folio)
 		{ ui->m_folio_cb -> addItem(str);}
@@ -243,6 +248,7 @@ void AutoNumberingDockWidget::conductorAutoNumChanged()
 	//Conductor Combobox
 	ui->m_conductor_cb->addItem("");
 	QList <QString> keys_conductor = m_project->conductorAutoNum().keys();
+	std::sort(keys_conductor.begin(), keys_conductor.end());
 	if (!keys_conductor.isEmpty()) {
 		foreach (QString str, keys_conductor)
 		{ ui->m_conductor_cb-> addItem(str); }
@@ -275,6 +281,7 @@ void AutoNumberingDockWidget::elementAutoNumChanged()
 	//Element Combobox
 	ui->m_element_cb->addItem("");
 	QList <QString> keys_element = m_project->elementAutoNum().keys();
+	std::sort(keys_element.begin(), keys_element.end());
 	if (!keys_element.isEmpty()) {
 		foreach (QString str, keys_element) {ui->m_element_cb -> addItem(str);}
 	}
@@ -303,6 +310,7 @@ void AutoNumberingDockWidget::folioAutoNumChanged()
 	//Folio Combobox
 	ui->m_folio_cb->addItem("");
 	QList <QString> keys_folio = m_project->folioAutoNum().keys();
+	std::sort(keys_folio.begin(), keys_folio.end());
 	if (!keys_folio.isEmpty()) {
 		foreach (QString str, keys_folio) { ui->m_folio_cb -> addItem(str);}
 	}
