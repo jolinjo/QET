@@ -124,6 +124,14 @@ FolioRevisionsDialog::FolioRevisionsDialog(Diagram *diagram, QWidget *parent) :
 	issue_row->addWidget(issue_clear);
 	form->addRow(tr("Date de publication :"), issue_row);
 
+	// 已登入 PDM:修訂索引(版本)、文件狀態、發行日期都由系統管理(版本三拆、
+	// 核准發行時填),使用者不手動設定 → 隱藏這三列。
+	if (!PdmSettings::username().isEmpty()) {
+		form->setRowVisible(m_indexrev, false);
+		form->setRowVisible(m_doc_status, false);
+		form->setRowVisible(issue_row, false);
+	}
+
 	m_table = new QTableWidget(ROW_COUNT, REV_FIELD_COUNT, this);
 	m_table->setHorizontalHeaderLabels({
 		tr("Indice"), tr("Date"), tr("Zone"),

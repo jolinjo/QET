@@ -1348,6 +1348,9 @@ void PdmDialog::addDrawingFromFile(const QString &source)
 		const QString d = QFileInfo(p).path();
 		if (d != QLatin1String(".") && !folders.contains(d)) folders << d;
 	}
+	// 也納入使用者新增、尚無圖檔的空資料夾(以 .gitkeep 佔位者)
+	for (const QString &d : m_extra_folders)
+		if (!folders.contains(d)) folders << d;
 	folders.sort();
 	folder_cb->addItems(folders);
 	auto *num_le = new QLineEdit(QFileInfo(source).completeBaseName(), &dlg);
