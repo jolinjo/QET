@@ -975,6 +975,7 @@ void ElementsCollectionWidget::setUpWidget()
 	m_grid_view->setDragDropMode(QAbstractItemView::DragOnly);
 	m_grid_view->setSelectionMode(QAbstractItemView::SingleSelection);
 	m_grid_view->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+	m_grid_view->setContextMenuPolicy(Qt::CustomContextMenu);
 	m_grid_delegate = new GridElementDelegate(
 		[this](const QModelIndex &index) -> QString {
 			ElementCollectionItem *eci =
@@ -1089,6 +1090,20 @@ void ElementsCollectionWidget::setUpConnection()
 {
 	connect(m_tree_view, &QTreeView::customContextMenuRequested,
 		this, &ElementsCollectionWidget::customContextMenu);
+	// 底部縮圖(grid):右鍵選單只提供「編輯元件」(縮圖項目一律是元件葉節點)
+	connect(m_grid_view, &QListView::customContextMenuRequested,
+		this, [this](const QPoint &point) {
+		m_index_at_context_menu = m_grid_view->indexAt(point);
+		if (!m_index_at_context_menu.isValid()) return;
+		ElementCollectionItem *eci =
+			elementCollectionItemForIndex(m_index_at_context_menu);
+		if (!(eci && eci->isElement())
+		    || eci->collectionPath().endsWith(QLatin1String(".qetmak")))
+			return;
+		m_context_menu->clear();
+		m_context_menu->addAction(m_edit_element);
+		m_context_menu->popup(m_grid_view->viewport()->mapToGlobal(point));
+	});
 	connect(m_tree_view, &QTreeView::clicked,
 		this, &ElementsCollectionWidget::updateGridRoot);
 	connect(m_grid_view, &QListView::doubleClicked,
