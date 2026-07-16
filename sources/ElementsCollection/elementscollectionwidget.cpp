@@ -94,6 +94,9 @@ class GridElementDelegate : public QStyledItemDelegate
 		}
 	}
 
+	/// 清空縮圖快取(元件被編輯/重新載入後,強制重繪最新圖形)
+	void clearCache() { m_pixmap_cache.clear(); }
+
 	void paint(QPainter *painter,
 		   const QStyleOptionViewItem &option,
 		   const QModelIndex &index) const override
@@ -1584,6 +1587,12 @@ void ElementsCollectionWidget::reload()
 	m_loading_timer.reset(new QElapsedTimer());
 	qInfo()<<"Elements collection reload";
 	m_loading_timer->start();
+
+	// 重新載入必須清掉兩層快取,否則縮圖顯示舊圖:
+	// 1) ElementPictureFactory 以 UUID 快取向量圖,單純檔案變更不會失效;
+	// 2) grid delegate 以路徑快取縮圖 pixmap。
+	ElementPictureFactory::dropInstance();
+	if (m_grid_delegate) m_grid_delegate->clearCache();
 
 	m_progress_bar->show();
 	// Force to repaint now,
