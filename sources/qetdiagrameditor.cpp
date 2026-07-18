@@ -105,7 +105,10 @@ public:
 #include "qetgraphicsitem/diagramtableitem.h"
 #include "undocommand/addgraphicsobjectcommand.h"
 
+#include <QDialog>
 #include <QInputDialog>
+#include <QSpinBox>
+#include <QTimer>
 #include "diagramevent/diagrameventaddshape.h"
 #include "diagramevent/diagrameventaddtext.h"
 #include "diagramview.h"
@@ -1616,7 +1619,8 @@ void QETDiagramEditor::setUpToolBar()
 			 tr("Ligne", "toolbar icon text"),
 			 tr("Rectangle", "toolbar icon text"),
 			 tr("Ellipse", "toolbar icon text"),
-			 tr("Polyligne", "toolbar icon text") });
+			 tr("Polyligne", "toolbar icon text"),
+			 QStringLiteral("表格") });
 	set_icon_texts(m_depth_action_group->actions(),
 		       { tr("Premier plan", "toolbar icon text"),
 			 tr("Rapprocher", "toolbar icon text"),
@@ -2399,22 +2403,41 @@ void QETDiagramEditor::addItemGroupTriggered(QAction *action)
 	}
 	else if (value == QLatin1String("table"))
 	{
-		bool ok = false;
-		const int rows = QInputDialog::getInt(this, tr("插入表格"),
-			tr("列數(橫向):"), 3, 1, 100, 1, &ok);
-		if (!ok) return;
-		const int cols = QInputDialog::getInt(this, tr("插入表格"),
-			tr("欄數(直向):"), 3, 1, 50, 1, &ok);
-		if (!ok) return;
-		auto *table = new DiagramTableItem();
-		table->setup(rows, cols);
-		DiagramView *dv = currentDiagramView();
-		QPointF c = dv->mapToScene(dv->viewport()->rect().center());
-		c.rx() -= table->boundingRect().width()  / 2;
-		c.ry() -= table->boundingRect().height() / 2;
-		d->clearSelection();
-		d->undoStack().push(new AddGraphicsObjectCommand(table, d, c));
-		table->setSelected(true);
+		// 列數/欄數一次設定(單一對話框)
+		QDialog dlg(this);
+		dlg.setWindowTitle(tr("插入表格"));
+		auto *form = new QFormLayout(&dlg);
+		auto *rows_sb = new QSpinBox(&dlg);
+		rows_sb->setRange(1, 100); rows_sb->setValue(3);
+		auto *cols_sb = new QSpinBox(&dlg);
+		cols_sb->setRange(1, 50);  cols_sb->setValue(3);
+		form->addRow(tr("列數(橫向):"), rows_sb);
+		form->addRow(tr("欄數(直向):"), cols_sb);
+		auto *bb = new QDialogButtonBox(
+			QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+		form->addRow(bb);
+		connect(bb, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+		connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+		if (dlg.exec() != QDialog::Accepted) return;
+		const int rows = rows_sb->value();
+		const int cols = cols_sb->value();
+		// 延遲到目前工具列動作事件結束後再建立/選取,避免在動作處理中改動
+		// 場景與選取造成重入當機。
+		QTimer::singleShot(0, this, [this, rows, cols]() {
+			DiagramView *dv = currentDiagramView();
+			if (!dv || !dv->diagram()) return;
+			Diagram *dg = dv->diagram();
+			auto *table = new DiagramTableItem();
+			table->setup(rows, cols);
+			QPointF c = dv->mapToScene(
+				dv->viewport()->rect().center());
+			c.rx() -= table->boundingRect().width()  / 2;
+			c.ry() -= table->boundingRect().height() / 2;
+			dg->clearSelection();
+			dg->undoStack().push(
+				new AddGraphicsObjectCommand(table, dg, c));
+			table->setSelected(true);
+		});
 		return;
 	}
 	else if (value == QLatin1String("terminal_strip"))
