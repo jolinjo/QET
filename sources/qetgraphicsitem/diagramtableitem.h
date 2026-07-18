@@ -43,7 +43,7 @@ class DiagramTableItem : public QetGraphicsItem
 		explicit DiagramTableItem(QetGraphicsItem *parent = nullptr);
 		~DiagramTableItem() override;
 
-		enum { Type = UserType + 1010 };
+		enum { Type = UserType + 1012 };   // 1010 已被 DynamicElementTextItem 佔用
 		int type() const override { return Type; }
 
 		/// 初始化 rows×cols 空表(等寬欄、預設列高)
