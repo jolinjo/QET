@@ -70,6 +70,8 @@ class DiagramImageItem : public QetGraphicsItem {
 	QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
 	bool sceneEventFilter(QGraphicsItem *watched, QEvent *event) override;
 	void contextMenuEvent(QGraphicsSceneContextMenuEvent *event) override;
+	void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) override;
+	void keyPressEvent(QKeyEvent *event) override;
 
 	private:
 	// 選取時於四角顯示控制點,拖曳等比例縮放(改 scale())

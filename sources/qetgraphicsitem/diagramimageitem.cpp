@@ -27,6 +27,7 @@
 #include <QGraphicsScene>
 #include <QGraphicsSceneContextMenuEvent>
 #include <QGraphicsSceneMouseEvent>
+#include <QKeyEvent>
 #include <QLineF>
 #include <QMenu>
 #include <QPainterPath>
@@ -233,6 +234,8 @@ void DiagramImageItem::startCrop()
 	m_crop_mode = true;
 	m_crop_rect = boundingRect();    // 初始剪裁框 = 整張圖
 	setFlag(ItemIsMovable, false);   // 剪裁時不移動圖片
+	setFlag(ItemIsFocusable, true);
+	setFocus();                      // 接收 Enter/Esc
 	addCropHandlers();
 	update();
 }
@@ -333,11 +336,46 @@ void DiagramImageItem::contextMenuEvent(QGraphicsSceneContextMenuEvent *event)
 	if (!m_crop_mode) {
 		menu.addAction(tr("剪裁圖片"), this, [this] { startCrop(); });
 	} else {
-		menu.addAction(tr("套用剪裁"), this, [this] { applyCrop(); });
-		menu.addAction(tr("取消剪裁"), this, [this] { cancelCrop(); });
+		menu.addAction(tr("套用剪裁 (雙擊/Enter)"),
+			       this, [this] { applyCrop(); });
+		menu.addAction(tr("取消剪裁 (Esc)"), this, [this] { cancelCrop(); });
 	}
 	event->accept();
 	menu.exec(event->screenPos());
+}
+
+/**
+	剪裁模式:雙擊圖片即套用剪裁;否則沿用預設(開啟屬性)。
+*/
+void DiagramImageItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event)
+{
+	if (m_crop_mode) {
+		applyCrop();
+		event->accept();
+		return;
+	}
+	QetGraphicsItem::mouseDoubleClickEvent(event);
+}
+
+/**
+	剪裁模式:Enter 套用、Esc 取消。
+*/
+void DiagramImageItem::keyPressEvent(QKeyEvent *event)
+{
+	if (m_crop_mode) {
+		if (event->key() == Qt::Key_Return
+		    || event->key() == Qt::Key_Enter) {
+			applyCrop();
+			event->accept();
+			return;
+		}
+		if (event->key() == Qt::Key_Escape) {
+			cancelCrop();
+			event->accept();
+			return;
+		}
+	}
+	QetGraphicsItem::keyPressEvent(event);
 }
 
 /**
