@@ -26,6 +26,7 @@
 #include "qetdiagrameditor.h"
 #include "qetgraphicsitem/conductor.h"
 #include "qetgraphicsitem/conductortextitem.h"
+#include "qetgraphicsitem/diagramimageitem.h"
 #include "qetgraphicsitem/independenttextitem.h"
 #include "qeticons.h"
 #include "titleblock/integrationmovetemplateshandler.h"
@@ -426,10 +427,29 @@ void DiagramView::paste(const QPointF &pos, QClipboard::Mode clipboard_mode) {
 	if (!isInteractive() || m_diagram -> isReadOnly()) return;
 
 	QString text_clipboard = QApplication::clipboard() -> text(clipboard_mode);
-	if ((text_clipboard).isEmpty()) return;
 
 	QDomDocument document_xml;
-	if (!document_xml.setContent(text_clipboard)) return;
+	// 剪貼簿有 QET 元素(XML 文字)→ 貼元素;否則若剪貼簿有圖片(截圖/外部
+	// 複製)→ 貼成圖片元件。
+	if (text_clipboard.isEmpty() || !document_xml.setContent(text_clipboard))
+	{
+		const QImage image =
+			QApplication::clipboard()->image(clipboard_mode);
+		if (!image.isNull())
+		{
+			auto *item = new DiagramImageItem(QPixmap::fromImage(image));
+			QPointF p = pos.isNull()
+				? mapToScene(viewport()->rect().center()) : pos;
+			p.rx() -= item->boundingRect().width()  / 2;
+			p.ry() -= item->boundingRect().height() / 2;
+			m_diagram->clearSelection();
+			m_diagram->undoStack().push(
+				new AddGraphicsObjectCommand(item, m_diagram, p));
+			item->setSelected(true);
+			adjustSceneRect();
+		}
+		return;
+	}
 
 	DiagramContent content_pasted;
 	m_diagram->fromXml(document_xml, pos, false, &content_pasted);

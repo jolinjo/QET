@@ -34,6 +34,7 @@ class QGraphicsSceneMouseEvent;
 */
 class DiagramImageItem : public QetGraphicsItem {
 	Q_OBJECT
+	Q_PROPERTY(QPixmap pixmap READ pixmap WRITE setPixmap)
 
 	// constructors, destructor
 	public:
@@ -58,6 +59,7 @@ class DiagramImageItem : public QetGraphicsItem {
 	virtual QDomElement toXml(QDomDocument &) const;
 	void editProperty() override;
 	void setPixmap(const QPixmap &pixmap);
+	QPixmap pixmap() const { return pixmap_; }
 	QRectF boundingRect() const override;
 	QString name() const override;
 	

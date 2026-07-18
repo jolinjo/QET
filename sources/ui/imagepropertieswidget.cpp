@@ -22,6 +22,84 @@
 #include "../qetgraphicsitem/diagramimageitem.h"
 #include "../ui_imagepropertieswidget.h"
 
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QLabel>
+#include <QMouseEvent>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPushButton>
+#include <QVBoxLayout>
+
+namespace {
+/**
+	剪裁預覽:等比例縮放顯示圖片,滑鼠拖曳畫出要「保留」的矩形。
+	cropRect() 回傳對應到原圖像素座標的矩形。
+*/
+class CropView : public QWidget
+{
+	public:
+		explicit CropView(const QPixmap &pix, QWidget *parent = nullptr) :
+			QWidget(parent), m_pix(pix)
+		{
+			setMinimumSize(360, 260);
+		}
+
+		QRect cropRect() const
+		{
+			if (m_sel.isNull() || m_scaled.width() < 1
+			    || m_scaled.height() < 1)
+				return QRect();
+			const QRectF sel = QRectF(m_sel).intersected(m_scaled);
+			const double sx = double(m_pix.width())  / m_scaled.width();
+			const double sy = double(m_pix.height()) / m_scaled.height();
+			QRect r(qRound((sel.x() - m_scaled.x()) * sx),
+				qRound((sel.y() - m_scaled.y()) * sy),
+				qRound(sel.width()  * sx),
+				qRound(sel.height() * sy));
+			return r.intersected(m_pix.rect());
+		}
+
+	protected:
+		void paintEvent(QPaintEvent *) override
+		{
+			QPainter p(this);
+			p.fillRect(rect(), palette().window());
+			QSize sz = m_pix.size();
+			sz.scale(size(), Qt::KeepAspectRatio);
+			m_scaled = QRectF(QPointF(0, 0), QSizeF(sz));
+			m_scaled.moveCenter(QRectF(rect()).center());
+			p.drawPixmap(m_scaled.toRect(), m_pix);
+			if (!m_sel.isNull()) {
+				// 選取框外變暗
+				QPainterPath path;
+				path.addRect(m_scaled);
+				path.addRect(QRectF(m_sel).intersected(m_scaled));
+				p.fillPath(path, QColor(0, 0, 0, 90));
+				p.setPen(QPen(Qt::red, 1, Qt::DashLine));
+				p.drawRect(m_sel);
+			}
+		}
+		void mousePressEvent(QMouseEvent *e) override
+		{
+			m_origin = e->pos();
+			m_sel = QRect(m_origin, QSize());
+			update();
+		}
+		void mouseMoveEvent(QMouseEvent *e) override
+		{
+			m_sel = QRect(m_origin, e->pos()).normalized();
+			update();
+		}
+
+	private:
+		QPixmap m_pix;
+		QRectF m_scaled;
+		QPoint m_origin;
+		QRect m_sel;
+};
+}   // namespace
+
 /**
 	@brief ImagePropertiesWidget::ImagePropertiesWidget
 	Constructor
@@ -34,6 +112,42 @@ ImagePropertiesWidget::ImagePropertiesWidget(DiagramImageItem *image, QWidget *p
 	m_image(nullptr)
 {
 	ui->setupUi(this);
+
+	// 剪裁按鈕:開啟預覽,拖曳矩形選取要保留的區域
+	auto *crop_btn = new QPushButton(tr("剪裁…"), this);
+	ui->gridLayout->addWidget(crop_btn, ui->gridLayout->rowCount(), 0, 1,
+				  ui->gridLayout->columnCount());
+	connect(crop_btn, &QPushButton::clicked, this, [this]() {
+		if (!m_image) return;
+		const QPixmap pix = m_image->pixmap();
+		if (pix.isNull()) return;
+		QDialog dlg(this);
+		dlg.setWindowTitle(tr("剪裁圖片"));
+		dlg.resize(560, 480);
+		auto *lay = new QVBoxLayout(&dlg);
+		lay->addWidget(new QLabel(
+			tr("在圖片上拖曳出要保留的範圍："), &dlg));
+		auto *view = new CropView(pix, &dlg);
+		lay->addWidget(view, 1);
+		auto *bb = new QDialogButtonBox(
+			QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+		lay->addWidget(bb);
+		connect(bb, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+		connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+		if (dlg.exec() != QDialog::Accepted) return;
+		const QRect r = view->cropRect();
+		if (r.width() < 2 || r.height() < 2) return;   // 無有效選取
+		const QPixmap cropped = pix.copy(r);
+		if (m_image->diagram()) {
+			auto *undo = new QPropertyUndoCommand(
+				m_image, "pixmap", QVariant(pix), QVariant(cropped));
+			undo->setText(tr("剪裁圖片"));
+			m_image->diagram()->undoStack().push(undo);
+		} else {
+			m_image->setPixmap(cropped);
+		}
+	});
+
 	this->setDisabled(true);
 	setImageItem(image);
 }

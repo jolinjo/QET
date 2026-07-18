@@ -242,8 +242,11 @@ void DiagramImageItem::editProperty()
 	@param pixmap the new pixmap
 */
 void DiagramImageItem::setPixmap(const QPixmap &pixmap) {
+	prepareGeometryChange();
 	pixmap_ = pixmap;
 	setTransformOriginPoint(boundingRect().center());
+	adjustHandlerPos();   // 尺寸變了(如剪裁),控制點跟著移到新四角
+	update();
 }
 
 /**
