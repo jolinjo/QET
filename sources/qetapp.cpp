@@ -2332,6 +2332,19 @@ void QETApp::initConfiguration()
 	if (!macros_dir.exists())
 		macros_dir.mkpath(QETApp::userMacrosDir());
 
+	// 一次性設定遷移:元件庫更新來源若仍是舊的 GitHub 預設,改為內網 Gitea。
+	// 只動「剛好等於舊預設」者(=從未自訂過的);自訂成其他位址則保留不動。
+	{
+		QSettings settings;
+		const QString lib_url_key =
+			QStringLiteral("elementspanel/library-git-url");
+		if (settings.value(lib_url_key).toString()
+		    == QLatin1String("https://github.com/jolinjo/QET-Lib")) {
+			settings.setValue(lib_url_key, QStringLiteral(
+				"http://192.168.1.148:3000/HC-Git/QET-Lib"));
+		}
+	}
+
 	/* recent files
 	 * note:
 	 *  icons must be initialized before these instructions
