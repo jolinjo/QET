@@ -120,7 +120,7 @@ GeneralConfigurationPage::GeneralConfigurationPage(QWidget *parent) :
 	ui->m_grid_icon_size_sb->setValue(settings.value("elementspanel/grid-icon-size", 60).toInt());
 	ui->m_grid_columns_sb->setValue(settings.value("elementspanel/grid-columns", 0).toInt());
 	ui->m_grid_cell_width_sb->setValue(settings.value("elementspanel/grid-cell-width", 0).toInt());
-	ui->m_library_git_url_le->setText(settings.value("elementspanel/library-git-url", "https://github.com/jolinjo/QET-Lib").toString());
+	ui->m_library_git_url_le->setText(settings.value("elementspanel/library-git-url", "http://192.168.1.148:3000/HC-Git/QET-Lib").toString());
 	ui->m_hide_common_elements_cb->setChecked(settings.value("collections/hide-common-elements", true).toBool());
 	ui->m_hide_common_titleblocks_cb->setChecked(settings.value("collections/hide-common-titleblocks", true).toBool());
 	ui->m_save_label_paste->setChecked(settings.value("diagramcommands/erase-label-on-copy", false).toBool());
@@ -299,7 +299,7 @@ void GeneralConfigurationPage::applyConf()
 	{
 		const QString git_url = ui->m_library_git_url_le->text().trimmed();
 		settings.setValue("elementspanel/library-git-url",
-			git_url.isEmpty() ? QStringLiteral("https://github.com/jolinjo/QET-Lib") : git_url);
+			git_url.isEmpty() ? QStringLiteral("http://192.168.1.148:3000/HC-Git/QET-Lib") : git_url);
 	}
 	settings.setValue("collections/hide-common-elements", ui->m_hide_common_elements_cb->isChecked());
 	settings.setValue("collections/hide-common-titleblocks", ui->m_hide_common_titleblocks_cb->isChecked());

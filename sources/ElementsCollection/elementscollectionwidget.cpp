@@ -520,7 +520,7 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 	QSettings settings;
 	const QString url = settings.value(
 		QStringLiteral("elementspanel/library-git-url"),
-		QStringLiteral("https://github.com/jolinjo/QET-Lib"))
+		QStringLiteral("http://192.168.1.148:3000/HC-Git/QET-Lib"))
 		.toString().trimmed();
 	if (url.isEmpty()) return;
 
