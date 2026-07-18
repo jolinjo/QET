@@ -20,8 +20,12 @@
 
 #include "qetgraphicsitem.h"
 
+#include <QVector>
+
 class QDomElement;
 class QDomDocument;
+class QetGraphicsHandlerItem;
+class QGraphicsSceneMouseEvent;
 
 /**
 	This class represents a selectable, movable and editable image on a
@@ -59,8 +63,25 @@ class DiagramImageItem : public QetGraphicsItem {
 	
 	protected:
 	void paint(QPainter *, const QStyleOptionGraphicsItem *, QWidget *) override;
-	
+	QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
+	bool sceneEventFilter(QGraphicsItem *watched, QEvent *event) override;
+
+	private:
+	// 選取時於四角顯示控制點,拖曳等比例縮放(改 scale())
+	void addHandler();
+	void removeHandler();
+	void adjustHandlerPos();
+	QVector<QPointF> cornerPoints() const;
+	void handlerMousePressEvent();
+	void handlerMouseMoveEvent(QGraphicsSceneMouseEvent *event);
+	void handlerMouseReleaseEvent();
+
 	protected:
 	QPixmap pixmap_;
+
+	private:
+	QVector<QetGraphicsHandlerItem *> m_handler_vector;
+	int m_vector_index = -1;
+	qreal m_old_scale = 1;
 };
 #endif

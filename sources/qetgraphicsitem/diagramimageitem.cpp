@@ -18,8 +18,16 @@
 #include "diagramimageitem.h"
 
 #include "../PropertiesEditor/propertieseditordialog.h"
+#include "../QPropertyUndoCommand/qpropertyundocommand.h"
+#include "../QetGraphicsItemModeler/qetgraphicshandleritem.h"
 #include "../diagram.h"
 #include "../ui/imagepropertieswidget.h"
+
+#include <QGraphicsScene>
+#include <QGraphicsSceneMouseEvent>
+#include <QLineF>
+
+#include <cmath>
 
 /**
 	@brief DiagramImageItem::DiagramImageItem
@@ -52,6 +60,142 @@ DiagramImageItem::DiagramImageItem(const QPixmap &pixmap, QetGraphicsItem *paren
 */
 DiagramImageItem::~DiagramImageItem()
 {
+	removeHandler();
+}
+
+/**
+	四角控制點的位置(item 座標)。只用四角 → 縮放恆等比例。
+*/
+QVector<QPointF> DiagramImageItem::cornerPoints() const
+{
+	const QRectF r = boundingRect();
+	return { r.topLeft(), r.topRight(), r.bottomRight(), r.bottomLeft() };
+}
+
+/**
+	選取時建立四角控制點(藍色方塊),裝上 sceneEventFilter 以攔截拖曳。
+*/
+void DiagramImageItem::addHandler()
+{
+	if (m_handler_vector.isEmpty() && scene())
+	{
+		m_handler_vector = QetGraphicsHandlerItem::handlerForPoint(
+			mapToScene(cornerPoints()));
+		for (QetGraphicsHandlerItem *h : qAsConst(m_handler_vector))
+		{
+			h->setZValue(this->zValue() + 1);
+			h->setColor(Qt::blue);
+			scene()->addItem(h);
+			h->installSceneEventFilter(this);
+		}
+	}
+}
+
+void DiagramImageItem::removeHandler()
+{
+	if (!m_handler_vector.isEmpty())
+	{
+		qDeleteAll(m_handler_vector);
+		m_handler_vector.clear();
+	}
+}
+
+/**
+	圖片移動/縮放/旋轉後,把控制點移到目前四角(scene 座標)。
+*/
+void DiagramImageItem::adjustHandlerPos()
+{
+	if (m_handler_vector.isEmpty()) return;
+	const QPolygonF scene_pts = mapToScene(cornerPoints());
+	if (m_handler_vector.size() == scene_pts.size())
+		for (int i = 0; i < m_handler_vector.size(); ++i)
+			m_handler_vector.at(i)->setPos(scene_pts.at(i));
+}
+
+QVariant DiagramImageItem::itemChange(GraphicsItemChange change,
+				      const QVariant &value)
+{
+	if (change == ItemSelectedHasChanged)
+	{
+		if (value.toBool() && scene())
+			addHandler();
+		else
+			removeHandler();
+	}
+	else if (change == ItemPositionHasChanged
+		 || change == ItemScaleHasChanged
+		 || change == ItemRotationHasChanged
+		 || change == ItemTransformHasChanged)
+	{
+		adjustHandlerPos();
+	}
+	return QetGraphicsItem::itemChange(change, value);
+}
+
+/**
+	攔截控制點的滑鼠事件(press/move/release)分派到縮放處理。
+*/
+bool DiagramImageItem::sceneEventFilter(QGraphicsItem *watched, QEvent *event)
+{
+	if (watched->type() == QetGraphicsHandlerItem::Type)
+	{
+		QetGraphicsHandlerItem *qghi =
+			qgraphicsitem_cast<QetGraphicsHandlerItem *>(watched);
+		if (m_handler_vector.contains(qghi))
+		{
+			m_vector_index = m_handler_vector.indexOf(qghi);
+			if (m_vector_index != -1)
+			{
+				if (event->type() == QEvent::GraphicsSceneMousePress) {
+					handlerMousePressEvent();
+					return true;
+				}
+				if (event->type() == QEvent::GraphicsSceneMouseMove) {
+					handlerMouseMoveEvent(
+						static_cast<QGraphicsSceneMouseEvent *>(event));
+					return true;
+				}
+				if (event->type() == QEvent::GraphicsSceneMouseRelease) {
+					handlerMouseReleaseEvent();
+					return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+
+void DiagramImageItem::handlerMousePressEvent()
+{
+	m_old_scale = scale();
+}
+
+/**
+	以「中心到游標的距離 / 未縮放半對角線」求新 scale:等比例、繞中心縮放
+	(中心 = transformOriginPoint,縮放時於場景中固定不動)。
+*/
+void DiagramImageItem::handlerMouseMoveEvent(QGraphicsSceneMouseEvent *event)
+{
+	const QPointF center_scene = mapToScene(boundingRect().center());
+	const qreal half_diag = 0.5 * std::hypot(boundingRect().width(),
+						 boundingRect().height());
+	if (half_diag <= 0) return;
+	qreal new_scale =
+		QLineF(center_scene, event->scenePos()).length() / half_diag;
+	new_scale = qBound(0.05, new_scale, 50.0);
+	setScale(new_scale);   // 觸發 ItemScaleHasChanged → adjustHandlerPos
+}
+
+void DiagramImageItem::handlerMouseReleaseEvent()
+{
+	if (diagram() && !qFuzzyCompare(scale(), m_old_scale))
+	{
+		auto *undo = new QPropertyUndoCommand(this, "scale",
+						      m_old_scale, scale());
+		undo->setText(tr("Redimensionner %1").arg(name()));
+		undo->setAnimated();
+		diagram()->undoStack().push(undo);
+	}
 }
 
 /**
