@@ -62,6 +62,9 @@ class DiagramImageItem : public QetGraphicsItem {
 	void setPixmap(const QPixmap &pixmap);
 	QPixmap pixmap() const { return pixmap_; }
 	void startCrop();   ///< 進入畫布上的剪裁模式(帶控制點)
+	void applyCrop();   ///< 套用剪裁(供 view 的 Enter 呼叫)
+	void cancelCrop();  ///< 取消剪裁(供 view 的 Esc 呼叫)
+	bool isCropping() const { return m_crop_mode; }
 	QRectF boundingRect() const override;
 	QString name() const override;
 	
@@ -86,8 +89,6 @@ class DiagramImageItem : public QetGraphicsItem {
 	void addCropHandlers();
 	void adjustCropHandlerPos();
 	void handlerCropMoveEvent(QGraphicsSceneMouseEvent *event);
-	void applyCrop();
-	void cancelCrop();
 
 	protected:
 	QPixmap pixmap_;

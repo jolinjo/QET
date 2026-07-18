@@ -535,7 +535,6 @@ void DiagramView::mousePressEvent(QMouseEvent *e)
 */
 void DiagramView::mouseMoveEvent(QMouseEvent *e)
 {
-	setToolTip(tr("X: %1 Y: %2").arg(e->pos().x()).arg(e->pos().y()));
 	if (m_event_interface && m_event_interface->mouseMoveEvent(e)) return;
 
 		// Drag the view
@@ -738,6 +737,23 @@ void DiagramView::keyPressEvent(QKeyEvent *e)
 {
 	if (m_event_interface && m_event_interface->keyPressEvent(e))
 		return;
+
+	// 圖片剪裁模式:Enter 套用、Esc 取消(不依賴圖元自身焦點)
+	if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter
+	    || e->key() == Qt::Key_Escape) {
+		const auto items = m_diagram->items();
+		for (QGraphicsItem *it : items) {
+			auto *img = qgraphicsitem_cast<DiagramImageItem *>(it);
+			if (img && img->isCropping()) {
+				if (e->key() == Qt::Key_Escape)
+					img->cancelCrop();
+				else
+					img->applyCrop();
+				e->accept();
+				return;
+			}
+		}
+	}
 
 	ProjectView *current_project = this->diagramEditor()->currentProjectView();
 	DiagramContent dc(m_diagram);

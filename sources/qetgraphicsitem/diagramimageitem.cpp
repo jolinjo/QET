@@ -235,7 +235,11 @@ void DiagramImageItem::startCrop()
 	m_crop_rect = boundingRect();    // 初始剪裁框 = 整張圖
 	setFlag(ItemIsMovable, false);   // 剪裁時不移動圖片
 	setFlag(ItemIsFocusable, true);
-	setFocus();                      // 接收 Enter/Esc
+	// 讓繪圖檢視取得鍵盤焦點(剪裁常從屬性面板按鈕進入,焦點原在面板上),
+	// 再把場景焦點給圖片,Enter/Esc 才收得到。
+	if (scene() && !scene()->views().isEmpty())
+		scene()->views().first()->setFocus();
+	setFocus();
 	addCropHandlers();
 	update();
 }
