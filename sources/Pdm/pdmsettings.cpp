@@ -31,7 +31,7 @@ namespace
 	const char *KEY_REPO       = "pdm/repo";
 
 	// 內網 Gitea 預設主機:沿用 OTA 更新器既有的伺服器(ota/repo-url)。
-	const char *DEFAULT_SERVER = "http://hc-server:3000";
+	const char *DEFAULT_SERVER = "http://192.168.1.148:3000";
 	// 公司圖庫:圖檔管理固定連此 repo,不提供選擇。
 	const char *DEFAULT_REPO   = "HC-Git/HC_Electrical-Schematics";
 

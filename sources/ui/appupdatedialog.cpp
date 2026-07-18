@@ -89,7 +89,7 @@ AppUpdateDialog::AppUpdateDialog(QWidget *parent) :
 	QSettings settings;
 	m_url = new QLineEdit(
 		settings.value(QStringLiteral("ota/repo-url"),
-			       QStringLiteral("http://hc-server:3000/HC-Git"
+			       QStringLiteral("http://192.168.1.148:3000/HC-Git"
 					      "/QET-release")).toString(),
 		this);
 

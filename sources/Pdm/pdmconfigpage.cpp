@@ -37,7 +37,7 @@ PdmConfigPage::PdmConfigPage(QWidget *parent) :
 	layout->addLayout(form);
 
 	m_server_edit = new QLineEdit(PdmSettings::serverUrl(), this);
-	m_server_edit->setPlaceholderText(QStringLiteral("http://hc-server:3000"));
+	m_server_edit->setPlaceholderText(QStringLiteral("http://192.168.1.148:3000"));
 	form->addRow(tr("Gitea 伺服器:"), m_server_edit);
 
 	// 帳密登入:填帳號密碼後按「登入」自動產生 token,免去手動貼上。
