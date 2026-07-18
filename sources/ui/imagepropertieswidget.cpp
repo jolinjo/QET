@@ -22,6 +22,7 @@
 #include "../qetgraphicsitem/diagramimageitem.h"
 #include "../ui_imagepropertieswidget.h"
 
+#include <QDialog>
 #include <QPushButton>
 
 /**
@@ -44,8 +45,10 @@ ImagePropertiesWidget::ImagePropertiesWidget(DiagramImageItem *image, QWidget *p
 	connect(crop_btn, &QPushButton::clicked, this, [this]() {
 		if (!m_image) return;
 		m_image->startCrop();
-		// 關閉屬性對話框,讓使用者直接在圖上拉剪裁框
-		if (QWidget *w = window()) w->close();
+		// 若屬性是以「對話框」開啟則關閉它,讓使用者直接在圖上拉剪裁框;
+		// 若是嵌在屬性面板(dock)則不要關(否則會關到主視窗)。
+		if (auto *dlg = qobject_cast<QDialog *>(window()))
+			dlg->close();
 	});
 
 	this->setDisabled(true);

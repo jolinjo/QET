@@ -94,6 +94,9 @@ class DiagramImageItem : public QetGraphicsItem {
 	QVector<QetGraphicsHandlerItem *> m_handler_vector;
 	int m_vector_index = -1;
 	qreal m_old_scale = 1;
+	QPointF m_old_pos;               ///< 縮放前位置(供 undo)
+	QPointF m_resize_anchor_scene;   ///< 對角控制點的固定場景座標
+	QPointF m_resize_anchor_item;    ///< 對角控制點的 item 座標
 	bool m_crop_mode = false;
 	QRectF m_crop_rect;
 };

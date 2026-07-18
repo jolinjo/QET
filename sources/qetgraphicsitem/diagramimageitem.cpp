@@ -180,33 +180,46 @@ bool DiagramImageItem::sceneEventFilter(QGraphicsItem *watched, QEvent *event)
 void DiagramImageItem::handlerMousePressEvent()
 {
 	m_old_scale = scale();
+	m_old_pos = pos();
+	// 對角控制點作為錨點(拖某角時對角固定不動),記住其固定場景座標
+	const QVector<QPointF> c = cornerPoints();   // 0 TL,1 TR,2 BR,3 BL
+	if (m_vector_index >= 0 && m_vector_index < c.size()) {
+		m_resize_anchor_item = c.at((m_vector_index + 2) % 4);
+		m_resize_anchor_scene = mapToScene(m_resize_anchor_item);
+	}
 }
 
 /**
-	以「中心到游標的距離 / 未縮放半對角線」求新 scale:等比例、繞中心縮放
-	(中心 = transformOriginPoint,縮放時於場景中固定不動)。
+	以「對角錨點到游標的距離 / 未縮放對角線」求新 scale(等比例),縮放後把
+	對角錨點補回原場景位置 → 拖角時對角控制點固定不動,符合一般操作直覺。
 */
 void DiagramImageItem::handlerMouseMoveEvent(QGraphicsSceneMouseEvent *event)
 {
-	const QPointF center_scene = mapToScene(boundingRect().center());
-	const qreal half_diag = 0.5 * std::hypot(boundingRect().width(),
-						 boundingRect().height());
-	if (half_diag <= 0) return;
+	const qreal diag = std::hypot(boundingRect().width(),
+				      boundingRect().height());
+	if (diag <= 0) return;
 	qreal new_scale =
-		QLineF(center_scene, event->scenePos()).length() / half_diag;
+		QLineF(m_resize_anchor_scene, event->scenePos()).length() / diag;
 	new_scale = qBound(0.05, new_scale, 50.0);
-	setScale(new_scale);   // 觸發 ItemScaleHasChanged → adjustHandlerPos
+	setScale(new_scale);
+	// 補償位置,讓對角錨點停在原場景座標(setPos 用基底類別,避免對齊格線抖動)
+	const QPointF now = mapToScene(m_resize_anchor_item);
+	QGraphicsObject::setPos(pos() + (m_resize_anchor_scene - now));
 }
 
 void DiagramImageItem::handlerMouseReleaseEvent()
 {
-	if (diagram() && !qFuzzyCompare(scale(), m_old_scale))
+	if (diagram()
+	    && (!qFuzzyCompare(scale(), m_old_scale) || pos() != m_old_pos))
 	{
-		auto *undo = new QPropertyUndoCommand(this, "scale",
-						      m_old_scale, scale());
-		undo->setText(tr("Redimensionner %1").arg(name()));
-		undo->setAnimated();
-		diagram()->undoStack().push(undo);
+		// 縮放同時動到 scale 與 pos:用巨集一起記錄以正確復原
+		diagram()->undoStack().beginMacro(
+			tr("Redimensionner %1").arg(name()));
+		diagram()->undoStack().push(new QPropertyUndoCommand(
+			this, "scale", m_old_scale, scale()));
+		diagram()->undoStack().push(new QPropertyUndoCommand(
+			this, "pos", QVariant(m_old_pos), QVariant(pos())));
+		diagram()->undoStack().endMacro();
 	}
 }
 
