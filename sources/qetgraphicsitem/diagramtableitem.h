@@ -27,6 +27,7 @@ class QDomElement;
 class QDomDocument;
 class QetGraphicsHandlerItem;
 class QGraphicsSceneMouseEvent;
+class QGraphicsProxyWidget;
 
 /**
 	@brief 可自由插入的繪圖用表格。
@@ -72,7 +73,8 @@ class DiagramTableItem : public QetGraphicsItem
 		void addHandlers();
 		void removeHandlers();
 		void adjustHandlerPos();
-		void editCell(int row, int col);
+		void editCell(int row, int col);      ///< 於儲存格上開 inline 編輯框
+		void commitEditor();                  ///< 收合 inline 編輯框並寫回文字
 		void pushStateUndo(const QString &old_state);
 
 		int m_rows = 0;
@@ -85,6 +87,8 @@ class DiagramTableItem : public QetGraphicsItem
 		QVector<QetGraphicsHandlerItem *> m_handlers;
 		int m_active = -1;             ///< 拖曳中的控制點索引(0..cols-1=欄右緣,cols=列高)
 		QString m_drag_old_state;
+		QGraphicsProxyWidget *m_editor = nullptr;  ///< inline 儲存格編輯框
+		int m_edit_index = -1;
 };
 
 #endif // DIAGRAM_TABLE_ITEM_H

@@ -361,6 +361,9 @@ void PdmDialog::setUpWidget()
 	m_folder_tree = new QTreeWidget(splitter);
 	m_folder_tree->setHeaderLabels({tr("資料夾")});
 	m_folder_tree->setSelectionMode(QAbstractItemView::SingleSelection);
+	// 欄寬隨資料夾名稱內容自動調整,長名不被截斷
+	m_folder_tree->header()->setSectionResizeMode(QHeaderView::ResizeToContents);
+	m_folder_tree->header()->setStretchLastSection(false);
 
 	m_tree = new QTreeWidget(splitter);
 	m_tree->setHeaderLabels({tr("版本"), tr("檔名"), tr("狀態"),
@@ -1194,6 +1197,10 @@ void PdmDialog::rebuildFolderTree()
 		auto *item = new QTreeWidgetItem(m_folder_tree, {folder});
 		if (folder == previous) to_select = item;
 	}
+	// 面板寬度跟隨最長資料夾名稱(有上限,避免佔滿整個視窗)
+	m_folder_tree->resizeColumnToContents(0);
+	m_folder_tree->setMinimumWidth(
+		qBound(160, m_folder_tree->columnWidth(0) + 34, 460));
 	if (!to_select && m_folder_tree->topLevelItemCount() > 0)
 		to_select = m_folder_tree->topLevelItem(0);
 	if (to_select) {

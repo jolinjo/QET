@@ -21,11 +21,10 @@
 #include "../QetGraphicsItemModeler/qetgraphicshandleritem.h"
 #include "../diagram.h"
 
-#include <QApplication>
 #include <QDomElement>
+#include <QGraphicsProxyWidget>
 #include <QGraphicsScene>
 #include <QGraphicsSceneMouseEvent>
-#include <QInputDialog>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -245,7 +244,7 @@ QVariant DiagramTableItem::itemChange(GraphicsItemChange change,
 {
 	if (change == ItemSelectedHasChanged) {
 		if (value.toBool() && scene()) addHandlers();
-		else removeHandlers();
+		else { commitEditor(); removeHandlers(); }
 	} else if (change == ItemPositionHasChanged
 		   || change == ItemTransformHasChanged) {
 		adjustHandlerPos();
@@ -303,15 +302,48 @@ void DiagramTableItem::editCell(int row, int col)
 	if (diagram() && diagram()->isReadOnly()) return;
 	const int idx = row * m_cols + col;
 	if (idx < 0 || idx >= m_cells.size()) return;
-	bool ok = false;
-	const QString text = QInputDialog::getText(
-		QApplication::activeWindow(), tr("儲存格內容"), tr("文字:"),
-		QLineEdit::Normal, m_cells.at(idx), &ok);
-	if (!ok || text == m_cells.at(idx)) return;
-	const QString old = state();
-	m_cells[idx] = text;
-	update();
-	pushStateUndo(old);
+	commitEditor();   // 若已有開啟中的編輯框先收合
+
+	auto *le = new QLineEdit();
+	le->setText(m_cells.at(idx));
+	le->setFrame(false);
+	le->setStyleSheet(QStringLiteral("background:white;"));
+
+	m_editor = new QGraphicsProxyWidget(this);
+	m_editor->setWidget(le);
+	m_editor->setGeometry(QRectF(columnLeft(col), row * m_row_height,
+				     m_col_widths.at(col), m_row_height));
+	m_editor->setZValue(zValue() + 2);
+	m_edit_index = idx;
+
+	le->selectAll();
+	m_editor->setFocus();
+	le->setFocus();
+	// Enter 或失焦即寫回
+	connect(le, &QLineEdit::editingFinished, this,
+		[this]() { commitEditor(); });
+}
+
+void DiagramTableItem::commitEditor()
+{
+	if (!m_editor) return;
+	// 先摘下指標,避免刪除 QLineEdit 觸發的 editingFinished 造成重入
+	QGraphicsProxyWidget *ed = m_editor;
+	const int idx = m_edit_index;
+	m_editor = nullptr;
+	m_edit_index = -1;
+
+	QString text;
+	if (auto *le = qobject_cast<QLineEdit *>(ed->widget()))
+		text = le->text();
+	ed->deleteLater();
+
+	if (idx >= 0 && idx < m_cells.size() && text != m_cells.at(idx)) {
+		const QString old = state();
+		m_cells[idx] = text;
+		update();
+		pushStateUndo(old);
+	}
 }
 
 void DiagramTableItem::pushStateUndo(const QString &old_state)
