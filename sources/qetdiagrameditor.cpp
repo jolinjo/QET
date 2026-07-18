@@ -102,6 +102,10 @@ public:
 #include "conductornumexport.h"
 #include "diagramcommands.h"
 #include "diagramevent/diagrameventaddimage.h"
+#include "qetgraphicsitem/diagramtableitem.h"
+#include "undocommand/addgraphicsobjectcommand.h"
+
+#include <QInputDialog>
 #include "diagramevent/diagrameventaddshape.h"
 #include "diagramevent/diagrameventaddtext.h"
 #include "diagramview.h"
@@ -1478,6 +1482,7 @@ void QETDiagramEditor::setUpActions()
 	QAction *add_rectangle = m_add_item_actions_group.addAction(QET::Icons::PartRectangle, tr("Ajouter un rectangle"));
 	QAction *add_ellipse   = m_add_item_actions_group.addAction(QET::Icons::PartEllipse,   tr("Ajouter une ellipse"));
 	QAction *add_polyline  = m_add_item_actions_group.addAction(QET::Icons::PartPolygon,   tr("Ajouter une polyligne"));
+	QAction *add_table     = m_add_item_actions_group.addAction(QET::Icons::TableOfContent, tr("Insérer un tableau"));
 
 	add_text     ->setStatusTip(tr("Ajoute un champ de texte sur le folio actuel"));
 	add_image    ->setStatusTip(tr("Ajoute une image sur le folio actuel"));
@@ -1492,6 +1497,8 @@ void QETDiagramEditor::setUpActions()
 	add_rectangle->setData(QStringLiteral("rectangle"));
 	add_ellipse  ->setData(QStringLiteral("ellipse"));
 	add_polyline ->setData(QStringLiteral("polyline"));
+	add_table    ->setData(QStringLiteral("table"));
+	add_table    ->setStatusTip(tr("插入一個可調欄寬的表格"));
 
 	add_text->setCheckable(true);
 	add_line->setCheckable(true);
@@ -2389,6 +2396,26 @@ void QETDiagramEditor::addItemGroupTriggered(QAction *action)
 	else if (value == "text")
 	{
 		diagram_event = new DiagramEventAddText(d);
+	}
+	else if (value == QLatin1String("table"))
+	{
+		bool ok = false;
+		const int rows = QInputDialog::getInt(this, tr("插入表格"),
+			tr("列數(橫向):"), 3, 1, 100, 1, &ok);
+		if (!ok) return;
+		const int cols = QInputDialog::getInt(this, tr("插入表格"),
+			tr("欄數(直向):"), 3, 1, 50, 1, &ok);
+		if (!ok) return;
+		auto *table = new DiagramTableItem();
+		table->setup(rows, cols);
+		DiagramView *dv = currentDiagramView();
+		QPointF c = dv->mapToScene(dv->viewport()->rect().center());
+		c.rx() -= table->boundingRect().width()  / 2;
+		c.ry() -= table->boundingRect().height() / 2;
+		d->clearSelection();
+		d->undoStack().push(new AddGraphicsObjectCommand(table, d, c));
+		table->setSelected(true);
+		return;
 	}
 	else if (value == QLatin1String("terminal_strip"))
 	{

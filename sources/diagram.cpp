@@ -30,6 +30,7 @@
 #include "qetgraphicsitem/conductor.h"
 #include "qetgraphicsitem/conductortextitem.h"
 #include "qetgraphicsitem/diagramimageitem.h"
+#include "qetgraphicsitem/diagramtableitem.h"
 #include "qetgraphicsitem/dynamicelementtextitem.h"
 #include "qetgraphicsitem/element.h"
 #include "qetgraphicsitem/elementtextitemgroup.h"
@@ -905,6 +906,7 @@ QDomDocument Diagram::toXml(bool whole_content, bool is_copy_command) {
 	QVector<DiagramTextItem *> list_texts;
 	QVector<DiagramImageItem *> list_images;
 	QVector<QetShapeItem *> list_shapes;
+	QVector<DiagramTableItem *> dtable_vector;
 	QVector<QetGraphicsTableItem *> table_vector;
 	QVector<TerminalStripItem *> strip_vector;
 
@@ -942,6 +944,12 @@ QDomDocument Diagram::toXml(bool whole_content, bool is_copy_command) {
 				auto image = static_cast<DiagramImageItem *>(qgi);
 				if (whole_content || image->isSelected())
 					list_images << image;
+				break;
+			}
+			case DiagramTableItem::Type: {
+				auto t = static_cast<DiagramTableItem *>(qgi);
+				if (whole_content || t->isSelected())
+					dtable_vector << t;
 				break;
 			}
 			case IndependentTextItem::Type: {
@@ -1011,6 +1019,14 @@ QDomDocument Diagram::toXml(bool whole_content, bool is_copy_command) {
 			dom_images.appendChild(dii->toXml(document));
 		}
 		dom_root.appendChild(dom_images);
+	}
+
+	if (!dtable_vector.isEmpty()) {
+		auto dom_dtables = document.createElement(
+			QStringLiteral("drawing_tables"));
+		for (auto t : dtable_vector)
+			dom_dtables.appendChild(t->toXml(document));
+		dom_root.appendChild(dom_dtables);
 	}
 
 	if (!list_shapes.isEmpty()) {
@@ -1426,6 +1442,15 @@ bool Diagram::fromXml(QDomElement &document,
 		dii -> fromXml(image_xml);
 		addItem(dii);
 		added_images << dii;
+	}
+
+		// Load drawing table
+	for (auto table_xml : QET::findInDomElement(root,
+						QStringLiteral("drawing_tables"),
+						QStringLiteral("drawing_table"))) {
+		auto *dt = new DiagramTableItem();
+		dt->fromXml(table_xml);
+		addItem(dt);
 	}
 
 		// Load shape

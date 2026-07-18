@@ -454,6 +454,8 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/qetgraphicsitem/crossrefitem.h
   ${QET_DIR}/sources/qetgraphicsitem/diagramimageitem.cpp
   ${QET_DIR}/sources/qetgraphicsitem/diagramimageitem.h
+  ${QET_DIR}/sources/qetgraphicsitem/diagramtableitem.cpp
+  ${QET_DIR}/sources/qetgraphicsitem/diagramtableitem.h
   ${QET_DIR}/sources/qetgraphicsitem/diagramtextitem.cpp
   ${QET_DIR}/sources/qetgraphicsitem/diagramtextitem.h
   ${QET_DIR}/sources/qetgraphicsitem/dynamicelementtextitem.cpp
