@@ -2745,8 +2745,10 @@ void QETDiagramEditor::slot_updatePasteAction()
 	DiagramView *dv = currentDiagramView();
 	bool editable_diagram = (dv && !dv -> diagram() -> isReadOnly());
 
-	// pour coller, il faut un schema ouvert et un schema dans le presse-papier
-	m_paste -> setEnabled(editable_diagram && Diagram::clipboardMayContainDiagram());
+	// 可貼上:有開圖,且剪貼簿有 QET 元素或有影像(截圖/外部複製的圖片)
+	m_paste -> setEnabled(editable_diagram
+		&& (Diagram::clipboardMayContainDiagram()
+		    || !QApplication::clipboard()->image().isNull()));
 }
 
 /**

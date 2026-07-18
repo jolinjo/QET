@@ -26,6 +26,7 @@ class QDomElement;
 class QDomDocument;
 class QetGraphicsHandlerItem;
 class QGraphicsSceneMouseEvent;
+class QGraphicsSceneContextMenuEvent;
 
 /**
 	This class represents a selectable, movable and editable image on a
@@ -60,6 +61,7 @@ class DiagramImageItem : public QetGraphicsItem {
 	void editProperty() override;
 	void setPixmap(const QPixmap &pixmap);
 	QPixmap pixmap() const { return pixmap_; }
+	void startCrop();   ///< 進入畫布上的剪裁模式(帶控制點)
 	QRectF boundingRect() const override;
 	QString name() const override;
 	
@@ -67,6 +69,7 @@ class DiagramImageItem : public QetGraphicsItem {
 	void paint(QPainter *, const QStyleOptionGraphicsItem *, QWidget *) override;
 	QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
 	bool sceneEventFilter(QGraphicsItem *watched, QEvent *event) override;
+	void contextMenuEvent(QGraphicsSceneContextMenuEvent *event) override;
 
 	private:
 	// 選取時於四角顯示控制點,拖曳等比例縮放(改 scale())
@@ -77,6 +80,12 @@ class DiagramImageItem : public QetGraphicsItem {
 	void handlerMousePressEvent();
 	void handlerMouseMoveEvent(QGraphicsSceneMouseEvent *event);
 	void handlerMouseReleaseEvent();
+	// 剪裁模式:剪裁框(item 座標)＋8 個控制點
+	void addCropHandlers();
+	void adjustCropHandlerPos();
+	void handlerCropMoveEvent(QGraphicsSceneMouseEvent *event);
+	void applyCrop();
+	void cancelCrop();
 
 	protected:
 	QPixmap pixmap_;
@@ -85,5 +94,7 @@ class DiagramImageItem : public QetGraphicsItem {
 	QVector<QetGraphicsHandlerItem *> m_handler_vector;
 	int m_vector_index = -1;
 	qreal m_old_scale = 1;
+	bool m_crop_mode = false;
+	QRectF m_crop_rect;
 };
 #endif

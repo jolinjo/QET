@@ -20,12 +20,16 @@
 #include "../PropertiesEditor/propertieseditordialog.h"
 #include "../QPropertyUndoCommand/qpropertyundocommand.h"
 #include "../QetGraphicsItemModeler/qetgraphicshandleritem.h"
+#include "../QetGraphicsItemModeler/qetgraphicshandlerutility.h"
 #include "../diagram.h"
 #include "../ui/imagepropertieswidget.h"
 
 #include <QGraphicsScene>
+#include <QGraphicsSceneContextMenuEvent>
 #include <QGraphicsSceneMouseEvent>
 #include <QLineF>
+#include <QMenu>
+#include <QPainterPath>
 
 #include <cmath>
 
@@ -77,6 +81,7 @@ QVector<QPointF> DiagramImageItem::cornerPoints() const
 */
 void DiagramImageItem::addHandler()
 {
+	if (m_crop_mode) return;
 	if (m_handler_vector.isEmpty() && scene())
 	{
 		m_handler_vector = QetGraphicsHandlerItem::handlerForPoint(
@@ -106,6 +111,7 @@ void DiagramImageItem::removeHandler()
 void DiagramImageItem::adjustHandlerPos()
 {
 	if (m_handler_vector.isEmpty()) return;
+	if (m_crop_mode) { adjustCropHandlerPos(); return; }
 	const QPolygonF scene_pts = mapToScene(cornerPoints());
 	if (m_handler_vector.size() == scene_pts.size())
 		for (int i = 0; i < m_handler_vector.size(); ++i)
@@ -119,6 +125,8 @@ QVariant DiagramImageItem::itemChange(GraphicsItemChange change,
 	{
 		if (value.toBool() && scene())
 			addHandler();
+		else if (m_crop_mode)
+			cancelCrop();
 		else
 			removeHandler();
 	}
@@ -147,16 +155,20 @@ bool DiagramImageItem::sceneEventFilter(QGraphicsItem *watched, QEvent *event)
 			if (m_vector_index != -1)
 			{
 				if (event->type() == QEvent::GraphicsSceneMousePress) {
-					handlerMousePressEvent();
+					if (!m_crop_mode) handlerMousePressEvent();
 					return true;
 				}
 				if (event->type() == QEvent::GraphicsSceneMouseMove) {
-					handlerMouseMoveEvent(
-						static_cast<QGraphicsSceneMouseEvent *>(event));
+					if (m_crop_mode)
+						handlerCropMoveEvent(
+							static_cast<QGraphicsSceneMouseEvent *>(event));
+					else
+						handlerMouseMoveEvent(
+							static_cast<QGraphicsSceneMouseEvent *>(event));
 					return true;
 				}
 				if (event->type() == QEvent::GraphicsSceneMouseRelease) {
-					handlerMouseReleaseEvent();
+					if (!m_crop_mode) handlerMouseReleaseEvent();
 					return true;
 				}
 			}
@@ -198,6 +210,123 @@ void DiagramImageItem::handlerMouseReleaseEvent()
 	}
 }
 
+/* ── 剪裁模式(在圖片上直接拉框,帶控制點)───────────────────────── */
+
+void DiagramImageItem::startCrop()
+{
+	if (m_crop_mode || pixmap_.isNull()) return;
+	setSelected(true);
+	removeHandler();                 // 收起等比例縮放控制點
+	m_crop_mode = true;
+	m_crop_rect = boundingRect();    // 初始剪裁框 = 整張圖
+	setFlag(ItemIsMovable, false);   // 剪裁時不移動圖片
+	addCropHandlers();
+	update();
+}
+
+void DiagramImageItem::addCropHandlers()
+{
+	if (!scene()) return;
+	m_handler_vector = QetGraphicsHandlerItem::handlerForPoint(
+		mapToScene(QetGraphicsHandlerUtility::pointsForRect(m_crop_rect)));
+	for (QetGraphicsHandlerItem *h : qAsConst(m_handler_vector))
+	{
+		h->setZValue(this->zValue() + 1);
+		h->setColor(Qt::red);
+		scene()->addItem(h);
+		h->installSceneEventFilter(this);
+	}
+}
+
+void DiagramImageItem::adjustCropHandlerPos()
+{
+	const QPolygonF pts = mapToScene(
+		QetGraphicsHandlerUtility::pointsForRect(m_crop_rect));
+	if (m_handler_vector.size() == pts.size())
+		for (int i = 0; i < m_handler_vector.size(); ++i)
+			m_handler_vector.at(i)->setPos(pts.at(i));
+}
+
+void DiagramImageItem::handlerCropMoveEvent(QGraphicsSceneMouseEvent *event)
+{
+	const QPointF p = mapFromScene(event->scenePos());
+	QRectF r = QetGraphicsHandlerUtility::rectForPosAtIndex(
+			m_crop_rect, p, m_vector_index)
+		.intersected(boundingRect());
+	if (r.width() >= 4 && r.height() >= 4)
+	{
+		m_crop_rect = r;
+		adjustCropHandlerPos();
+		update();
+	}
+}
+
+void DiagramImageItem::applyCrop()
+{
+	if (!m_crop_mode) return;
+	const QRect r = m_crop_rect.toRect().intersected(pixmap_.rect());
+	m_crop_mode = false;
+	removeHandler();
+	setFlag(ItemIsMovable, true);
+
+	if (r.width() >= 2 && r.height() >= 2 && r != pixmap_.rect())
+	{
+		// 保留被裁區域在畫面上的位置:算出裁後要補的位移(平移不受縮放/旋轉影響)
+		const QPointF anchor_scene = mapToScene(m_crop_rect.topLeft());
+		const QPixmap old_pix = pixmap_;
+		const QPointF old_pos = pos();
+		const QPixmap cropped = pixmap_.copy(r);
+
+		setPixmap(cropped);   // 暫時套用以取得裁後原點對應的場景座標
+		const QPointF new_pos =
+			old_pos + (anchor_scene - mapToScene(QPointF(0, 0)));
+		setPixmap(old_pix);   // 還原,實際變更交給 undo(巨集依序:pixmap→pos)
+		setPos(old_pos);
+
+		if (diagram())
+		{
+			diagram()->undoStack().beginMacro(tr("剪裁圖片"));
+			diagram()->undoStack().push(new QPropertyUndoCommand(
+				this, "pixmap", QVariant(old_pix), QVariant(cropped)));
+			diagram()->undoStack().push(new QPropertyUndoCommand(
+				this, "pos", QVariant(old_pos), QVariant(new_pos)));
+			diagram()->undoStack().endMacro();
+		}
+		else
+		{
+			setPixmap(cropped);
+			setPos(new_pos);
+		}
+	}
+
+	if (isSelected()) addHandler();   // 回到等比例縮放控制點
+	update();
+}
+
+void DiagramImageItem::cancelCrop()
+{
+	if (!m_crop_mode) return;
+	m_crop_mode = false;
+	removeHandler();
+	setFlag(ItemIsMovable, true);
+	if (isSelected()) addHandler();
+	update();
+}
+
+void DiagramImageItem::contextMenuEvent(QGraphicsSceneContextMenuEvent *event)
+{
+	if (diagram() && diagram()->isReadOnly()) { event->ignore(); return; }
+	QMenu menu;
+	if (!m_crop_mode) {
+		menu.addAction(tr("剪裁圖片"), this, [this] { startCrop(); });
+	} else {
+		menu.addAction(tr("套用剪裁"), this, [this] { applyCrop(); });
+		menu.addAction(tr("取消剪裁"), this, [this] { cancelCrop(); });
+	}
+	event->accept();
+	menu.exec(event->screenPos());
+}
+
 /**
 	@brief DiagramImageItem::paint
 	Draw the pixmap.
@@ -209,6 +338,23 @@ void DiagramImageItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *
 	painter -> drawPixmap(pixmap_.rect(),pixmap_);
 
 	Q_UNUSED(option); Q_UNUSED(widget);
+
+	if (m_crop_mode) {
+		// 剪裁框外變暗、框線以紅色虛線標示
+		painter->save();
+		QPainterPath path;
+		path.addRect(boundingRect());
+		path.addRect(m_crop_rect);
+		painter->fillPath(path, QColor(0, 0, 0, 110));
+		QPen cp(Qt::red);
+		cp.setStyle(Qt::DashLine);
+		cp.setCosmetic(true);
+		painter->setPen(cp);
+		painter->setBrush(Qt::NoBrush);
+		painter->drawRect(m_crop_rect);
+		painter->restore();
+		return;
+	}
 
 	if (isSelected()) {
 		painter -> save();
