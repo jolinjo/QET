@@ -109,6 +109,7 @@ public:
 #include <QInputDialog>
 #include <QSpinBox>
 #include <QTimer>
+#include <QDockWidget>
 #include "diagramevent/diagrameventaddshape.h"
 #include "diagramevent/diagrameventaddtext.h"
 #include "diagramview.h"
@@ -3561,8 +3562,30 @@ void QETDiagramEditor::applyReadOnlyView(bool read_only)
 	if (m_qdw_elmt_collection) m_qdw_elmt_collection->setVisible(editable);
 	// 復原、目前選取項目的屬性、選擇自動編號:純編輯輔助面板，沒開圖就隱藏
 	if (qdw_undo) qdw_undo->setVisible(has_project);
-	if (m_selection_properties_editor)
+	if (m_selection_properties_editor) {
 		m_selection_properties_editor->setVisible(has_project);
+		// 修:舊佈局可能把屬性面板擠成 0 寬/0 高(勾選卻看不到,且擠住的
+		// dock 常拿不回空間)。開圖後延到版面穩定再量測,若被擠到幾乎看
+		// 不到,就改成浮動視窗以保證可見(使用者可再拖回停靠)。
+		if (has_project) {
+			QDockWidget *dock = m_selection_properties_editor;
+			// 延到版面穩定後檢查:若面板實際沒畫出任何像素(被壓成 0
+			// 尺寸、或和元件庫疊成分頁藏在後面、或被完全遮住),就改成
+			// 浮動視窗保證看得到(使用者可再拖回停靠)。visibleRegion
+			// 空 = 真的看不到,比量寬高更可靠。
+			QTimer::singleShot(80, this, [dock]() {
+				// 使用者自己浮動的不動;被藏起來的(分頁 inactive 時
+				// isVisible 也會是 false,故不以 isVisible 判斷)才處理。
+				if (dock->isFloating()) return;
+				if (dock->visibleRegion().isEmpty()) {
+					dock->setFloating(true);
+					dock->resize(320, 480);
+					dock->show();
+					dock->raise();
+				}
+			});
+		}
+	}
 	if (m_autonumbering_dock) m_autonumbering_dock->setVisible(has_project);
 	if (m_add_item_tool_bar) m_add_item_tool_bar->setVisible(editable);
 	if (m_depth_tool_bar) m_depth_tool_bar->setVisible(editable);

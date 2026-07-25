@@ -7162,6 +7162,10 @@ Options disponibles :
         <translation>工具</translation>
     </message>
     <message>
+        <source>Édition</source>
+        <translation>編輯</translation>
+    </message>
+    <message>
         <location filename="../sources/qetdiagrameditor.cpp" line="740"/>
         <source>Affichage</source>
         <translation>顯示</translation>
