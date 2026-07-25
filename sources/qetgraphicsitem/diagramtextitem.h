@@ -36,6 +36,7 @@ class DiagramTextItem : public QGraphicsTextItem
 
 	Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY colorChanged)
 	Q_PROPERTY(QColor badgeBackground READ badgeBackground WRITE setBadgeBackground)
+	Q_PROPERTY(QColor badgeBorder READ badgeBorder WRITE setBadgeBorder)
 	Q_PROPERTY(Qt::Alignment alignment READ alignment WRITE setAlignment NOTIFY alignmentChanged)
 	Q_PROPERTY(QString plainText READ toPlainText WRITE setPlainText)
 	Q_PROPERTY(QFont font READ font WRITE setFont NOTIFY fontChanged)
@@ -76,6 +77,10 @@ class DiagramTextItem : public QGraphicsTextItem
 		/// Badge 圓角底色(無效色=無 badge)。畫在文字後方的圓角實心底。
 		void setBadgeBackground(const QColor &color);
 		QColor badgeBackground() const { return m_badge_bg; }
+
+		/// 文字外框(無效色=無)。圓角外框上色、內部白底(文字黑字)。
+		void setBadgeBorder(const QColor &color);
+		QColor badgeBorder() const { return m_badge_border; }
 
 		void setNoEditable(bool e = true) {m_no_editable = e;}
 		
@@ -122,7 +127,8 @@ class DiagramTextItem : public QGraphicsTextItem
 		m_previous_text;
 		
 		QPointF m_mouse_to_origin_movement;
-		QColor m_badge_bg;   ///< badge 圓角底色(無效=無)
+		QColor m_badge_bg;      ///< badge 圓角底色(無效=無)
+		QColor m_badge_border;  ///< 文字外框色(無效=無;白底黑字)
 
 	private:
 		QRectF m_alignment_rect;

@@ -64,6 +64,7 @@ class IndiTextPropertiesWidget : public PropertiesEditorWidget
 					  const QString &undo_text);
 		void applyTextForeground(const QColor &color);   ///< 套用文字色
 		void applyTextBackground(const QColor &color);   ///< 套用底色(空=移除)
+		void applyTextOutline(const QColor &color);      ///< 套用外框(空=移除)
 		void buildColorPalette();   ///< 建立範本顏色swatch面板(ClickUp 風)
 		
 	private:

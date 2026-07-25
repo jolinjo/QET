@@ -189,6 +189,13 @@ void DiagramTextItem::setBadgeBackground(const QColor &color)
 	update();
 }
 
+void DiagramTextItem::setBadgeBorder(const QColor &color)
+{
+	if (m_badge_border == color) return;
+	m_badge_border = color;
+	update();
+}
+
 void DiagramTextItem::setAlignment(const Qt::Alignment &alignment)
 {
 	m_alignment = alignment;
@@ -253,17 +260,26 @@ void DiagramTextItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *o
 {
 	painter -> setRenderHint(QPainter::Antialiasing, false);
 
-	// Badge:文字後方畫圓角實心底色(像 ClickUp 標籤)。半徑取高度一半
-	// 成膠囊狀,略微內縮避免蓋住外框。
-	if (m_badge_bg.isValid()) {
+	// Badge:文字後方畫圓角底(像 ClickUp 標籤)。實心底色 m_badge_bg;
+	// 或外框模式 m_badge_border(白底、彩色外框)。半徑隨字級等比縮放。
+	if (m_badge_bg.isValid() || m_badge_border.isValid()) {
 		painter->save();
 		painter->setRenderHint(QPainter::Antialiasing, true);
-		painter->setPen(Qt::NoPen);
-		painter->setBrush(m_badge_bg);
-		const QRectF r = boundingRect().adjusted(0.5, 0.5, -0.5, -0.5);
-		// ClickUp 風小圓角,且隨文字大小等比縮放(取高度的 ~20%)
+		QRectF r = boundingRect().adjusted(0.5, 0.5, -0.5, -0.5);
 		const qreal radius = qMin(r.height() * 0.2, r.height() / 2.0);
-		painter->drawRoundedRect(r, radius, radius);
+		if (m_badge_bg.isValid()) {           // 實心底色
+			painter->setPen(Qt::NoPen);
+			painter->setBrush(m_badge_bg);
+			painter->drawRoundedRect(r, radius, radius);
+		} else {                              // 外框模式:白底 + 彩色框
+			const qreal pw = qMax(1.0, r.height() * 0.07);
+			QPen bp(m_badge_border);
+			bp.setWidthF(pw);
+			painter->setPen(bp);
+			painter->setBrush(Qt::white);
+			r = r.adjusted(pw / 2, pw / 2, -pw / 2, -pw / 2);
+			painter->drawRoundedRect(r, radius, radius);
+		}
 		painter->restore();
 	}
 

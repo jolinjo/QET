@@ -78,6 +78,8 @@ void IndependentTextItem::fromXml(const QDomElement &e) {
 	}
 	if (e.hasAttribute("badge_bg"))
 		setBadgeBackground(QColor(e.attribute("badge_bg")));
+	if (e.hasAttribute("badge_border"))
+		setBadgeBorder(QColor(e.attribute("badge_border")));
 }
 
 /**
@@ -96,6 +98,9 @@ QDomElement IndependentTextItem::toXml(QDomDocument &document) const
 	if (badgeBackground().isValid())
 		result.setAttribute("badge_bg",
 			badgeBackground().name(QColor::HexArgb));
+	if (badgeBorder().isValid())
+		result.setAttribute("badge_border",
+			badgeBorder().name(QColor::HexArgb));
 
 	return(result);
 }

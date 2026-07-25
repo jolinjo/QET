@@ -96,6 +96,8 @@ IndiTextPropertiesWidget::IndiTextPropertiesWidget(IndependentTextItem *text, QW
 	// 大小/字型/內容編輯)。拿掉後文字永遠純文字。
 	ui->m_sup_pb->hide();
 	ui->m_sub_pb->hide();
+	// 「顏色」自訂調色盤按鈕改由下方「文字顏色」色票取代,隱藏之。
+	ui->m_color_pb->hide();
 	buildColorPalette();
 	if (text) {
 		setText(text);
@@ -116,6 +118,7 @@ IndiTextPropertiesWidget::IndiTextPropertiesWidget(
 	ui->setupUi(this);
 	ui->m_sup_pb->hide();
 	ui->m_sub_pb->hide();
+	ui->m_color_pb->hide();
 	buildColorPalette();
 	setText(text_list);
 }
@@ -620,6 +623,10 @@ void IndiTextPropertiesWidget::applyTextBackground(const QColor &color)
 					      : tr("移除文字底色"));
 		st.push(new QPropertyUndoCommand(item, "badgeBackground",
 			QVariant(item->badgeBackground()), QVariant(color)));
+		// 底色與外框互斥:設實心底色時清掉外框
+		if (color.isValid() && item->badgeBorder().isValid())
+			st.push(new QPropertyUndoCommand(item, "badgeBorder",
+				QVariant(item->badgeBorder()), QVariant(QColor())));
 		if (color.isValid() && !item->isHtml()) {
 			// 用感知亮度(YIQ)決定對比色,而非 HSL lightness——
 			// 飽和的紫/藍 lightness 會 ~0.5 卻其實很暗,需白字。
@@ -630,6 +637,32 @@ void IndiTextPropertiesWidget::applyTextBackground(const QColor &color)
 			if (item->color() != fg)
 				st.push(new QPropertyUndoCommand(item, "color",
 					QVariant(item->color()), QVariant(fg)));
+		}
+		st.endMacro();
+	}
+}
+
+void IndiTextPropertiesWidget::applyTextOutline(const QColor &color)
+{
+	// 外框:圓角彩色框、內部白底、文字黑字。與實心底色互斥。
+	const QList<IndependentTextItem *> texts = editedTexts();
+	for (IndependentTextItem *item : texts) {
+		if (!item->diagram()) continue;
+		QUndoStack &st = item->diagram()->undoStack();
+		st.beginMacro(color.isValid() ? tr("設定文字外框")
+					      : tr("移除文字外框"));
+		st.push(new QPropertyUndoCommand(item, "badgeBorder",
+			QVariant(item->badgeBorder()), QVariant(color)));
+		if (color.isValid()) {
+			if (item->badgeBackground().isValid())
+				st.push(new QPropertyUndoCommand(item,
+					"badgeBackground",
+					QVariant(item->badgeBackground()),
+					QVariant(QColor())));
+			const QColor black(0x1a, 0x1a, 0x1a);
+			if (!item->isHtml() && item->color() != black)
+				st.push(new QPropertyUndoCommand(item, "color",
+					QVariant(item->color()), QVariant(black)));
 		}
 		st.endMacro();
 	}
@@ -710,6 +743,41 @@ void IndiTextPropertiesWidget::buildColorPalette()
 	bg_wrap->addLayout(bg);
 	bg_wrap->addStretch();
 	v->addLayout(bg_wrap);
+
+	// 文字外框:圓角彩色框、白底黑字(顏色與底色同一組)
+	v->addWidget(new QLabel(tr("文字外框(白底彩框)"), w));
+	auto *ol = new QGridLayout();
+	ol->setSpacing(3);
+	int m = 0;
+	for (const char *hex : HL_COLORS) {
+		const QColor c(QString::fromLatin1(hex));
+		auto *b = new QToolButton(this);
+		b->setFixedSize(20, 20);
+		b->setCursor(Qt::PointingHandCursor);
+		b->setToolTip(c.name());
+		b->setStyleSheet(QStringLiteral(
+			"QToolButton{border:2px solid %1;border-radius:6px;"
+			"background:white;}").arg(c.name()));
+		connect(b, &QToolButton::clicked, this,
+			[this, c]() { applyTextOutline(c); });
+		ol->addWidget(b, m / cols, m % cols);
+		++m;
+	}
+	auto *ol_none = new QToolButton(this);
+	ol_none->setFixedSize(20, 20);
+	ol_none->setText(QStringLiteral("⊘"));
+	ol_none->setToolTip(tr("移除外框"));
+	ol_none->setCursor(Qt::PointingHandCursor);
+	ol_none->setStyleSheet(QStringLiteral(
+		"QToolButton{border:1px solid #c8c8c8;border-radius:6px;"
+		"background:white;}"));
+	connect(ol_none, &QToolButton::clicked, this,
+		[this]() { applyTextOutline(QColor()); });
+	ol->addWidget(ol_none, m / cols, m % cols);
+	auto *ol_wrap = new QHBoxLayout();
+	ol_wrap->addLayout(ol);
+	ol_wrap->addStretch();
+	v->addLayout(ol_wrap);
 
 	const int row = ui->gridLayout->rowCount();
 	ui->gridLayout->addWidget(w, row, 0, 1, 4);
