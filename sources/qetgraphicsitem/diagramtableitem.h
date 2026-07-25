@@ -20,7 +20,9 @@
 
 #include "qetgraphicsitem.h"
 
+#include <QColor>
 #include <QFont>
+#include <QPointF>
 #include <QVector>
 
 class QDomElement;
@@ -59,11 +61,40 @@ class DiagramTableItem : public QetGraphicsItem
 		QRectF boundingRect() const override;
 		QString name() const override { return tr("un tableau"); }
 
+		/* ── 儲存格選取 + 底色(供屬性面板呼叫)────────────────── */
+		bool hasCellSelection() const;          ///< 目前是否有選取儲存格
+		int rowCount() const { return m_rows; }
+		int columnCount() const { return m_cols; }
+		/// 對選取的儲存格上底色(無選取則整張表);空/無效色 = 清除底色
+		void setSelectionBackground(const QColor &color);
+		void clearSelectionBackground() { setSelectionBackground(QColor()); }
+		void selectFullRows();                  ///< 把選取擴成整列(整行)
+		void selectFullColumns();               ///< 把選取擴成整欄(整列)
+		void selectAllCells();                  ///< 選取整張表
+		void clearCellSelection();              ///< 取消儲存格選取
+		void selectWholeRow(int row);           ///< 選取整列(第 row 列)
+		void selectWholeColumn(int col);        ///< 選取整欄(第 col 欄)
+		void addRowAtEnd();                     ///< 表尾新增一列
+		void addColumnAtEnd();                  ///< 表右新增一欄
+		void deleteSelectedRows();              ///< 刪除選取的列(無選取則末列)
+		void deleteSelectedColumns();           ///< 刪除選取的欄(無選取則末欄)
+		// 以下皆套用到「選取範圍」(無選取則整張表),與設定底色一致
+		void setSelectionAlignH(Qt::Alignment h);  ///< 水平對齊(左/中/右)
+		void setSelectionValign(Qt::Alignment v);  ///< 垂直對齊(上/中/下)
+		void setSelectionFontSize(int pt);         ///< 文字大小
+		int currentFontSize() const;               ///< 首個選取格(或預設)字級
+
+	signals:
+		void tableSelectionChanged();           ///< 儲存格選取有變(更新面板)
+
 	protected:
 		void paint(QPainter *, const QStyleOptionGraphicsItem *, QWidget *) override;
 		QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
 		bool sceneEventFilter(QGraphicsItem *watched, QEvent *event) override;
 		void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) override;
+		void mousePressEvent(QGraphicsSceneMouseEvent *event) override;
+		void mouseMoveEvent(QGraphicsSceneMouseEvent *event) override;
+		void mouseReleaseEvent(QGraphicsSceneMouseEvent *event) override;
 
 	private:
 		qreal tableWidth() const;
@@ -76,13 +107,31 @@ class DiagramTableItem : public QetGraphicsItem
 		void editCell(int row, int col);      ///< 於儲存格上開 inline 編輯框
 		void commitEditor();                  ///< 收合 inline 編輯框並寫回文字
 		void pushStateUndo(const QString &old_state);
+		/// 正規化選取矩形(r0<=r1, c0<=c1);回傳 false 表無選取
+		bool selectionRect(int *r0, int *c0, int *r1, int *c1) const;
+		void setSelectionAnchor(int row, int col);   ///< 起點(單格)
+		void extendSelectionTo(int row, int col);    ///< 拖曳延伸終點
+		/// 命中選取列/欄的把手或新增列/欄的「+」;回傳是否已處理該次按下
+		bool hitAffordance(const QPointF &p);
 
 		int m_rows = 0;
 		int m_cols = 0;
 		QVector<qreal> m_col_widths;   ///< 每欄寬度(size = m_cols)
 		qreal m_row_height = 24;       ///< 統一列高
 		QVector<QString> m_cells;      ///< size = m_rows*m_cols,(r,c)=m_cells[r*cols+c]
-		QFont m_font;
+		QVector<QColor> m_cell_bg;     ///< 每格底色(size = m_rows*m_cols;無效=不填)
+		QVector<int> m_cell_halign;    ///< 每格水平對齊 int(Qt::Alignment)
+		QVector<int> m_cell_valign;    ///< 每格垂直對齊
+		QVector<int> m_cell_size;      ///< 每格字級(0=用 m_font 字級)
+		QFont m_font;                  ///< 字型家族 + 預設字級
+
+		// 儲存格選取(矩形範圍;-1 = 無選取)。純顯示狀態,不序列化。
+		int m_sel_r0 = -1, m_sel_c0 = -1, m_sel_r1 = -1, m_sel_c1 = -1;
+		bool m_selecting = false;      ///< Shift 拖曳範圍選取進行中
+		// 按下時暫存,用於「純點一下(未拖曳)= 選單一格」判定
+		QPointF m_press_pos;
+		int m_press_r = -1, m_press_c = -1;
+		bool m_press_was_selected = false;
 
 		QVector<QetGraphicsHandlerItem *> m_handlers;
 		int m_active = -1;             ///< 拖曳中的控制點索引(0..cols-1=欄右緣,cols=列高)

@@ -660,6 +660,8 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/ui/diagramselection.h
   ${QET_DIR}/sources/ui/dialogwaiting.cpp
   ${QET_DIR}/sources/ui/dialogwaiting.h
+  ${QET_DIR}/sources/ui/drawingtablepropertieseditor.cpp
+  ${QET_DIR}/sources/ui/drawingtablepropertieseditor.h
   ${QET_DIR}/sources/ui/dynamicelementtextitemeditor.cpp
   ${QET_DIR}/sources/ui/dynamicelementtextitemeditor.h
   ${QET_DIR}/sources/ui/dynamicelementtextmodel.cpp

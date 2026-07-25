@@ -18,6 +18,8 @@
 #include "propertieseditorfactory.h"
 
 #include "../PropertiesEditor/propertieseditorwidget.h"
+#include "../qetgraphicsitem/diagramtableitem.h"
+#include "../ui/drawingtablepropertieseditor.h"
 #include "../qetgraphicsitem/ViewItem/projectdbmodel.h"
 #include "../qetgraphicsitem/ViewItem/qetgraphicstableitem.h"
 #include "../qetgraphicsitem/ViewItem/ui/graphicstablepropertieseditor.h"
@@ -201,6 +203,12 @@ PropertiesEditorWidget *PropertiesEditorFactory::propertiesEditor(
 				return editor;
 			}
 			return new GraphicsTablePropertiesEditor(table, parent);
+		}
+		case DiagramTableItem::Type: //1012 繪圖用表格(插入表格工具)
+		{
+			if (count_ > 1) return nullptr;
+			return new DrawingTablePropertiesEditor(
+				static_cast<DiagramTableItem*>(item), parent);
 		}
 		default:
 			return nullptr;
