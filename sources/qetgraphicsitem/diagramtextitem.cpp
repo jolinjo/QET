@@ -182,6 +182,13 @@ QColor DiagramTextItem::color() const
 	return defaultTextColor();
 }
 
+void DiagramTextItem::setBadgeBackground(const QColor &color)
+{
+	if (m_badge_bg == color) return;
+	m_badge_bg = color;
+	update();
+}
+
 void DiagramTextItem::setAlignment(const Qt::Alignment &alignment)
 {
 	m_alignment = alignment;
@@ -245,6 +252,21 @@ bool DiagramTextItem::isHtml() const
 void DiagramTextItem::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget)
 {
 	painter -> setRenderHint(QPainter::Antialiasing, false);
+
+	// Badge:文字後方畫圓角實心底色(像 ClickUp 標籤)。半徑取高度一半
+	// 成膠囊狀,略微內縮避免蓋住外框。
+	if (m_badge_bg.isValid()) {
+		painter->save();
+		painter->setRenderHint(QPainter::Antialiasing, true);
+		painter->setPen(Qt::NoPen);
+		painter->setBrush(m_badge_bg);
+		const QRectF r = boundingRect().adjusted(0.5, 0.5, -0.5, -0.5);
+		// ClickUp 風小圓角,且隨文字大小等比縮放(取高度的 ~20%)
+		const qreal radius = qMin(r.height() * 0.2, r.height() / 2.0);
+		painter->drawRoundedRect(r, radius, radius);
+		painter->restore();
+	}
+
 	QGraphicsTextItem::paint(painter, option, widget);
 
 	if (m_mouse_hover && !isSelected())

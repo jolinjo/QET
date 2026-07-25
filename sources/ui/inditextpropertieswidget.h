@@ -62,6 +62,9 @@ class IndiTextPropertiesWidget : public PropertiesEditorWidget
 		QList<IndependentTextItem *> editedTexts() const;
 		void applyCharFormatToAll(const QTextCharFormat &format,
 					  const QString &undo_text);
+		void applyTextForeground(const QColor &color);   ///< 套用文字色
+		void applyTextBackground(const QColor &color);   ///< 套用底色(空=移除)
+		void buildColorPalette();   ///< 建立範本顏色swatch面板(ClickUp 風)
 		
 	private:
 		Ui::IndiTextPropertiesWidget *ui;

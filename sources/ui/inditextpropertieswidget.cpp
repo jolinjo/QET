@@ -18,8 +18,14 @@
 #include "inditextpropertieswidget.h"
 
 #include <QColorDialog>
+#include <QGridLayout>
+#include <QHBoxLayout>
+#include <QLabel>
 #include <QTextCursor>
 #include <QTextDocument>
+#include <QToolButton>
+#include <QUndoStack>
+#include <QVBoxLayout>
 
 #include "../QPropertyUndoCommand/qpropertyundocommand.h"
 #include "../diagram.h"
@@ -86,6 +92,11 @@ IndiTextPropertiesWidget::IndiTextPropertiesWidget(IndependentTextItem *text, QW
 		underline_font.setUnderline(true);
 		ui->m_underline_pb->setFont(underline_font);
 	}
+	// 移除上標/下標:那是唯一會把文字轉成 HTML 的功能(HTML 會鎖住
+	// 大小/字型/內容編輯)。拿掉後文字永遠純文字。
+	ui->m_sup_pb->hide();
+	ui->m_sub_pb->hide();
+	buildColorPalette();
 	if (text) {
 		setText(text);
 	}
@@ -103,6 +114,9 @@ IndiTextPropertiesWidget::IndiTextPropertiesWidget(
 	ui(new Ui::IndiTextPropertiesWidget)
 {
 	ui->setupUi(this);
+	ui->m_sup_pb->hide();
+	ui->m_sub_pb->hide();
+	buildColorPalette();
 	setText(text_list);
 }
 
@@ -555,13 +569,16 @@ void IndiTextPropertiesWidget::on_m_color_pb_clicked()
 {
 	const QList<IndependentTextItem *> texts = editedTexts();
 	if (texts.isEmpty()) return;
-
 	const QColor color = QColorDialog::getColor(
-		texts.first()->color(), this,
-		tr("Couleur du texte"));
+		texts.first()->color(), this, tr("Couleur du texte"));
 	if (!color.isValid()) return;
+	applyTextForeground(color);
+}
 
-	for (IndependentTextItem *item : texts) {
+void IndiTextPropertiesWidget::applyTextForeground(const QColor &color)
+{
+	if (!color.isValid()) return;
+	for (IndependentTextItem *item : editedTexts()) {
 		if (item->isHtml()) {
 			QTextCharFormat format;
 			format.setForeground(color);
@@ -587,19 +604,121 @@ void IndiTextPropertiesWidget::on_m_color_pb_clicked()
 	}
 }
 
-void IndiTextPropertiesWidget::on_m_bold_pb_clicked(bool checked)
+void IndiTextPropertiesWidget::applyTextBackground(const QColor &color)
 {
+	// 底色改用「項目層級圓角 badge 底」,而非字元格式 highlight。字元格式
+	// 會把文字轉成 HTML,導致尺寸無法調整;badge 是項目屬性,不轉 HTML,
+	// 尺寸照常可調。套用有效色時同時把文字色改成對比色(暗底白字/亮底
+	// 深字)讓 badge 上的字清楚;整組合成單一復原。
 	const QList<IndependentTextItem *> texts = editedTexts();
 	for (IndependentTextItem *item : texts) {
-		if (item->isHtml()) {
-			QTextCharFormat format;
-			format.setFontWeight(checked ? QFont::Bold
-						     : QFont::Normal);
-			applyCharFormatToAll(format,
-				tr("Modifier le format d'un champ texte"));
-			return;
+		if (!item->diagram()) continue;
+		if (item->badgeBackground() == color
+		    && (!color.isValid())) continue;
+		QUndoStack &st = item->diagram()->undoStack();
+		st.beginMacro(color.isValid() ? tr("設定文字底色")
+					      : tr("移除文字底色"));
+		st.push(new QPropertyUndoCommand(item, "badgeBackground",
+			QVariant(item->badgeBackground()), QVariant(color)));
+		if (color.isValid() && !item->isHtml()) {
+			// 用感知亮度(YIQ)決定對比色,而非 HSL lightness——
+			// 飽和的紫/藍 lightness 會 ~0.5 卻其實很暗,需白字。
+			const int yiq = (color.red() * 299 + color.green() * 587
+					 + color.blue() * 114) / 1000;
+			const QColor fg = yiq < 150
+				? QColor(Qt::white) : QColor(0x1a, 0x1a, 0x1a);
+			if (item->color() != fg)
+				st.push(new QPropertyUndoCommand(item, "color",
+					QVariant(item->color()), QVariant(fg)));
 		}
+		st.endMacro();
 	}
+}
+
+void IndiTextPropertiesWidget::buildColorPalette()
+{
+	// 固定範本色(參考 ClickUp):文字色一組、底色(highlight)一組,
+	// 直接點選套用,不必開調色盤,產出風格較一致。
+	static const char *const TEXT_COLORS[] = {
+		"#1a1a1a", "#e03e3e", "#d9730d", "#dfab01", "#0f7b6c",
+		"#0b6e99", "#6940a5", "#ad1a72", "#787774" };
+	// badge 底色(圓角標籤):一排飽和色、一排淡色(參考 ClickUp Badges)
+	static const char *const HL_COLORS[] = {
+		"#d63d3d", "#e8710a", "#e0a800", "#2f6fdb", "#4a3fc7",
+		"#d63384", "#2f8f5b", "#9b9a97",
+		"#fbe4e4", "#faebdd", "#fbf3db", "#ddedea", "#ddebf1",
+		"#eae4f2", "#f4dfeb", "#e3e2e0" };
+
+	auto *w = new QWidget(this);
+	auto *v = new QVBoxLayout(w);
+	v->setContentsMargins(0, 4, 0, 0);
+	v->setSpacing(2);
+
+	auto makeSwatch = [this](const QColor &c, bool foreground) -> QToolButton * {
+		auto *b = new QToolButton(this);
+		b->setFixedSize(20, 20);
+		b->setCursor(Qt::PointingHandCursor);
+		b->setToolTip(c.name());
+		if (foreground) {
+			b->setText(QStringLiteral("A"));
+			b->setStyleSheet(QStringLiteral(
+				"QToolButton{border:1px solid #c8c8c8;border-radius:3px;"
+				"font-weight:bold;color:%1;background:white;}")
+				.arg(c.name()));
+			connect(b, &QToolButton::clicked, this,
+				[this, c]() { applyTextForeground(c); });
+		} else {
+			b->setStyleSheet(QStringLiteral(
+				"QToolButton{border:1px solid #c8c8c8;border-radius:10px;"
+				"background:%1;}").arg(c.name()));
+			connect(b, &QToolButton::clicked, this,
+				[this, c]() { applyTextBackground(c); });
+		}
+		return b;
+	};
+
+	v->addWidget(new QLabel(tr("文字顏色"), w));
+	auto *fg = new QHBoxLayout();
+	fg->setSpacing(3);
+	for (const char *hex : TEXT_COLORS)
+		fg->addWidget(makeSwatch(QColor(QString::fromLatin1(hex)), true));
+	fg->addStretch();
+	v->addLayout(fg);
+
+	v->addWidget(new QLabel(tr("文字底色(圓角標籤)"), w));
+	auto *bg = new QGridLayout();
+	bg->setSpacing(3);
+	const int cols = 8;
+	int n = 0;
+	for (const char *hex : HL_COLORS) {
+		bg->addWidget(makeSwatch(QColor(QString::fromLatin1(hex)), false),
+			      n / cols, n % cols);
+		++n;
+	}
+	auto *none = new QToolButton(this);
+	none->setFixedSize(20, 20);
+	none->setText(QStringLiteral("⊘"));
+	none->setToolTip(tr("移除底色"));
+	none->setCursor(Qt::PointingHandCursor);
+	none->setStyleSheet(QStringLiteral(
+		"QToolButton{border:1px solid #c8c8c8;border-radius:10px;"
+		"background:white;}"));
+	connect(none, &QToolButton::clicked, this,
+		[this]() { applyTextBackground(QColor()); });
+	bg->addWidget(none, n / cols, n % cols);
+	auto *bg_wrap = new QHBoxLayout();
+	bg_wrap->addLayout(bg);
+	bg_wrap->addStretch();
+	v->addLayout(bg_wrap);
+
+	const int row = ui->gridLayout->rowCount();
+	ui->gridLayout->addWidget(w, row, 0, 1, 4);
+}
+
+void IndiTextPropertiesWidget::on_m_bold_pb_clicked(bool checked)
+{
+	// 一律用項目字型旗標(不走 HTML 字元格式),維持純文字
+	const QList<IndependentTextItem *> texts = editedTexts();
 	for (IndependentTextItem *item : texts) {
 		QFont font = item->font();
 		if (font.bold() == checked) continue;
@@ -617,16 +736,8 @@ void IndiTextPropertiesWidget::on_m_bold_pb_clicked(bool checked)
 
 void IndiTextPropertiesWidget::on_m_underline_pb_clicked(bool checked)
 {
+	// 一律用項目字型旗標(不走 HTML 字元格式),維持純文字
 	const QList<IndependentTextItem *> texts = editedTexts();
-	for (IndependentTextItem *item : texts) {
-		if (item->isHtml()) {
-			QTextCharFormat format;
-			format.setFontUnderline(checked);
-			applyCharFormatToAll(format,
-				tr("Modifier le format d'un champ texte"));
-			return;
-		}
-	}
 	for (IndependentTextItem *item : texts) {
 		QFont font = item->font();
 		if (font.underline() == checked) continue;

@@ -76,6 +76,8 @@ void IndependentTextItem::fromXml(const QDomElement &e) {
 		font.fromString(e.attribute("font"));
 		setFont(font);
 	}
+	if (e.hasAttribute("badge_bg"))
+		setBadgeBackground(QColor(e.attribute("badge_bg")));
 }
 
 /**
@@ -91,7 +93,10 @@ QDomElement IndependentTextItem::toXml(QDomDocument &document) const
 	result.setAttribute("text", isHtml() ? toHtml() : toPlainText());
 	result.setAttribute("rotation", QString::number(QET::correctAngle(rotation())));
 	result.setAttribute("font", font().toString());
-	
+	if (badgeBackground().isValid())
+		result.setAttribute("badge_bg",
+			badgeBackground().name(QColor::HexArgb));
+
 	return(result);
 }
 
