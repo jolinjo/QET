@@ -332,6 +332,26 @@ void DiagramTableItem::paint(QPainter *painter,
 		};
 		plusBar(QRectF(0, H + 2, W, ADD - 3));
 		plusBar(QRectF(W + 2, 0, ADD - 3, H));
+
+		// 拖曳換列/欄時的落點指示線(藍色)
+		if (m_reorder != NoReorder && m_reorder_to != m_reorder_from) {
+			QPen ip(QColor(0x2d, 0x7d, 0xff));
+			ip.setWidthF(2.5);
+			ip.setCosmetic(true);
+			painter->setPen(ip);
+			if (m_reorder == ReorderCol) {
+				const qreal x = m_reorder_to > m_reorder_from
+					? columnLeft(m_reorder_to)
+						+ m_col_widths.at(m_reorder_to)
+					: columnLeft(m_reorder_to);
+				painter->drawLine(QPointF(x, -HDR), QPointF(x, H));
+			} else {
+				const qreal y = (m_reorder_to > m_reorder_from
+					? m_reorder_to + 1 : m_reorder_to)
+					* m_row_height;
+				painter->drawLine(QPointF(-HDR, y), QPointF(W, y));
+			}
+		}
 		painter->restore();
 	}
 }
@@ -721,6 +741,80 @@ int DiagramTableItem::currentFontSize() const
 	return m_font.pointSize() > 0 ? m_font.pointSize() : 9;
 }
 
+int DiagramTableItem::columnAtX(qreal x) const
+{
+	qreal acc = 0;
+	for (int c = 0; c < m_cols; ++c) {
+		if (x < acc + m_col_widths.at(c)) return c;
+		acc += m_col_widths.at(c);
+	}
+	return m_cols - 1;
+}
+
+void DiagramTableItem::moveColumn(int from, int to)
+{
+	if (diagram() && diagram()->isReadOnly()) return;
+	from = qBound(0, from, m_cols - 1);
+	to = qBound(0, to, m_cols - 1);
+	if (from == to) return;
+	const QString old = state();
+	prepareGeometryChange();
+	QList<int> order;
+	for (int c = 0; c < m_cols; ++c) order << c;
+	order.move(from, to);   // 把第 from 欄搬到 to 位置
+	QVector<qreal> nw;
+	QVector<QString> nc;
+	QVector<QColor> nbg;
+	QVector<int> nha, nva, nsz;
+	for (int c : order) nw.append(m_col_widths.value(c));
+	for (int r = 0; r < m_rows; ++r)
+		for (int c : order) {
+			const int i = r * m_cols + c;
+			nc.append(m_cells.value(i));
+			nbg.append(m_cell_bg.value(i));
+			nha.append(m_cell_halign.value(i, int(Qt::AlignLeft)));
+			nva.append(m_cell_valign.value(i, int(Qt::AlignVCenter)));
+			nsz.append(m_cell_size.value(i, 0));
+		}
+	m_col_widths = nw; m_cells = nc; m_cell_bg = nbg;
+	m_cell_halign = nha; m_cell_valign = nva; m_cell_size = nsz;
+	clearCellSelection();
+	if (isSelected()) { removeHandlers(); addHandlers(); }
+	update();
+	pushStateUndo(old);
+}
+
+void DiagramTableItem::moveRow(int from, int to)
+{
+	if (diagram() && diagram()->isReadOnly()) return;
+	from = qBound(0, from, m_rows - 1);
+	to = qBound(0, to, m_rows - 1);
+	if (from == to) return;
+	const QString old = state();
+	prepareGeometryChange();
+	QList<int> order;
+	for (int r = 0; r < m_rows; ++r) order << r;
+	order.move(from, to);
+	QVector<QString> nc;
+	QVector<QColor> nbg;
+	QVector<int> nha, nva, nsz;
+	for (int r : order)
+		for (int c = 0; c < m_cols; ++c) {
+			const int i = r * m_cols + c;
+			nc.append(m_cells.value(i));
+			nbg.append(m_cell_bg.value(i));
+			nha.append(m_cell_halign.value(i, int(Qt::AlignLeft)));
+			nva.append(m_cell_valign.value(i, int(Qt::AlignVCenter)));
+			nsz.append(m_cell_size.value(i, 0));
+		}
+	m_cells = nc; m_cell_bg = nbg;
+	m_cell_halign = nha; m_cell_valign = nva; m_cell_size = nsz;
+	clearCellSelection();
+	if (isSelected()) { removeHandlers(); addHandlers(); }
+	update();
+	pushStateUndo(old);
+}
+
 bool DiagramTableItem::hitAffordance(const QPointF &p)
 {
 	const qreal W = tableWidth(), H = tableHeight();
@@ -732,19 +826,18 @@ bool DiagramTableItem::hitAffordance(const QPointF &p)
 	if (p.x() >= W && p.x() <= W + ADD && p.y() >= 0 && p.y() <= H) {
 		addColumnAtEnd(); return true;
 	}
-	// 上方把手 = 選整欄
+	// 上方把手 = 選整欄,並開始拖曳換欄位置
 	if (p.y() >= -HDR && p.y() < 0 && p.x() >= 0 && p.x() < W) {
-		qreal x = 0; int c = 0;
-		for (c = 0; c < m_cols; ++c) {
-			if (p.x() < x + m_col_widths.at(c)) break;
-			x += m_col_widths.at(c);
-		}
+		const int c = columnAtX(p.x());
 		selectWholeColumn(c);
+		m_reorder = ReorderCol; m_reorder_from = c; m_reorder_to = c;
 		return true;
 	}
-	// 左方把手 = 選整列
+	// 左方把手 = 選整列,並開始拖曳換列位置
 	if (p.x() >= -HDR && p.x() < 0 && p.y() >= 0 && p.y() < H) {
-		selectWholeRow(int(p.y() / m_row_height));
+		const int r = int(p.y() / m_row_height);
+		selectWholeRow(r);
+		m_reorder = ReorderRow; m_reorder_from = r; m_reorder_to = r;
 		return true;
 	}
 	return false;
@@ -782,6 +875,18 @@ void DiagramTableItem::mousePressEvent(QGraphicsSceneMouseEvent *event)
 
 void DiagramTableItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 {
+	if (m_reorder != NoReorder) {
+		const QPointF p = event->pos();
+		if (m_reorder == ReorderCol)
+			m_reorder_to = columnAtX(
+				qBound(0.0, p.x(), tableWidth() - 0.1));
+		else
+			m_reorder_to = qBound(0, int(p.y() / m_row_height),
+					      m_rows - 1);
+		update();
+		event->accept();
+		return;
+	}
 	if (m_selecting) {
 		int r = 0, c = 0;
 		if (cellAt(event->pos(), &r, &c) >= 0) extendSelectionTo(r, c);
@@ -793,6 +898,18 @@ void DiagramTableItem::mouseMoveEvent(QGraphicsSceneMouseEvent *event)
 
 void DiagramTableItem::mouseReleaseEvent(QGraphicsSceneMouseEvent *event)
 {
+	if (m_reorder != NoReorder) {
+		const ReorderKind kind = m_reorder;
+		const int from = m_reorder_from, to = m_reorder_to;
+		m_reorder = NoReorder; m_reorder_from = m_reorder_to = -1;
+		if (to != from) {
+			if (kind == ReorderCol) moveColumn(from, to);
+			else moveRow(from, to);
+		}
+		update();
+		event->accept();
+		return;
+	}
 	if (m_selecting) {
 		m_selecting = false;
 		event->accept();

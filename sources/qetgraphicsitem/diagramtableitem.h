@@ -113,6 +113,9 @@ class DiagramTableItem : public QetGraphicsItem
 		void extendSelectionTo(int row, int col);    ///< 拖曳延伸終點
 		/// 命中選取列/欄的把手或新增列/欄的「+」;回傳是否已處理該次按下
 		bool hitAffordance(const QPointF &p);
+		int columnAtX(qreal x) const;                ///< x 落在第幾欄
+		void moveRow(int from, int to);              ///< 換列位置
+		void moveColumn(int from, int to);           ///< 換欄位置
 
 		int m_rows = 0;
 		int m_cols = 0;
@@ -128,6 +131,10 @@ class DiagramTableItem : public QetGraphicsItem
 		// 儲存格選取(矩形範圍;-1 = 無選取)。純顯示狀態,不序列化。
 		int m_sel_r0 = -1, m_sel_c0 = -1, m_sel_r1 = -1, m_sel_c1 = -1;
 		bool m_selecting = false;      ///< Shift 拖曳範圍選取進行中
+		// 拖曳把手換列/欄位置
+		enum ReorderKind { NoReorder, ReorderRow, ReorderCol };
+		ReorderKind m_reorder = NoReorder;
+		int m_reorder_from = -1, m_reorder_to = -1;
 		// 按下時暫存,用於「純點一下(未拖曳)= 選單一格」判定
 		QPointF m_press_pos;
 		int m_press_r = -1, m_press_c = -1;
