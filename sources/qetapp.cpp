@@ -1311,7 +1311,7 @@ QFont QETApp::diagramTextsFont(qreal size)
 
 	//Font to use
 	QString diagram_texts_family = settings.value("diagramitemfont",
-							  "Liberation Sans").toString();
+							  "osifont").toString();
 	qreal diagram_texts_size     = settings.value("diagramitemsize",
 							  9.0).toDouble();
 	auto diagram_texts_item_weight =
@@ -1324,6 +1324,11 @@ QFont QETApp::diagramTextsFont(qreal size)
 		diagram_texts_size = size;
 	}
 	QFont diagram_texts_font = QFont(diagram_texts_family);
+	// 逐字型 fallback:主字型(英數,預設 osifont)缺字(中文)時改用
+	// 源樣黑體 GenYoGothic2 TW。Qt6 setFamilies 會逐字挑第一個有該字的字型。
+	diagram_texts_font.setFamilies({diagram_texts_family,
+		QStringLiteral("GenYoGothic2 TW"),
+		QStringLiteral("GenYoGothic2 TW R")});
 	diagram_texts_font.setPointSizeF(diagram_texts_size);
 	diagram_texts_font.setWeight(diagram_texts_item_weight);
 	diagram_texts_font.setStyleHint(QFont::SansSerif);
@@ -1345,7 +1350,7 @@ QFont QETApp::diagramTextsItemFont(qreal size)
 
 	//Font to use
 	QString diagram_texts_item_family = settings.value("diagramitemfont",
-							   "Liberation Sans").toString();
+							   "osifont").toString();
 	qreal diagram_texts_item_size     = settings.value("diagramitemsize",
 							   9.0).toDouble();
 	auto diagram_texts_item_weight =
@@ -1358,6 +1363,9 @@ QFont QETApp::diagramTextsItemFont(qreal size)
 		diagram_texts_item_size = size;
 	}
 	QFont diagram_texts_item_font = QFont(diagram_texts_item_family);
+	diagram_texts_item_font.setFamilies({diagram_texts_item_family,
+		QStringLiteral("GenYoGothic2 TW"),
+		QStringLiteral("GenYoGothic2 TW R")});
 	diagram_texts_item_font.setPointSizeF(diagram_texts_item_size);
 	diagram_texts_item_font.setWeight(diagram_texts_item_weight);
 	diagram_texts_item_font.setStyleHint(QFont::SansSerif);
@@ -2218,7 +2226,11 @@ void QETApp::initFonts()
 
 			See the file "fonts/osifont.LICENSE" for license information. */
 		":/fonts/osifont.ttf",
-		":/fonts/osifont-italic.ttf",	
+		":/fonts/osifont-italic.ttf",
+
+		/** "GenYo Gothic (源樣黑體)" 中文字型,SIL Open Font License 1.1。
+			圖紙文字英數用 osifont,中文 fallback 到此。 */
+		":/fonts/GenYoGothic2TW-R.otf",
 	};
 
 	for (const QString &font : fonts) {
@@ -2342,6 +2354,14 @@ void QETApp::initConfiguration()
 		    == QLatin1String("https://github.com/jolinjo/QET-Lib")) {
 			settings.setValue(lib_url_key, QStringLiteral(
 				"http://192.168.1.148:3000/HC-Git/QET-Lib"));
+		}
+		// 圖紙文字預設字型改用工程字型 osifont(英文/數字符合 ISO 3098)。
+		// 只動「未設定或仍是舊預設 Liberation Sans」者,自訂過的保留。
+		const QString font_key = QStringLiteral("diagramitemfont");
+		const QString cur_font = settings.value(font_key).toString();
+		if (cur_font.isEmpty()
+		    || cur_font == QLatin1String("Liberation Sans")) {
+			settings.setValue(font_key, QStringLiteral("osifont"));
 		}
 	}
 

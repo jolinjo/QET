@@ -770,6 +770,9 @@
 	<file>fonts/osifont-italic.ttf</file>
 	<file>licenses/osifont.NOTICE</file>
 	<file>licenses/osifont.LICENSE</file>
+        <!-- "GenYo Gothic (源樣黑體)" 中文字型,SIL Open Font License 1.1。
+             用作圖紙中文字型(英數用 osifont,中文 fallback 到此)。 -->
+	<file>fonts/GenYoGothic2TW-R.otf</file>
 
 	<!-- Custom bundled fonts.
 	     UI = WenQuanYi Micro Hei (Apache-2.0 / GPLv3, committed; TrueType-hinted,
