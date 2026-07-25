@@ -23,7 +23,47 @@
 #include "../qetgraphicsitem/qetshapeitem.h"
 #include "../ui_shapegraphicsitempropertieswidget.h"
 
+#include <QComboBox>
 #include <QHash>
+#include <QIcon>
+#include <QPainter>
+#include <QPen>
+#include <QPixmap>
+
+namespace {
+	/// 依 Qt 筆型畫一段實際樣式線段當縮圖(讓下拉選單看得出長相)
+	QIcon lineStyleIcon(Qt::PenStyle style)
+	{
+		const int w = 72, h = 14;
+		QPixmap pm(w, h);
+		pm.fill(Qt::transparent);
+		QPainter p(&pm);
+		QPen pen(Qt::black);
+		pen.setWidthF(1.4);
+		if (style == Qt::CustomDashLine) {
+			pen.setStyle(Qt::CustomDashLine);
+			pen.setDashPattern({6, 3, 1, 3});   // 範例自訂虛線樣式
+		} else {
+			pen.setStyle(style);
+		}
+		p.setPen(pen);
+		p.drawLine(3, h / 2, w - 3, h / 2);
+		return QIcon(pm);
+	}
+
+	/// 為線型下拉的六個項目(一般/虛線/點狀/點劃線/雙點劃線/自訂虛線)
+	/// 各加上對應樣式的線段縮圖。項目順序須與 Qt::PenStyle 對應一致。
+	void decorateLineStyleCombo(QComboBox *cb)
+	{
+		if (!cb) return;
+		static const Qt::PenStyle styles[6] = {
+			Qt::SolidLine, Qt::DashLine, Qt::DotLine,
+			Qt::DashDotLine, Qt::DashDotDotLine, Qt::CustomDashLine };
+		cb->setIconSize(QSize(72, 14));
+		for (int i = 0; i < cb->count() && i < 6; ++i)
+			cb->setItemIcon(i, lineStyleIcon(styles[i]));
+	}
+}
 
 /**
 	@brief ShapeGraphicsItemPropertiesWidget::ShapeGraphicsItemPropertiesWidget
@@ -37,6 +77,7 @@ ShapeGraphicsItemPropertiesWidget::ShapeGraphicsItemPropertiesWidget(QetShapeIte
 	m_shape(nullptr)
 {
 	ui->setupUi(this);
+	decorateLineStyleCombo(ui->m_style_cb);
 	setItem(item);
 }
 
@@ -45,6 +86,7 @@ ShapeGraphicsItemPropertiesWidget::ShapeGraphicsItemPropertiesWidget(QList<QetSh
 	ui(new Ui::ShapeGraphicsItemPropertiesWidget)
 {
 	ui->setupUi(this);
+	decorateLineStyleCombo(ui->m_style_cb);
 	setItems(items_list);
 }
 
