@@ -296,7 +296,11 @@ PdmDialog::PdmDialog(QWidget *parent) :
 			ensureBusyDialog();
 			m_busy_label->setText(text);
 			m_hide_timer->stop();
-			if (!m_busy_dialog->isVisible()) {
+			// 只在「使用者操作進行中」或「圖檔管理視窗開著」才彈框;
+			// 啟動初始化與視窗未開時的背景 git(清單/歷史/同步)
+			// 一律安靜跑,不打擾(狀態列文字照更新)。
+			if (!m_busy_dialog->isVisible()
+			    && (m_op_active || isVisible())) {
 				m_busy_dialog->show();
 				m_busy_dialog->raise();
 				m_busy_bar->setValue(0);   // 背景讀取自行彈框:從頭開始
