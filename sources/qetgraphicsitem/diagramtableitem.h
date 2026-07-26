@@ -83,6 +83,10 @@ class DiagramTableItem : public QetGraphicsItem
 		void setSelectionValign(Qt::Alignment v);  ///< 垂直對齊(上/中/下)
 		void setSelectionFontSize(int pt);         ///< 文字大小
 		int currentFontSize() const;               ///< 首個選取格(或預設)字級
+		/// 把多張表合併進本表:依畫面位置(上→下、左→右)把各表的列
+		/// 串接起來;欄數取最大、逐格樣式(底色/對齊/字級)保留,
+		/// 欄寬取「第一張有該欄的表」;來源表刪除。整包一個復原巨集。
+		void mergeWith(QList<DiagramTableItem *> others);
 
 	signals:
 		void tableSelectionChanged();           ///< 儲存格選取有變(更新面板)

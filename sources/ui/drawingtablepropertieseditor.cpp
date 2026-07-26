@@ -29,11 +29,24 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
+#include <algorithm>
+
 DrawingTablePropertiesEditor::DrawingTablePropertiesEditor(
-	DiagramTableItem *table, QWidget *parent) :
-	PropertiesEditorWidget(parent),
-	m_table(table)
+	const QList<DiagramTableItem *> &tables, QWidget *parent) :
+	PropertiesEditorWidget(parent)
 {
+	for (DiagramTableItem *t : tables)
+		if (t) m_tables << t;
+	// 依畫面位置排序,首張(最上/最左)為主表
+	std::sort(m_tables.begin(), m_tables.end(),
+		  [](const QPointer<DiagramTableItem> &a,
+		     const QPointer<DiagramTableItem> &b) {
+		const QPointF pa = a->scenePos(), pb = b->scenePos();
+		if (!qFuzzyCompare(pa.y(), pb.y())) return pa.y() < pb.y();
+		return pa.x() < pb.x();
+	});
+	m_table = m_tables.isEmpty() ? nullptr : m_tables.first().data();
+
 	auto *root = new QVBoxLayout(this);
 	root->setContentsMargins(0, 0, 0, 0);
 
@@ -43,6 +56,17 @@ DrawingTablePropertiesEditor::DrawingTablePropertiesEditor(
 	m_info = new QLabel(box);
 	m_info->setWordWrap(true);
 	v->addWidget(m_info);
+
+	// 多選表格:提供合併(依畫面位置上→下串接成一張)
+	if (m_tables.count() >= 2) {
+		auto *merge = new QPushButton(
+			tr("合併 %1 張表格").arg(m_tables.count()), box);
+		merge->setToolTip(tr("依畫面位置由上而下,把選取的表格"
+				     "串接成一張(可復原)"));
+		v->addWidget(merge);
+		connect(merge, &QPushButton::clicked, this,
+			&DrawingTablePropertiesEditor::mergeSelectedTables);
+	}
 
 	auto *sel_row = new QHBoxLayout();
 	auto *btn_row = new QPushButton(tr("選取整列"), box);
@@ -185,6 +209,13 @@ void DrawingTablePropertiesEditor::updateInfo()
 	}
 	if (!m_info) return;
 	if (!m_table) { m_info->setText(QStringLiteral("—")); return; }
+	if (m_tables.count() >= 2) {
+		m_info->setText(tr(
+			"已選取 %1 張表格。「合併」會依畫面位置由上而下\n"
+			"串接成一張;下方設定只作用於第一張表。")
+				.arg(m_tables.count()));
+		return;
+	}
 	if (m_table->hasCellSelection())
 		m_info->setText(tr(
 			"已選取儲存格:設定底色會套用到選取範圍。\n"
@@ -193,4 +224,18 @@ void DrawingTablePropertiesEditor::updateInfo()
 		m_info->setText(tr(
 			"未選取儲存格:設定底色會套用到整張表。\n"
 			"點一格=選單格;Shift+拖曳=選範圍。"));
+}
+
+void DrawingTablePropertiesEditor::mergeSelectedTables()
+{
+	QList<DiagramTableItem *> list;
+	for (const QPointer<DiagramTableItem> &p : m_tables)
+		if (p) list << p.data();
+	if (list.count() < 2) return;
+	DiagramTableItem *target = list.takeFirst();   // 已排序:最上/最左
+	target->mergeWith(list);
+	// 來源表已自場景移除,選取狀態隨之更新,面板會重建成單表模式
+	m_tables.clear();
+	m_tables << target;
+	updateInfo();
 }

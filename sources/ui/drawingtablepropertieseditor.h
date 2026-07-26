@@ -20,6 +20,9 @@
 
 #include "../PropertiesEditor/propertieseditorwidget.h"
 
+#include <QList>
+#include <QPointer>
+
 class DiagramTableItem;
 class QLabel;
 class QSpinBox;
@@ -28,6 +31,7 @@ class QSpinBox;
 	@brief 「繪圖表格」(DiagramTableItem)的屬性面板編輯器。
 	提供:選取整列/整欄/整表、對選取儲存格(無選取則整張表)設定或清除
 	底色。變更即時套用(經表格自身的 QPropertyUndoCommand,可復原)。
+	同時選取多張表時另提供「合併表格」:依畫面位置由上而下串接成一張。
 */
 class DrawingTablePropertiesEditor : public PropertiesEditorWidget
 {
@@ -35,14 +39,17 @@ class DrawingTablePropertiesEditor : public PropertiesEditorWidget
 
 	public:
 		explicit DrawingTablePropertiesEditor(
-			DiagramTableItem *table, QWidget *parent = nullptr);
+			const QList<DiagramTableItem *> &tables,
+			QWidget *parent = nullptr);
 
 		QString title() const override;
 
 	private:
 		void updateInfo();
+		void mergeSelectedTables();
 
 		DiagramTableItem *m_table = nullptr;
+		QList<QPointer<DiagramTableItem>> m_tables;
 		QLabel *m_info = nullptr;
 		QSpinBox *m_size_sb = nullptr;
 };

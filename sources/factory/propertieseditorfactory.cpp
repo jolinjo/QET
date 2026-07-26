@@ -206,9 +206,11 @@ PropertiesEditorWidget *PropertiesEditorFactory::propertiesEditor(
 		}
 		case DiagramTableItem::Type: //1012 繪圖用表格(插入表格工具)
 		{
-			if (count_ > 1) return nullptr;
-			return new DrawingTablePropertiesEditor(
-				static_cast<DiagramTableItem*>(item), parent);
+			// 多選(全為表格)也給編輯器:提供「合併表格」
+			QList<DiagramTableItem *> tables;
+			for (QGraphicsItem *qgi : items)
+				tables << static_cast<DiagramTableItem *>(qgi);
+			return new DrawingTablePropertiesEditor(tables, parent);
 		}
 		default:
 			return nullptr;

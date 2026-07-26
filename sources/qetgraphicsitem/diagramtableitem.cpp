@@ -30,6 +30,9 @@
 #include <QJsonObject>
 #include <QLineEdit>
 #include <QPainter>
+#include <QPointer>
+
+#include <algorithm>
 
 namespace {
 	const qreal MIN_COL = 20;
@@ -982,6 +985,123 @@ void DiagramTableItem::pushStateUndo(const QString &old_state)
 					      old_state, state());
 	undo->setText(tr("Modifier %1").arg(name()));
 	diagram()->undoStack().push(undo);
+}
+
+namespace {
+	/// 合併表格用:把來源表自場景移除(undo 放回)。
+	/// DiagramContent 未涵蓋繪圖表格,故自備最小移除命令。
+	class RemoveTableCommand : public QUndoCommand
+	{
+	public:
+		RemoveTableCommand(DiagramTableItem *item, Diagram *diagram,
+				   QUndoCommand *parent = nullptr) :
+			QUndoCommand(parent), m_item(item), m_diagram(diagram)
+		{
+			setText(QObject::tr("刪除表格"));
+		}
+		~RemoveTableCommand() override
+		{
+			// 命令被銷毀時表格仍在場景外 → 歸本命令所有,須釋放
+			if (m_removed && m_item && !m_item->scene())
+				delete m_item;
+		}
+		void redo() override
+		{
+			if (!m_item) return;
+			m_item->setSelected(false);   // 先收控制點
+			m_pos = m_item->pos();
+			m_diagram->removeItem(m_item);
+			m_removed = true;
+		}
+		void undo() override
+		{
+			if (!m_item) return;
+			m_diagram->addItem(m_item);
+			m_item->setPos(m_pos);
+			m_removed = false;
+		}
+	private:
+		QPointer<DiagramTableItem> m_item;
+		Diagram *m_diagram = nullptr;
+		QPointF m_pos;
+		bool m_removed = false;
+	};
+}
+
+void DiagramTableItem::mergeWith(QList<DiagramTableItem *> others)
+{
+	others.removeAll(this);
+	others.removeAll(nullptr);
+	if (others.isEmpty() || !diagram()) return;
+
+	// 合併順序 = 含本表在內,依畫面位置上→下、左→右
+	QList<DiagramTableItem *> all;
+	all << this;
+	all += others;
+	std::sort(all.begin(), all.end(),
+		  [](DiagramTableItem *a, DiagramTableItem *b) {
+		const QPointF pa = a->scenePos(), pb = b->scenePos();
+		if (!qFuzzyCompare(pa.y(), pb.y())) return pa.y() < pb.y();
+		return pa.x() < pb.x();
+	});
+
+	const QString old = state();
+	int new_cols = 0, new_rows = 0;
+	for (DiagramTableItem *t : all) {
+		new_cols = qMax(new_cols, t->m_cols);
+		new_rows += t->m_rows;
+	}
+	QVector<qreal> widths(new_cols, 80.0);
+	for (int c = 0; c < new_cols; ++c)
+		for (DiagramTableItem *t : all)
+			if (c < t->m_col_widths.size()) {
+				widths[c] = t->m_col_widths.at(c);
+				break;
+			}
+	const int n = new_rows * new_cols;
+	QVector<QString> cells(n);
+	QVector<QColor> bg(n);
+	QVector<int> ha(n, int(Qt::AlignLeft));
+	QVector<int> va(n, int(Qt::AlignVCenter));
+	QVector<int> sz(n, 0);
+	int row_base = 0;
+	for (DiagramTableItem *t : all) {
+		for (int r = 0; r < t->m_rows; ++r)
+			for (int c = 0; c < t->m_cols; ++c) {
+				const int src = r * t->m_cols + c;
+				const int dst = (row_base + r) * new_cols + c;
+				cells[dst] = t->m_cells.value(src);
+				bg[dst] = t->m_cell_bg.value(src);
+				ha[dst] = t->m_cell_halign.value(
+					src, int(Qt::AlignLeft));
+				va[dst] = t->m_cell_valign.value(
+					src, int(Qt::AlignVCenter));
+				sz[dst] = t->m_cell_size.value(src, 0);
+			}
+		row_base += t->m_rows;
+	}
+
+	prepareGeometryChange();
+	m_rows = new_rows;
+	m_cols = new_cols;
+	m_col_widths = widths;
+	m_cells = cells;
+	m_cell_bg = bg;
+	m_cell_halign = ha;
+	m_cell_valign = va;
+	m_cell_size = sz;
+	m_sel_r0 = m_sel_c0 = m_sel_r1 = m_sel_c1 = -1;
+	if (isSelected()) { removeHandlers(); addHandlers(); }
+	update();
+	emit tableSelectionChanged();
+
+	// 一個復原巨集 = 本表新狀態 + 移除全部來源表
+	auto &stack = diagram()->undoStack();
+	stack.beginMacro(tr("合併 %1 張表格").arg(all.count()));
+	pushStateUndo(old);
+	for (DiagramTableItem *t : others)
+		stack.push(new RemoveTableCommand(t, diagram()));
+	stack.endMacro();
 }
 
 /* ── XML ─────────────────────────────────────────────────────────── */
