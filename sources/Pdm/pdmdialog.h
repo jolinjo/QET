@@ -66,6 +66,8 @@ class PdmDialog : public QDialog
 		/// 由本機開檔路徑反推圖檔在圖庫的相對路徑(專案資料夾/檔名);
 		/// 工作區內直接反推,發行版/最新版暫存則以檔名比對清單。空=無法解析。
 		QString drawingRelPath(const QString &abs_path) const;
+		/// 首次初始化是否已結束(initFinished 已發出)
+		bool initReported() const { return m_init_reported; }
 
 	signals:
 		/// 要求編輯器開啟一個 .qet 檔(出庫/審核檢視時發出)
@@ -76,6 +78,11 @@ class PdmDialog : public QDialog
 		void requestSaveFile(const QString &file_path);
 		/// 背景連線結果:ok=已連上並取回資料(供工具列按鈕 enable/disable)
 		void connectionReady(bool ok);
+		/// 啟動初始化進度(0-100 + 說明),供啟動畫面顯示;首次初始化
+		/// 結束(initFinished)後不再發出
+		void initStep(int percent, const QString &text);
+		/// 首次初始化結束(成功或失敗都發,僅發一次);啟動畫面等此訊號
+		void initFinished(bool ok);
 		/// 按「新增圖檔」:請編輯器提供目前開啟的圖檔(存檔後回呼 addDrawingFromFile)
 		void requestAddCurrentDrawing();
 
@@ -310,7 +317,12 @@ class PdmDialog : public QDialog
 		bool m_is_confirmer = false;   ///< 在 pdm-confirmers team
 		bool m_is_releaser = false;    ///< 在 pdm-releasers team
 		bool m_auto_refreshed = false;
+		bool m_init_reported = false;  ///< initFinished 已發出(只發一次)
 		QHash<QString, FileState> m_files;   ///< key = rel_path
+
+		/// 首次初始化的進度/結束回報(initFinished 後全部靜默)
+		void emitInitStep(int percent, const QString &text);
+		void reportInit(bool ok);
 };
 
 #endif // PDMDIALOG_H

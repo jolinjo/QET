@@ -36,6 +36,8 @@
 #include "ui/aboutqetdialog.h"
 #include "ui/configpage/generalconfigurationpage.h"
 #include "Pdm/pdmconfigpage.h"
+#include "Pdm/pdmdialog.h"
+#include "Pdm/pdmsettings.h"
 #include "machine_info.h"
 #include "TerminalStrip/ui/terminalstripeditorwindow.h"
 #include "qetversion.h"
@@ -45,10 +47,63 @@
 #define QUOTE(x) STRINGIFY(x)
 #define STRINGIFY(x) #x
 #include <QCoreApplication>
+#include <QEventLoop>
 #include <QFileInfo>
 #include <QFontDatabase>
+#include <QPainter>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
+#include <QSplashScreen>
+#include <QTimer>
+
+namespace
+{
+	/**
+		啟動畫面:logo 下緣加一條進度條與說明文字。
+		setProgress() 設定百分比(<0 = 不畫進度條)並更新文字。
+	*/
+	class QetSplashScreen : public QSplashScreen
+	{
+	public:
+		using QSplashScreen::QSplashScreen;
+
+		void setProgress(int percent, const QString &text)
+		{
+			m_percent = qBound(0, percent, 100);
+			showMessage(text, Qt::AlignBottom | Qt::AlignLeft,
+				    Qt::black);
+		}
+
+	protected:
+		void drawContents(QPainter *painter) override
+		{
+			QSplashScreen::drawContents(painter);
+			if (m_percent < 0) return;
+			// 進度條:貼齊底部訊息文字上方
+			const int margin = 12;
+			const QRect bar(margin, height() - 34,
+					width() - margin * 2, 6);
+			painter->save();
+			painter->setRenderHint(QPainter::Antialiasing);
+			painter->setPen(Qt::NoPen);
+			painter->setBrush(QColor(0, 0, 0, 45));
+			painter->drawRoundedRect(bar, 3, 3);
+			if (m_percent > 0) {
+				QRect fill = bar;
+				fill.setWidth(qMax(6, bar.width()
+						      * m_percent / 100));
+				painter->setBrush(QColor(0x2e, 0x86, 0xde));
+				painter->drawRoundedRect(fill, 3, 3);
+			}
+			painter->restore();
+		}
+
+	private:
+		int m_percent = -1;
+	};
+
+	QetSplashScreen *g_splash = nullptr;
+}
 #ifdef BUILD_WITHOUT_KF5
 #else
 #	include <KAutoSaveFile>
@@ -151,6 +206,9 @@ QETApp::QETApp() :
 	}
 
 	buildSystemTrayMenu();
+	// 需要連線/同步的初始化(PDM)統一在 logo 畫面完成,
+	// 畫面收掉後即可直接使用,不再跳忙碌訊息。
+	waitForPdmInit();
 	if (m_splash_screen) {
 		m_splash_screen -> hide();
 	}
@@ -166,6 +224,7 @@ QETApp::~QETApp()
 	m_elements_recent_files->save();
 	m_projects_recent_files->save();
 
+	g_splash = nullptr;
 	delete m_splash_screen;
 	delete m_elements_recent_files;
 	delete m_projects_recent_files;
@@ -2157,9 +2216,50 @@ void QETApp::parseArguments()
 void QETApp::initSplashScreen()
 {
 	if (non_interactive_execution_) return;
-	m_splash_screen = new QSplashScreen(QPixmap(":/ico/splash.png"));
+	g_splash = new QetSplashScreen(QPixmap(":/ico/splash.png"));
+	m_splash_screen = g_splash;
 	m_splash_screen -> show();
 	setSplashScreenStep(tr("Chargement...", "splash screen caption"));
+}
+
+/**
+	@brief QETApp::setSplashProgress
+	更新啟動畫面的進度條與說明文字(非互動模式為 no-op)。
+*/
+void QETApp::setSplashProgress(int percent, const QString &text)
+{
+	if (!g_splash) return;
+	g_splash->setProgress(percent, text);
+	qApp->processEvents();
+}
+
+/**
+	@brief QETApp::waitForPdmInit
+	啟動畫面階段等待圖檔管理(PDM)首次初始化完成:連線驗證、圖庫
+	git 同步、檔案清單載入全部在 logo 畫面完成(進度條+說明),
+	之後開圖檔管理不再出現忙碌/連線中畫面。未設定 PDM(無 token)
+	或初始化已提前完成則直接返回;45 秒保險逾時,逾時後照常進入
+	程式(屆時開視窗會顯示連線錯誤)。
+*/
+void QETApp::waitForPdmInit()
+{
+	if (!m_splash_screen) return;
+	if (PdmSettings::token().isEmpty()) return;
+	const auto editors = QETApp::diagramEditors();
+	if (editors.isEmpty()) return;
+	PdmDialog *pdm = editors.first()->pdmDialog();
+	if (!pdm || pdm->initReported()) return;
+
+	setSplashProgress(5, tr("連線圖檔管理…"));
+	QEventLoop loop;
+	connect(pdm, &PdmDialog::initStep, this,
+		[this](int percent, const QString &text) {
+			setSplashProgress(percent, text);
+		});
+	connect(pdm, &PdmDialog::initFinished, &loop, &QEventLoop::quit);
+	QTimer::singleShot(45000, &loop, &QEventLoop::quit);
+	loop.exec();
+	disconnect(pdm, nullptr, this, nullptr);
 }
 
 /**

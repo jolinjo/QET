@@ -286,6 +286,10 @@ class QETApp : public QObject
 		void parseArguments();
 		void initSplashScreen();
 		void setSplashScreenStep(const QString & = QString());
+		/// 更新啟動畫面的進度條(0-100)與說明文字
+		void setSplashProgress(int percent, const QString &text);
+		/// 啟動畫面階段等待 PDM 首次初始化完成(未設定 PDM 則直接返回)
+		void waitForPdmInit();
 		void initLanguage();
 		void initFonts();
 		void initStyle();

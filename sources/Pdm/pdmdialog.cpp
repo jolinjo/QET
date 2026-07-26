@@ -573,12 +573,27 @@ void PdmDialog::startBackgroundConnect()
 	refresh();
 }
 
+void PdmDialog::emitInitStep(int percent, const QString &text)
+{
+	if (!m_init_reported)
+		emit initStep(percent, text);
+}
+
+void PdmDialog::reportInit(bool ok)
+{
+	if (m_init_reported) return;
+	m_init_reported = true;
+	emit initFinished(ok);
+}
+
 void PdmDialog::refresh()
 {
 	// 重整是「操作結束後的背景讀取」邊界:先收起進度對話框,之後的
 	// 背景 git(讀清單/歷史)就不會再彈框。
 	showBusy(false);
+	emitInitStep(10, tr("連線圖檔管理伺服器…"));
 	if (PdmSettings::token().isEmpty()) {
+		reportInit(false);
 		emit connectionReady(false);
 		m_account_label->setText(
 			tr("尚未設定:請至偏好設定→圖檔管理填入伺服器與 token"));
@@ -592,12 +607,14 @@ void PdmDialog::refresh()
 	m_account_label->setText(tr("連線中…"));
 	m_service->verifyConnection([this](bool ok, const QString &login_or_error) {
 		if (!ok) {
+			reportInit(false);
 			emit connectionReady(false);
 			m_account_label->setText(tr("連線失敗:%1").arg(login_or_error));
 			return;
 		}
 		m_username = login_or_error;
 		PdmSettings::setUsername(m_username);
+		emitInitStep(30, tr("帳號驗證完成,載入圖庫…"));
 		m_account_label->setText(tr("操作者:%1").arg(m_username));
 		// 取 email 供比對 work 分支作者(判斷「繪製者本人」)
 		m_service->get(QStringLiteral("/user"),
@@ -770,6 +787,7 @@ void PdmDialog::syncRepository()
 
 	const QString vault = vaultDir();
 	if (QDir(vault + QStringLiteral("/.git")).exists()) {
+		emitInitStep(55, tr("同步圖庫(git 更新)…"));
 		// origin 是 clone 當下的位址;內網/Tailscale 環境切換後要先
 		// 重新指向本次解析到的伺服器,後續 fetch/push 才連得上。
 		// (worktree 共用 vault 的 config,設一次全部生效)
@@ -786,6 +804,7 @@ void PdmDialog::syncRepository()
 				loadFileStates();
 			});
 	} else {
+		emitInitStep(55, tr("首次下載圖庫…"));
 		QDir().mkpath(QFileInfo(vault).absolutePath());
 		m_git->enqueue({"clone", remoteUrlWithCredentials(), vault}, {},
 			[this, vault](const PdmGitWorker::Result &result) {
@@ -802,6 +821,7 @@ void PdmDialog::syncRepository()
 
 void PdmDialog::loadFileStates()
 {
+	emitInitStep(75, tr("讀取圖檔清單與狀態…"));
 	const QString vault = vaultDir();
 	m_files.clear();
 	m_extra_folders.clear();
@@ -1172,6 +1192,8 @@ void PdmDialog::rebuildTree()
 	populateFileList();
 	m_status_label->setText(tr("共 %1 個圖檔").arg(m_files.size()));
 	updateButtons();
+	emitInitStep(100, tr("圖檔管理就緒"));
+	reportInit(true);
 	emit connectionReady(true);   // 已連上並取回資料
 }
 
@@ -2990,6 +3012,8 @@ void PdmDialog::showBusy(bool busy, bool with_dialog, int op_steps)
 
 void PdmDialog::fail(const QString &title, const QString &log)
 {
+	// 首次初始化途中失敗也要收掉啟動畫面的等待(僅首次有效)
+	reportInit(false);
 	// 失敗:立刻收框(不等防抖)並恢復按鈕
 	if (m_hide_timer) m_hide_timer->stop();
 	if (m_busy_dialog) m_busy_dialog->hide();

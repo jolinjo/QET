@@ -75,6 +75,8 @@ class QETDiagramEditor : public QETMainWindow
 		QETProject *currentProject() const;
 		bool drawGrid() const;
 		void applyInterfaceFonts();
+		/// 圖檔管理對話框(啟動時已建立;供啟動畫面等待其初始化)
+		PdmDialog *pdmDialog() const { return m_pdm_dialog; }
 #ifdef BUILD_WITHOUT_KF5
 #else
 		void openBackupFiles (QList<KAutoSaveFile *> backup_files);
