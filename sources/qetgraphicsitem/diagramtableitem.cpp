@@ -66,6 +66,7 @@ void DiagramTableItem::setup(int rows, int cols)
 	m_cell_halign = QVector<int>(m_rows * m_cols, int(Qt::AlignLeft));
 	m_cell_valign = QVector<int>(m_rows * m_cols, int(Qt::AlignVCenter));
 	m_cell_size = QVector<int>(m_rows * m_cols, 0);   // 0 = 用預設字級
+	m_spans.clear();
 	prepareGeometryChange();
 	update();
 }
@@ -96,6 +97,15 @@ QString DiagramTableItem::state() const
 	o[QStringLiteral("cell_halign")] = ha;
 	o[QStringLiteral("cell_valign")] = va;
 	o[QStringLiteral("cell_size")]   = sz;
+	if (!m_spans.isEmpty()) {
+		QJsonArray spans;
+		for (const QRect &sp : m_spans) {
+			QJsonArray one;
+			one << sp.y() << sp.x() << sp.height() << sp.width();
+			spans.append(one);   // [列, 欄, 跨列, 跨欄]
+		}
+		o[QStringLiteral("spans")] = spans;
+	}
 	return QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact));
 }
 
@@ -143,6 +153,15 @@ void DiagramTableItem::setState(const QString &s)
 	for (const QJsonValue &v : o.value(QStringLiteral("cell_size")).toArray())
 		m_cell_size.append(v.toInt(0));
 	m_cell_size.resize(n);
+	m_spans.clear();
+	for (const QJsonValue &v : o.value(QStringLiteral("spans")).toArray()) {
+		const QJsonArray a = v.toArray();   // [列, 欄, 跨列, 跨欄]
+		if (a.size() != 4) continue;
+		QRect sp(a.at(1).toInt(), a.at(0).toInt(),
+			 a.at(3).toInt(1), a.at(2).toInt(1));
+		sp &= QRect(0, 0, m_cols, m_rows);   // 越界的裁掉
+		if (sp.width() * sp.height() >= 2) m_spans << sp;
+	}
 	// 表結構可能改變(undo/還原):清掉可能越界的選取
 	m_sel_r0 = m_sel_c0 = m_sel_r1 = m_sel_c1 = -1;
 	if (isSelected()) { removeHandlers(); addHandlers(); }
@@ -187,13 +206,47 @@ int DiagramTableItem::cellAt(const QPointF &p, int *row, int *col) const
 	qreal x = 0;
 	for (int c = 0; c < m_cols; ++c) {
 		if (p.x() >= x && p.x() < x + m_col_widths.at(c)) {
-			*row = qBound(0, r, m_rows - 1);
-			*col = c;
-			return r * m_cols + c;
+			int rr = qBound(0, r, m_rows - 1);
+			int cc = c;
+			// 命中合併區 → 導向錨點(左上格)
+			const QRect sp = spanAt(rr, cc);
+			if (sp.isValid()) { rr = sp.y(); cc = sp.x(); }
+			*row = rr;
+			*col = cc;
+			return rr * m_cols + cc;
 		}
 		x += m_col_widths.at(c);
 	}
 	return -1;
+}
+
+/* ── 合併儲存格:查詢輔助 ────────────────────────────────────────── */
+
+QRect DiagramTableItem::spanAt(int row, int col) const
+{
+	for (const QRect &sp : m_spans)
+		if (sp.contains(col, row)) return sp;
+	return QRect();
+}
+
+bool DiagramTableItem::isCoveredCell(int row, int col) const
+{
+	const QRect sp = spanAt(row, col);
+	return sp.isValid() && !(sp.y() == row && sp.x() == col);
+}
+
+QRectF DiagramTableItem::spanCellRect(int row, int col) const
+{
+	const QRect sp = spanAt(row, col);
+	const int c0 = sp.isValid() ? sp.x() : col;
+	const int r0 = sp.isValid() ? sp.y() : row;
+	const int cn = sp.isValid() ? sp.width() : 1;
+	const int rn = sp.isValid() ? sp.height() : 1;
+	qreal w = 0;
+	for (int c = c0; c < c0 + cn && c < m_col_widths.size(); ++c)
+		w += m_col_widths.at(c);
+	return QRectF(columnLeft(c0), r0 * m_row_height,
+		      w, rn * m_row_height);
 }
 
 /* ── 繪製 ────────────────────────────────────────────────────────── */
@@ -208,15 +261,14 @@ void DiagramTableItem::paint(QPainter *painter,
 	painter->setRenderHint(QPainter::Antialiasing, false);
 	painter->fillRect(QRectF(0, 0, W, H), Qt::white);
 
-	// 每格底色(有效色才填)
+	// 每格底色(有效色才填);合併區只畫錨點、範圍=整個合併區
 	for (int r = 0; r < m_rows; ++r) {
 		for (int c = 0; c < m_cols; ++c) {
 			const int i = r * m_cols + c;
 			if (i >= m_cell_bg.size() || !m_cell_bg.at(i).isValid())
 				continue;
-			painter->fillRect(QRectF(columnLeft(c), r * m_row_height,
-					  m_col_widths.at(c), m_row_height),
-					  m_cell_bg.at(i));
+			if (isCoveredCell(r, c)) continue;
+			painter->fillRect(spanCellRect(r, c), m_cell_bg.at(i));
 		}
 	}
 
@@ -224,23 +276,48 @@ void DiagramTableItem::paint(QPainter *painter,
 	pen.setCosmetic(true);
 	painter->setPen(pen);
 	painter->drawRect(QRectF(0, 0, W, H));
-	// 直線(欄界)
-	qreal x = 0;
-	for (int c = 0; c < m_cols - 1; ++c) {
-		x += m_col_widths.at(c);
-		painter->drawLine(QPointF(x, 0), QPointF(x, H));
+	if (m_spans.isEmpty()) {
+		// 無合併:整條格線一次畫完(快)
+		qreal x = 0;
+		for (int c = 0; c < m_cols - 1; ++c) {
+			x += m_col_widths.at(c);
+			painter->drawLine(QPointF(x, 0), QPointF(x, H));
+		}
+		for (int r = 1; r < m_rows; ++r)
+			painter->drawLine(QPointF(0, r * m_row_height),
+					  QPointF(W, r * m_row_height));
+	} else {
+		// 有合併:逐格邊畫線段,同一合併區內部的邊不畫
+		auto same_span = [this](int r1_, int c1_, int r2_, int c2_) {
+			const QRect a = spanAt(r1_, c1_);
+			return a.isValid() && a == spanAt(r2_, c2_);
+		};
+		for (int r = 0; r < m_rows; ++r)          // 欄界(垂直邊)
+			for (int c = 0; c < m_cols - 1; ++c) {
+				if (same_span(r, c, r, c + 1)) continue;
+				const qreal ex = columnLeft(c + 1);
+				painter->drawLine(
+					QPointF(ex, r * m_row_height),
+					QPointF(ex, (r + 1) * m_row_height));
+			}
+		for (int r = 1; r < m_rows; ++r)          // 列界(水平邊)
+			for (int c = 0; c < m_cols; ++c) {
+				if (same_span(r - 1, c, r, c)) continue;
+				const qreal ex = columnLeft(c);
+				painter->drawLine(
+					QPointF(ex, r * m_row_height),
+					QPointF(ex + m_col_widths.at(c),
+						r * m_row_height));
+			}
 	}
-	// 橫線(列界)
-	for (int r = 1; r < m_rows; ++r)
-		painter->drawLine(QPointF(0, r * m_row_height),
-				  QPointF(W, r * m_row_height));
 
-	// 儲存格文字(逐格字級/對齊)
+	// 儲存格文字(逐格字級/對齊);合併區只畫錨點文字、置於整區
 	for (int r = 0; r < m_rows; ++r) {
 		for (int c = 0; c < m_cols; ++c) {
 			const int i = r * m_cols + c;
 			const QString &txt = m_cells.at(i);
 			if (txt.isEmpty()) continue;
+			if (isCoveredCell(r, c)) continue;
 			QFont f = m_font;
 			const int sz = m_cell_size.value(i, 0);
 			if (sz > 0) f.setPointSize(sz);
@@ -250,9 +327,8 @@ void DiagramTableItem::paint(QPainter *painter,
 					int(Qt::AlignVCenter)))
 				| Qt::Alignment(m_cell_halign.value(i,
 					int(Qt::AlignLeft)));
-			QRectF cell(columnLeft(c), r * m_row_height,
-				    m_col_widths.at(c), m_row_height);
-			painter->drawText(cell.adjusted(3, 1, -3, -1), al, txt);
+			painter->drawText(spanCellRect(r, c).adjusted(3, 1, -3, -1),
+					  al, txt);
 		}
 	}
 	painter->restore();
@@ -470,6 +546,20 @@ bool DiagramTableItem::selectionRect(int *r0, int *c0, int *r1, int *c1) const
 	*r1 = qBound(0, qMax(m_sel_r0, m_sel_r1), m_rows - 1);
 	*c0 = qBound(0, qMin(m_sel_c0, m_sel_c1), m_cols - 1);
 	*c1 = qBound(0, qMax(m_sel_c0, m_sel_c1), m_cols - 1);
+	// 與合併區部分重疊時,擴張到涵蓋整個合併區(同 Excel)
+	bool grew = true;
+	while (grew) {
+		grew = false;
+		const QRect sel(*c0, *r0, *c1 - *c0 + 1, *r1 - *r0 + 1);
+		for (const QRect &sp : m_spans) {
+			if (!sp.intersects(sel) || sel.contains(sp)) continue;
+			*r0 = qMin(*r0, sp.top());
+			*r1 = qMax(*r1, sp.bottom());
+			*c0 = qMin(*c0, sp.left());
+			*c1 = qMax(*c1, sp.right());
+			grew = true;
+		}
+	}
 	return true;
 }
 
@@ -642,6 +732,7 @@ void DiagramTableItem::deleteSelectedRows()
 	m_rows -= count;
 	m_cells = nc; m_cell_bg = nbg;
 	m_cell_halign = nha; m_cell_valign = nva; m_cell_size = nsz;
+	removeSpansForDeletedRows(r0, count);
 	clearCellSelection();
 	if (isSelected()) { removeHandlers(); addHandlers(); }
 	update();
@@ -678,9 +769,74 @@ void DiagramTableItem::deleteSelectedColumns()
 	m_cols -= count;
 	m_col_widths = nw; m_cells = nc; m_cell_bg = nbg;
 	m_cell_halign = nha; m_cell_valign = nva; m_cell_size = nsz;
+	removeSpansForDeletedCols(c0, count);
 	clearCellSelection();
 	if (isSelected()) { removeHandlers(); addHandlers(); }
 	update();
+	pushStateUndo(old);
+}
+
+void DiagramTableItem::removeSpansForDeletedRows(int from, int count)
+{
+	for (int i = m_spans.size() - 1; i >= 0; --i) {
+		QRect &sp = m_spans[i];
+		const int top = sp.top(), bot = sp.bottom();
+		const int cut = qMax(0, qMin(bot, from + count - 1)
+					- qMax(top, from) + 1);   // 落在刪除段的列數
+		const int shift = qMax(0, qMin(top, from + count) - from); // 上方被刪
+		const int new_h = sp.height() - cut;
+		if (new_h * sp.width() < 2) { m_spans.removeAt(i); continue; }
+		sp = QRect(sp.x(), top - shift, sp.width(), new_h);
+	}
+}
+
+void DiagramTableItem::removeSpansForDeletedCols(int from, int count)
+{
+	for (int i = m_spans.size() - 1; i >= 0; --i) {
+		QRect &sp = m_spans[i];
+		const int left = sp.left(), right = sp.right();
+		const int cut = qMax(0, qMin(right, from + count - 1)
+					- qMax(left, from) + 1);
+		const int shift = qMax(0, qMin(left, from + count) - from);
+		const int new_w = sp.width() - cut;
+		if (new_w * sp.height() < 2) { m_spans.removeAt(i); continue; }
+		sp = QRect(left - shift, sp.y(), new_w, sp.height());
+	}
+}
+
+void DiagramTableItem::mergeSelectedCells()
+{
+	if (diagram() && diagram()->isReadOnly()) return;
+	int r0, c0, r1, c1;
+	if (!selectionRect(&r0, &c0, &r1, &c1)) return;
+	if (r0 == r1 && c0 == c1) return;   // 至少要兩格
+	const QString old = state();
+	const QRect region(c0, r0, c1 - c0 + 1, r1 - r0 + 1);
+	// 範圍內既有的合併先移除,再放一個涵蓋全範圍的
+	for (int i = m_spans.size() - 1; i >= 0; --i)
+		if (m_spans.at(i).intersects(region)) m_spans.removeAt(i);
+	m_spans << region;
+	update();
+	emit tableSelectionChanged();
+	pushStateUndo(old);
+}
+
+void DiagramTableItem::unmergeSelectedCells()
+{
+	if (diagram() && diagram()->isReadOnly()) return;
+	int r0, c0, r1, c1;
+	if (!selectionRect(&r0, &c0, &r1, &c1)) return;
+	const QRect region(c0, r0, c1 - c0 + 1, r1 - r0 + 1);
+	const QString old = state();
+	bool changed = false;
+	for (int i = m_spans.size() - 1; i >= 0; --i)
+		if (m_spans.at(i).intersects(region)) {
+			m_spans.removeAt(i);
+			changed = true;
+		}
+	if (!changed) return;
+	update();
+	emit tableSelectionChanged();
 	pushStateUndo(old);
 }
 
@@ -761,6 +917,11 @@ void DiagramTableItem::moveColumn(int from, int to)
 	to = qBound(0, to, m_cols - 1);
 	if (from == to) return;
 	const QString old = state();
+	// 換欄會打散跨欄關係:與 from/to 相交的合併直接拆掉
+	for (int i = m_spans.size() - 1; i >= 0; --i)
+		if (m_spans.at(i).left() <= qMax(from, to)
+		    && m_spans.at(i).right() >= qMin(from, to))
+			m_spans.removeAt(i);
 	prepareGeometryChange();
 	QList<int> order;
 	for (int c = 0; c < m_cols; ++c) order << c;
@@ -794,6 +955,11 @@ void DiagramTableItem::moveRow(int from, int to)
 	to = qBound(0, to, m_rows - 1);
 	if (from == to) return;
 	const QString old = state();
+	// 換列會打散跨列關係:與 from/to 相交的合併直接拆掉
+	for (int i = m_spans.size() - 1; i >= 0; --i)
+		if (m_spans.at(i).top() <= qMax(from, to)
+		    && m_spans.at(i).bottom() >= qMin(from, to))
+			m_spans.removeAt(i);
 	prepareGeometryChange();
 	QList<int> order;
 	for (int r = 0; r < m_rows; ++r) order << r;
@@ -943,8 +1109,8 @@ void DiagramTableItem::editCell(int row, int col)
 
 	m_editor = new QGraphicsProxyWidget(this);
 	m_editor->setWidget(le);
-	m_editor->setGeometry(QRectF(columnLeft(col), row * m_row_height,
-				     m_col_widths.at(col), m_row_height));
+	// 合併儲存格:編輯框覆蓋整個合併區
+	m_editor->setGeometry(spanCellRect(row, col));
 	m_editor->setZValue(zValue() + 2);
 	m_edit_index = idx;
 
@@ -1064,6 +1230,7 @@ void DiagramTableItem::mergeWith(QList<DiagramTableItem *> others)
 	QVector<int> ha(n, int(Qt::AlignLeft));
 	QVector<int> va(n, int(Qt::AlignVCenter));
 	QVector<int> sz(n, 0);
+	QVector<QRect> spans;
 	int row_base = 0;
 	for (DiagramTableItem *t : all) {
 		for (int r = 0; r < t->m_rows; ++r)
@@ -1078,6 +1245,8 @@ void DiagramTableItem::mergeWith(QList<DiagramTableItem *> others)
 					src, int(Qt::AlignVCenter));
 				sz[dst] = t->m_cell_size.value(src, 0);
 			}
+		for (const QRect &sp : t->m_spans)      // 儲存格合併跟著搬
+			spans << sp.translated(0, row_base);
 		row_base += t->m_rows;
 	}
 
@@ -1090,6 +1259,7 @@ void DiagramTableItem::mergeWith(QList<DiagramTableItem *> others)
 	m_cell_halign = ha;
 	m_cell_valign = va;
 	m_cell_size = sz;
+	m_spans = spans;
 	m_sel_r0 = m_sel_c0 = m_sel_r1 = m_sel_c1 = -1;
 	if (isSelected()) { removeHandlers(); addHandlers(); }
 	update();

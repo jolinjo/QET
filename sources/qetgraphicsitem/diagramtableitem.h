@@ -87,6 +87,12 @@ class DiagramTableItem : public QetGraphicsItem
 		/// 串接起來;欄數取最大、逐格樣式(底色/對齊/字級)保留,
 		/// 欄寬取「第一張有該欄的表」;來源表刪除。整包一個復原巨集。
 		void mergeWith(QList<DiagramTableItem *> others);
+		/* ── Excel 式合併儲存格 ─────────────────────────────── */
+		/// 把選取範圍合併成一格(錨點=左上;其餘格資料保留、隱藏,
+		/// 取消合併會重現)。選取不足兩格則不動作。
+		void mergeSelectedCells();
+		/// 取消選取範圍內(相交即算)的所有儲存格合併
+		void unmergeSelectedCells();
 
 	signals:
 		void tableSelectionChanged();           ///< 儲存格選取有變(更新面板)
@@ -131,6 +137,15 @@ class DiagramTableItem : public QetGraphicsItem
 		QVector<int> m_cell_valign;    ///< 每格垂直對齊
 		QVector<int> m_cell_size;      ///< 每格字級(0=用 m_font 字級)
 		QFont m_font;                  ///< 字型家族 + 預設字級
+		/// 合併儲存格區域:QRect(x=欄, y=列, w=跨欄數, h=跨列數)。
+		/// 錨點=左上格;被覆蓋格資料保留但不繪製。
+		QVector<QRect> m_spans;
+
+		QRect spanAt(int row, int col) const;    ///< 含該格的合併區(無=invalid)
+		bool isCoveredCell(int row, int col) const; ///< 在合併區內但非錨點
+		QRectF spanCellRect(int row, int col) const; ///< 該格的繪製矩形(含跨距)
+		void removeSpansForDeletedRows(int from, int count);
+		void removeSpansForDeletedCols(int from, int count);
 
 		// 儲存格選取(矩形範圍;-1 = 無選取)。純顯示狀態,不序列化。
 		int m_sel_r0 = -1, m_sel_c0 = -1, m_sel_r1 = -1, m_sel_c1 = -1;

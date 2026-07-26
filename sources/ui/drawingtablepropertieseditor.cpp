@@ -77,6 +77,24 @@ DrawingTablePropertiesEditor::DrawingTablePropertiesEditor(
 	sel_row->addWidget(btn_all);
 	v->addLayout(sel_row);
 
+	// Excel 式合併儲存格:選取範圍合併成一格 / 取消合併
+	auto *span_row = new QHBoxLayout();
+	auto *btn_merge_cells = new QPushButton(tr("合併儲存格"), box);
+	btn_merge_cells->setToolTip(tr("把選取的範圍合併成一格"
+				       "(錨點=左上;其餘格內容保留、"
+				       "取消合併會重現)"));
+	auto *btn_unmerge = new QPushButton(tr("取消合併"), box);
+	btn_unmerge->setToolTip(tr("拆開選取範圍內的合併儲存格"));
+	span_row->addWidget(btn_merge_cells);
+	span_row->addWidget(btn_unmerge);
+	v->addLayout(span_row);
+	connect(btn_merge_cells, &QPushButton::clicked, this, [this]() {
+		if (m_table) m_table->mergeSelectedCells();
+	});
+	connect(btn_unmerge, &QPushButton::clicked, this, [this]() {
+		if (m_table) m_table->unmergeSelectedCells();
+	});
+
 	// 對齊(水平:左/中/右;垂直:上/中/下)
 	v->addWidget(new QLabel(tr("對齊"), box));
 	auto *align_row = new QHBoxLayout();
