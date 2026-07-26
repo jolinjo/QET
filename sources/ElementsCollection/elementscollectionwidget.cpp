@@ -438,7 +438,8 @@ namespace {
 	/// Extract a "vX[.Y[.Z]]" version token from a string, or empty.
 	QString qetlib_version(const QString &s) {
 		static const QRegularExpression re(
-			QStringLiteral("v\\d+(?:\\.\\d+)*"));
+			QStringLiteral("v\\d+(?:\\.\\d+)*"),
+			QRegularExpression::CaseInsensitiveOption);
 		const QRegularExpressionMatch m = re.match(s);
 		return m.hasMatch() ? m.captured(0) : QString();
 	}
