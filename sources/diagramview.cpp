@@ -438,10 +438,21 @@ void DiagramView::paste(const QPointF &pos, QClipboard::Mode clipboard_mode) {
 		if (!image.isNull())
 		{
 			auto *item = new DiagramImageItem(QPixmap::fromImage(image));
+			// 預設縮成 30%;若仍超出圖框可繪區,再縮到放得下
+			// (留 5% 邊)。之後可用四角控制點自由調整。
+			qreal k = 0.3;
+			const QSizeF img = item->boundingRect().size();
+			const QRectF page =
+				m_diagram->border_and_titleblock.insideBorderRect();
+			const qreal max_w = page.width()  * 0.95;
+			const qreal max_h = page.height() * 0.95;
+			if (img.width() * k > max_w || img.height() * k > max_h)
+				k = qMin(max_w / img.width(), max_h / img.height());
+			item->setScale(k);
 			QPointF p = pos.isNull()
 				? mapToScene(viewport()->rect().center()) : pos;
-			p.rx() -= item->boundingRect().width()  / 2;
-			p.ry() -= item->boundingRect().height() / 2;
+			p.rx() -= img.width()  * k / 2;
+			p.ry() -= img.height() * k / 2;
 			m_diagram->clearSelection();
 			m_diagram->undoStack().push(
 				new AddGraphicsObjectCommand(item, m_diagram, p));
