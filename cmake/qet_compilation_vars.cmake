@@ -26,7 +26,8 @@ set(QET_COMPONENTS
   Sql
   Network
   Widgets
-  Concurrent)
+  Concurrent
+  PdfWidgets)
 
 set(QET_PRIVATE_LIBRARIES
   Qt::PrintSupport
@@ -37,6 +38,7 @@ set(QET_PRIVATE_LIBRARIES
   Qt::Network
   Qt::Widgets
   Qt::Concurrent
+  Qt::PdfWidgets
   )
 
 set(QET_RES_FILES
@@ -662,6 +664,8 @@ set(QET_SRC_FILES
   ${QET_DIR}/sources/ui/dialogwaiting.h
   ${QET_DIR}/sources/ui/drawingtablepropertieseditor.cpp
   ${QET_DIR}/sources/ui/drawingtablepropertieseditor.h
+  ${QET_DIR}/sources/ui/pdfviewerwindow.cpp
+  ${QET_DIR}/sources/ui/pdfviewerwindow.h
   ${QET_DIR}/sources/ui/dynamicelementtextitemeditor.cpp
   ${QET_DIR}/sources/ui/dynamicelementtextitemeditor.h
   ${QET_DIR}/sources/ui/dynamicelementtextmodel.cpp

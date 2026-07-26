@@ -89,6 +89,7 @@ public:
 #include <QMenu>
 #include "qetversion.h"
 #include "qetlibraryrequirement.h"
+#include "ui/pdfviewerwindow.h"
 #include "changetitleblockcommand.h"
 #include "Pdm/pdmsettings.h"
 #include <QComboBox>
@@ -1698,6 +1699,17 @@ void QETDiagramEditor::setUpMenu()
 	connect(QETApp::projectsRecentFiles(), SIGNAL(fileOpeningRequested(const QString &)),
 		this, SLOT(openRecentFile(const QString &)));
 	menu_fichier -> addActions(m_file_actions_group.actions());
+	menu_fichier -> addSeparator();
+	// 簡易 PDF 檢視器(開檔、翻頁、縮放)
+	{
+		QAction *open_pdf = menu_fichier->addAction(tr("開啟 PDF 檢視…"));
+		connect(open_pdf, &QAction::triggered, this, [this]() {
+			auto *v = new PdfViewerWindow(this);
+			v->setAttribute(Qt::WA_DeleteOnClose);
+			v->show();
+			v->openFileDialog();
+		});
+	}
 	menu_fichier -> addSeparator();
 	//menu_fichier -> addAction(import_diagram);
 	menu_fichier -> addAction(m_export_to_images);
