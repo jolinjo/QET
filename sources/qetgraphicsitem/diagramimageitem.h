@@ -42,6 +42,8 @@ class DiagramImageItem : public QetGraphicsItem {
 	// constructors, destructor
 	public:
 		QUuid uuid() const { return m_uuid; }
+		/// 貼上時重生識別(貼上物與原件共用 uuid 會使群組失效)
+		void regenerateUuid() { m_uuid = QUuid::createUuid(); }
 	DiagramImageItem(QetGraphicsItem * = nullptr);
 	DiagramImageItem(const QPixmap &pixmap, QetGraphicsItem * = nullptr);
 	~DiagramImageItem() override;

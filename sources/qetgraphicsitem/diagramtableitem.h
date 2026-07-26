@@ -48,6 +48,8 @@ class DiagramTableItem : public QetGraphicsItem
 		~DiagramTableItem() override;
 
 		QUuid uuid() const { return m_uuid; }
+		/// 貼上時重生識別(貼上物與原件共用 uuid 會使群組失效)
+		void regenerateUuid() { m_uuid = QUuid::createUuid(); }
 
 		enum { Type = UserType + 1012 };   // 1010 已被 DynamicElementTextItem 佔用
 		int type() const override { return Type; }

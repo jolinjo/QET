@@ -155,6 +155,8 @@ class Element : public QetGraphicsItem
 				QHash<Terminal *,
 				int> &) const;
 		QUuid uuid() const;
+		/// 貼上時重生識別(貼上物與原件共用 uuid 會使群組失效)
+		void regenerateUuid() { m_uuid = QUuid::createUuid(); }
 		int orientation() const;
 
 			//METHODS related to texts

@@ -57,6 +57,8 @@ class QetShapeItem : public QetGraphicsItem
 		
 	public:
 		QUuid uuid() const { return m_uuid; }
+		/// 貼上時重生識別(貼上物與原件共用 uuid 會使群組失效)
+		void regenerateUuid() { m_uuid = QUuid::createUuid(); }
 		enum ShapeType {Line	  =1,
 						Rectangle =2,
 						Ellipse	  =4,

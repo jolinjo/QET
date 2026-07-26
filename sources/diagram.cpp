@@ -1465,12 +1465,14 @@ bool Diagram::fromXml(QDomElement &document,
 	}
 
 		// Load drawing table
+	QList<DiagramTableItem *> added_dtables;
 	for (auto table_xml : QET::findInDomElement(root,
 						QStringLiteral("drawing_tables"),
 						QStringLiteral("drawing_table"))) {
 		auto *dt = new DiagramTableItem();
 		dt->fromXml(table_xml);
 		addItem(dt);
+		added_dtables << dt;
 	}
 
 		// Load shape
@@ -1568,6 +1570,17 @@ bool Diagram::fromXml(QDomElement &document,
 			else
 				delete c;
 		}
+	}
+
+	// 貼上(content_ptr 非空):貼上物與原件共用 uuid,群組以 uuid
+	// 集合去重會把「原件+複製品」當同一個而失效 → 重生貼上物的 uuid。
+	// 導線連接此時已解析完;下次存檔會寫出新 uuid。
+	if (content_ptr) {
+		for (auto *e : qAsConst(added_elements)) e->regenerateUuid();
+		for (auto *t : qAsConst(added_texts))    t->regenerateUuid();
+		for (auto *sh : qAsConst(added_shapes))  sh->regenerateUuid();
+		for (auto *im : qAsConst(added_images))  im->regenerateUuid();
+		for (auto *dt : qAsConst(added_dtables)) dt->regenerateUuid();
 	}
 
 		//Filling of falculatory lists
