@@ -87,7 +87,8 @@ DiagramPropertiesDialog::DiagramPropertiesDialog(Diagram *diagram, QWidget *pare
 	// 換範本走專案屬性。
 	border_infos->hide();
 	m_cpw->hide();
-	titleblock_infos->setTitleBlockTemplatesVisible(false);
+	// 整個範本群組框(範本下拉/圖框顯示位置/編輯鈕)都不顯示
+	titleblock_infos->setTemplateGroupVisible(false);
 
 	QGridLayout *glayout = new QGridLayout;
 	glayout->addWidget(border_infos,0,0);

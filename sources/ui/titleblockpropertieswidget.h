@@ -73,6 +73,8 @@ class TitleBlockPropertiesWidget : public QWidget
 				QString autoNum);
 
 		void setTitleBlockTemplatesVisible(const bool &visible);
+		/// 隱藏/顯示整個「範本」群組框(含範本下拉、顯示位置、編輯鈕)
+		void setTemplateGroupVisible(const bool &visible);
 		void setReadOnly (const bool &ro);
 
 	private:

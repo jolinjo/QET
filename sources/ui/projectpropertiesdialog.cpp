@@ -42,7 +42,8 @@ ProjectPropertiesDialog::ProjectPropertiesDialog(QETProject *project, QWidget *p
 	ProjectAutoNumConfigPage *projectAutoNumConfigPage = new ProjectAutoNumConfigPage (project);
 	m_properties_dialog -> addPage(projectAutoNumConfigPage);
 
-	m_properties_dialog->addPage(new TerminalStripProjectConfigPage { project, parent });
+	// 端子配置頁隱藏:公司流程不用 QET 的端子排配置功能(2026-07)
+	// m_properties_dialog->addPage(new TerminalStripProjectConfigPage { project, parent });
 
 	connect(projectAutoNumConfigPage,SIGNAL(setAutoNum(QString)),newDiagramPage,SLOT(setFolioAutonum(QString)));
 	connect(projectAutoNumConfigPage,SIGNAL(saveCurrentTbp()),newDiagramPage,SLOT(saveCurrentTbp()));

@@ -370,6 +370,15 @@ void TitleBlockPropertiesWidget::setTitleBlockTemplatesVisible(
 }
 
 /**
+	@brief TitleBlockPropertiesWidget::setTemplateGroupVisible
+	隱藏/顯示整個「範本」群組框(含範本下拉、圖框顯示位置、編輯鈕)。
+*/
+void TitleBlockPropertiesWidget::setTemplateGroupVisible(const bool &visible)
+{
+	ui -> m_tbt_gb -> setVisible(visible);
+}
+
+/**
 	@brief TitleBlockPropertiesWidget::setReadOnly
 	if true, this widget is disable
 */
