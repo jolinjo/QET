@@ -451,8 +451,11 @@ void DiagramView::paste(const QPointF &pos, QClipboard::Mode clipboard_mode) {
 			item->setScale(k);
 			QPointF p = pos.isNull()
 				? mapToScene(viewport()->rect().center()) : pos;
-			p.rx() -= img.width()  * k / 2;
-			p.ry() -= img.height() * k / 2;
+			// 變形原點在圖片中心(建構子 setTransformOriginPoint),
+			// 視覺中心 = pos + 未縮放尺寸/2,與 k 無關 —— 位置補償
+			// 必須用未縮放的一半,否則大圖會偏出頁面外。
+			p.rx() -= img.width()  / 2;
+			p.ry() -= img.height() / 2;
 			m_diagram->clearSelection();
 			m_diagram->undoStack().push(
 				new AddGraphicsObjectCommand(item, m_diagram, p));
