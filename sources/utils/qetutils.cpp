@@ -19,6 +19,8 @@
 #include <QString>
 #include <QStringList>
 #include <QGraphicsView>
+#include <QTcpSocket>
+#include <QUrl>
 #include "../qetapp.h"
 #include "../qetdiagrameditor.h"
 
@@ -149,4 +151,29 @@ void QETUtils::pixelSizedFont(QFont &font)
 
     auto px = font.pointSizeF()/72 * QFontMetrics{font}.fontDpi();
     font.setPixelSize(qRound(px));
+}
+
+/**
+ * @brief QETUtils::firstReachableUrl
+ * 見標頭說明。只測 TCP 連線(不發 HTTP),足以分辨「在內網」與
+ * 「只有 Tailscale」兩種環境。
+ */
+QString QETUtils::firstReachableUrl(const QString &primary,
+				    const QString &fallback,
+				    int primary_ms, int fallback_ms)
+{
+	auto reachable = [](const QString &u, int timeout_ms) {
+		const QUrl qu(u.trimmed());
+		if (!qu.isValid() || qu.host().isEmpty()) return false;
+		QTcpSocket socket;
+		socket.connectToHost(qu.host(), quint16(qu.port(3000)));
+		const bool ok = socket.waitForConnected(timeout_ms);
+		socket.abort();
+		return ok;
+	};
+	if (!primary.trimmed().isEmpty() && reachable(primary, primary_ms))
+		return primary.trimmed();
+	if (!fallback.trimmed().isEmpty() && reachable(fallback, fallback_ms))
+		return fallback.trimmed();
+	return QString();
 }

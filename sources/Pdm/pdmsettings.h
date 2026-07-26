@@ -27,7 +27,11 @@
 */
 namespace PdmSettings
 {
+	/// 執行期用:內網/Tailscale 自動判別後的伺服器位址(程序內快取,
+	/// 首次呼叫才探測)。都不通時回傳內網設定值(操作會報連線錯誤)。
 	QString serverUrl();
+	/// 設定頁用:QSettings 內的原始內網位址(不做探測、不被解析結果覆蓋)。
+	QString configuredServerUrl();
 	void setServerUrl(const QString &url);
 
 	QString username();

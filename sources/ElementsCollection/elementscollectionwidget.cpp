@@ -39,10 +39,11 @@
 
 #include <QDesktopServices>
 #include <QMenu>
-#include <QTcpSocket>
 #include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
+
+#include "../utils/qetutils.h"
 #include <QtGlobal>
 #include <QProgressBar>
 #include <QStatusBar>
@@ -529,22 +530,7 @@ void ElementsCollectionWidget::updateLibraryFromGit()
 		QStringLiteral("http://hc-server:3000/HC-Git/QET-Lib"))
 		.toString().trimmed();
 	// 快速 TCP 探測(git clone 對不通的主機要等 75 秒才逾時)。
-	// 內網 IP 不通時多半是 SYN 無回應,1.2 秒即可判定;Tailscale 名稱
-	// 需先過 MagicDNS,寬限到 2.5 秒。
-	auto reachable = [](const QString &u, int timeout_ms) {
-		const QUrl qu(u);
-		if (!qu.isValid() || qu.host().isEmpty()) return false;
-		QTcpSocket s;
-		s.connectToHost(qu.host(), quint16(qu.port(3000)));
-		const bool ok = s.waitForConnected(timeout_ms);
-		s.abort();
-		return ok;
-	};
-	QString url;
-	if (!lan_url.isEmpty() && reachable(lan_url, 1200))
-		url = lan_url;
-	else if (!ts_url.isEmpty() && reachable(ts_url, 2500))
-		url = ts_url;
+	const QString url = QETUtils::firstReachableUrl(lan_url, ts_url);
 	if (url.isEmpty()) {
 		QMessageBox::warning(this, tr("更新公司元件庫"),
 			tr("內網與 Tailscale 皆連不上元件庫伺服器:\n%1\n%2\n"

@@ -17,6 +17,8 @@
 */
 #include "pdmsettings.h"
 
+#include "../utils/qetutils.h"
+
 #include <QDir>
 #include <QProcess>
 #include <QSettings>
@@ -25,6 +27,7 @@
 namespace
 {
 	const char *KEY_SERVER_URL = "pdm/server-url";
+	const char *KEY_SERVER_URL_TS = "pdm/server-url-tailscale";
 	const char *KEY_USERNAME   = "pdm/username";
 	const char *KEY_TOKEN      = "pdm/token";
 	const char *KEY_WORK_ROOT  = "pdm/work-root";
@@ -32,6 +35,19 @@ namespace
 
 	// 內網 Gitea 預設主機:沿用 OTA 更新器既有的伺服器(ota/repo-url)。
 	const char *DEFAULT_SERVER = "http://192.168.1.148:3000";
+	// Tailscale MagicDNS 備援(離開公司網路時自動改走這條)。
+	const char *DEFAULT_SERVER_TS = "http://hc-server:3000";
+
+	QString normalized(QString url)
+	{
+		url = url.trimmed();
+		while (url.endsWith('/')) url.chop(1);
+		return url;
+	}
+
+	// serverUrl() 的探測快取(程序內);setServerUrl 會使其失效。
+	QString g_resolved_server;
+	bool g_server_probed = false;
 	// 公司圖庫:圖檔管理固定連此 repo,不提供選擇。
 	const char *DEFAULT_REPO   = "HC-Git/HC_Electrical-Schematics";
 
@@ -66,15 +82,33 @@ namespace
 
 QString PdmSettings::serverUrl()
 {
+	// PDM 的 git/API 呼叫非常頻繁,探測結果做程序內快取:
+	// 首次呼叫測一次(內網 1.2s → Tailscale 2.5s),之後直接回傳。
+	if (!g_server_probed) {
+		QSettings settings;
+		const QString lan = normalized(settings.value(
+			KEY_SERVER_URL, DEFAULT_SERVER).toString());
+		const QString ts = normalized(settings.value(
+			KEY_SERVER_URL_TS, DEFAULT_SERVER_TS).toString());
+		g_resolved_server = QETUtils::firstReachableUrl(lan, ts);
+		if (g_resolved_server.isEmpty())
+			g_resolved_server = lan;   // 都不通:回內網設定值
+		g_server_probed = true;
+	}
+	return g_resolved_server;
+}
+
+QString PdmSettings::configuredServerUrl()
+{
 	QSettings settings;
-	QString url = settings.value(KEY_SERVER_URL, DEFAULT_SERVER).toString().trimmed();
-	while (url.endsWith('/')) url.chop(1);
-	return url;
+	return normalized(settings.value(
+		KEY_SERVER_URL, DEFAULT_SERVER).toString());
 }
 
 void PdmSettings::setServerUrl(const QString &url)
 {
 	QSettings().setValue(KEY_SERVER_URL, url.trimmed());
+	g_server_probed = false;   // 位址改了,下次 serverUrl() 重新探測
 }
 
 QString PdmSettings::username()

@@ -770,6 +770,11 @@ void PdmDialog::syncRepository()
 
 	const QString vault = vaultDir();
 	if (QDir(vault + QStringLiteral("/.git")).exists()) {
+		// origin 是 clone 當下的位址;內網/Tailscale 環境切換後要先
+		// 重新指向本次解析到的伺服器,後續 fetch/push 才連得上。
+		// (worktree 共用 vault 的 config,設一次全部生效)
+		m_git->enqueue({"remote", "set-url", "origin",
+			remoteUrlWithCredentials()}, vault, {});
 		m_git->enqueue({"fetch", "origin", "--prune"}, vault, {});
 		m_git->enqueue({"checkout", DEFAULT_BRANCH}, vault, {});
 		m_git->enqueue({"pull", "--ff-only"}, vault,

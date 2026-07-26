@@ -35,6 +35,16 @@ namespace QETUtils
 
 	bool sortBeginIntString(const QString &str_a, const QString &str_b);
 
+	/**
+		內網/Tailscale 雙路徑自動判別:依序對兩個 URL 的主機:埠做快速
+		TCP 探測(git/HTTP 對不通的主機動輒等數十秒才逾時),回傳第一個
+		連得上的 URL;都不通回傳空字串。primary 通常是內網 IP(SYN 無回
+		應 1.2 秒可判定),fallback 是 Tailscale MagicDNS 名稱(要先解析,
+		寬限 2.5 秒)。
+	*/
+	QString firstReachableUrl(const QString &primary, const QString &fallback,
+				  int primary_ms = 1200, int fallback_ms = 2500);
+
 	template <typename T>
 	QVector<QWeakPointer<T>> sharedVectorToWeak(const QVector<QSharedPointer<T>> &vector)
 	{

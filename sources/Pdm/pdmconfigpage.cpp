@@ -36,7 +36,8 @@ PdmConfigPage::PdmConfigPage(QWidget *parent) :
 	auto *form = new QFormLayout();
 	layout->addLayout(form);
 
-	m_server_edit = new QLineEdit(PdmSettings::serverUrl(), this);
+	// 顯示原始設定值(serverUrl() 是探測後的執行期位址,存回會蓋掉內網設定)
+	m_server_edit = new QLineEdit(PdmSettings::configuredServerUrl(), this);
 	m_server_edit->setPlaceholderText(QStringLiteral("http://192.168.1.148:3000"));
 	form->addRow(tr("Gitea 伺服器:"), m_server_edit);
 
@@ -100,7 +101,7 @@ void PdmConfigPage::loginWithPassword()
 {
 	// 伺服器網址要先有,才能連去產 token
 	PdmSettings::setServerUrl(m_server_edit->text());
-	if (PdmSettings::serverUrl().isEmpty()) {
+	if (PdmSettings::configuredServerUrl().isEmpty()) {
 		m_test_result->setText(tr("✗ 請先填 Gitea 伺服器網址。"));
 		return;
 	}

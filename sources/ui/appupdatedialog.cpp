@@ -19,6 +19,7 @@
 
 #include "../qetapp.h"
 #include "../qetversion.h"
+#include "../utils/qetutils.h"
 
 #include <QCoreApplication>
 #include <QDialogButtonBox>
@@ -87,11 +88,18 @@ AppUpdateDialog::AppUpdateDialog(QWidget *parent) :
 	setWindowTitle(tr("Mise à jour de l'application", "window title"));
 
 	QSettings settings;
-	m_url = new QLineEdit(
+	// 內網/Tailscale 雙路徑自動判別:誰連得上用誰(都不通則顯示內網
+	// 位址,重新整理時會報連線錯誤)。
+	const QString lan_url =
 		settings.value(QStringLiteral("ota/repo-url"),
 			       QStringLiteral("http://192.168.1.148:3000/HC-Git"
-					      "/QET-release")).toString(),
-		this);
+					      "/QET-release")).toString();
+	const QString ts_url =
+		settings.value(QStringLiteral("ota/repo-url-tailscale"),
+			       QStringLiteral("http://hc-server:3000/HC-Git"
+					      "/QET-release")).toString();
+	const QString picked = QETUtils::firstReachableUrl(lan_url, ts_url);
+	m_url = new QLineEdit(picked.isEmpty() ? lan_url : picked, this);
 
 	m_versions = new QListWidget(this);
 	m_versions->setMinimumSize(460, 140);
