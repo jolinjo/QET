@@ -375,7 +375,11 @@ void TitleBlockPropertiesWidget::setTitleBlockTemplatesVisible(
 */
 void TitleBlockPropertiesWidget::setTemplateGroupVisible(const bool &visible)
 {
-	ui -> m_tbt_gb -> setVisible(visible);
+	// m_tbt_gb 內含整個分頁內容,不能整框隱藏;只藏範本那一列
+	ui -> m_tbt_label      -> setVisible(visible);
+	ui -> m_tbt_cb         -> setVisible(visible);
+	ui -> m_display_at_cb  -> setVisible(visible);
+	ui -> m_tbt_pb         -> setVisible(visible);
 }
 
 /**
