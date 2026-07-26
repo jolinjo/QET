@@ -105,6 +105,10 @@ Diagram::Diagram(QETProject *project) :
 		}
 	});
 
+	// 元件群組:選取變動時把「同組」元件一併選起來(選一個=選整組)
+	connect(this, &QGraphicsScene::selectionChanged,
+		this, &Diagram::syncGroupSelection);
+
 	connect(&border_and_titleblock,
 		&BorderTitleBlock::needTitleBlockTemplate,
 		this, &Diagram::setTitleBlockTemplate);
@@ -1049,6 +1053,22 @@ QDomDocument Diagram::toXml(bool whole_content, bool is_copy_command) {
 		dom_root.appendChild(TerminalStripItemXml::toXml(strip_vector, document));
 	}
 
+	// 元件群組(uuid 清單;只在存整頁時寫,選取複製不帶群組)
+	if (whole_content && !m_element_groups.isEmpty()) {
+		auto dom_groups = document.createElement(
+			QStringLiteral("element_groups"));
+		for (const QSet<QUuid> &group : m_element_groups) {
+			if (group.count() < 2) continue;
+			QStringList uuids;
+			for (const QUuid &u : group) uuids << u.toString();
+			auto g = document.createElement(QStringLiteral("group"));
+			g.setAttribute(QStringLiteral("uuids"),
+				       uuids.join(QChar(';')));
+			dom_groups.appendChild(g);
+		}
+		if (dom_groups.hasChildNodes())
+			dom_root.appendChild(dom_groups);
+	}
 
 	return(document);
 }
@@ -1478,6 +1498,21 @@ bool Diagram::fromXml(QDomElement &document,
 
 		//Load terminal strip item
 	QVector<TerminalStripItem *> added_strips { TerminalStripItemXml::fromXml(this, root) };
+
+		// 元件群組(選取複製的 XML 不含此節點,貼上不會誤加)
+	for (const auto &dom_group : QET::findInDomElement(root,
+			QStringLiteral("element_groups"),
+			QStringLiteral("group"))) {
+		QSet<QUuid> group;
+		const QStringList uuids = dom_group.attribute(
+			QStringLiteral("uuids"))
+			.split(QChar(';'), Qt::SkipEmptyParts);
+		for (const QString &u : uuids) {
+			const QUuid id(u);
+			if (!id.isNull()) group << id;
+		}
+		if (group.count() >= 2) m_element_groups << group;
+	}
 
 	//Translate items if a new position was given in parameter
 	if (position != QPointF())
@@ -2130,6 +2165,110 @@ QList <Element *> Diagram::elements() const
 			element_list <<elmt;
 	}
 	return (element_list);
+}
+
+/* ── 元件群組 ────────────────────────────────────────────────────── */
+
+namespace {
+	/// 群組/取消群組的復原命令:整包群組清單前後對調
+	class SetElementGroupsCommand : public QUndoCommand
+	{
+	public:
+		SetElementGroupsCommand(Diagram *d,
+					const QList<QSet<QUuid>> &before,
+					const QList<QSet<QUuid>> &after,
+					const QString &text) :
+			m_diagram(d), m_before(before), m_after(after)
+		{
+			setText(text);
+		}
+		void redo() override { m_diagram->setElementGroups(m_after); }
+		void undo() override { m_diagram->setElementGroups(m_before); }
+	private:
+		Diagram *m_diagram;
+		QList<QSet<QUuid>> m_before, m_after;
+	};
+}
+
+QList<Element *> Diagram::selectedElements() const
+{
+	QList<Element *> out;
+	const QList<Element *> all = elements();
+	for (Element *e : all)
+		if (e->isSelected()) out << e;
+	return out;
+}
+
+int Diagram::selectedElementCount() const
+{
+	return selectedElements().count();
+}
+
+bool Diagram::selectionHasGroupedElement() const
+{
+	const QList<Element *> sel = selectedElements();
+	for (Element *e : sel)
+		for (const QSet<QUuid> &g : m_element_groups)
+			if (g.contains(e->uuid())) return true;
+	return false;
+}
+
+void Diagram::setElementGroups(const QList<QSet<QUuid>> &groups)
+{
+	m_element_groups = groups;
+	syncGroupSelection();
+}
+
+void Diagram::groupSelectedElements()
+{
+	if (isReadOnly()) return;
+	const QList<Element *> sel = selectedElements();
+	if (sel.count() < 2) return;
+	QSet<QUuid> ids;
+	for (Element *e : sel) ids << e->uuid();
+
+	QList<QSet<QUuid>> groups = m_element_groups;
+	for (int i = groups.size() - 1; i >= 0; --i) {   // 先移出舊群組
+		groups[i] -= ids;
+		if (groups.at(i).count() < 2) groups.removeAt(i);
+	}
+	groups << ids;
+	undoStack().push(new SetElementGroupsCommand(
+		this, m_element_groups, groups,
+		tr("群組 %1 個元件").arg(ids.count())));
+}
+
+void Diagram::ungroupSelectedElements()
+{
+	if (isReadOnly()) return;
+	const QList<Element *> sel = selectedElements();
+	QSet<QUuid> ids;
+	for (Element *e : sel) ids << e->uuid();
+
+	QList<QSet<QUuid>> groups = m_element_groups;
+	for (int i = groups.size() - 1; i >= 0; --i)
+		if (groups.at(i).intersects(ids)) groups.removeAt(i);
+	if (groups.count() == m_element_groups.count()) return;
+	undoStack().push(new SetElementGroupsCommand(
+		this, m_element_groups, groups, tr("取消元件群組")));
+}
+
+void Diagram::syncGroupSelection()
+{
+	if (m_group_sync_guard || m_element_groups.isEmpty()) return;
+	const QList<Element *> sel = selectedElements();
+	if (sel.isEmpty()) return;
+	QSet<QUuid> want;
+	for (Element *e : sel)
+		for (const QSet<QUuid> &g : m_element_groups)
+			if (g.contains(e->uuid())) want |= g;
+	if (want.isEmpty()) return;
+	m_group_sync_guard = true;
+	const QList<Element *> all = elements();
+	for (Element *e : all)
+		if (want.contains(e->uuid()) && !e->isSelected())
+			e->setSelected(true);
+	m_group_sync_guard = false;
 }
 
 /**

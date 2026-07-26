@@ -128,6 +128,11 @@ class Diagram : public QGraphicsScene
 		bool m_freeze_new_elements;
 		bool m_freeze_new_conductors_;
 		QUuid m_uuid = QUuid::createUuid();
+		/// 元件群組(每組 = 元件 uuid 集合);選取同步見 syncGroupSelection
+		QList<QSet<QUuid>> m_element_groups;
+		bool m_group_sync_guard = false;
+		void syncGroupSelection();
+		QList<Element *> selectedElements() const;
 	
 	// METHODS
 	protected:
@@ -249,6 +254,18 @@ class Diagram : public QGraphicsScene
 		void setFreezeNewConductors(bool);
 		bool freezeNewConductors();
 	
+		/* ── 元件群組(選一個等於選整組,一起移動)────────────── */
+		/// 把目前選取的元件(≥2)群組;已屬其他群組者先移出。可復原。
+		void groupSelectedElements();
+		/// 解散「目前選取元件所屬」的所有群組。可復原。
+		void ungroupSelectedElements();
+		/// 選取中的元件數(供 UI 判斷群組動作可否啟用)
+		int selectedElementCount() const;
+		/// 選取中是否有元件屬於某群組
+		bool selectionHasGroupedElement() const;
+		QList<QSet<QUuid>> elementGroups() const { return m_element_groups; }
+		void setElementGroups(const QList<QSet<QUuid>> &groups);
+
 		//methods related to insertion and loading of folio sequential
 		void insertFolioSeqHash (QHash<QString, QStringList> *hash,
 					 const QString& title,

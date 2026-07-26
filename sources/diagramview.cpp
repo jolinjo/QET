@@ -93,6 +93,21 @@ DiagramView::DiagramView(Diagram *diagram, QWidget *parent) :
 	m_create_template = new QAction(tr("Créer un template", "context menu action"), this);
 	connect(m_create_template, SIGNAL(triggered()), this, SLOT(createTemplateFromSelection()));
 
+	// 元件群組:選一個等於選整組、一起移動(Ctrl+G / Ctrl+Shift+G)
+	m_group_elements = new QAction(tr("群組元件"), this);
+	m_group_elements->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_G));
+	connect(m_group_elements, &QAction::triggered, this, [this]() {
+		m_diagram->groupSelectedElements();
+	});
+	addAction(m_group_elements);   // 讓快捷鍵在本視圖有效
+	m_ungroup_elements = new QAction(tr("取消元件群組"), this);
+	m_ungroup_elements->setShortcut(
+		QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_G));
+	connect(m_ungroup_elements, &QAction::triggered, this, [this]() {
+		m_diagram->ungroupSelectedElements();
+	});
+	addAction(m_ungroup_elements);
+
 		//setup three separators, to be use in context menu
 	for(int i=0 ; i<3 ; ++i)
 	{
@@ -1244,10 +1259,17 @@ QList<QAction *> DiagramView::contextMenuActions() const
 		}
 		else
 		{
+			// 群組動作:≥2 個元件可群組;選取含群組成員才可取消
+			m_group_elements->setEnabled(
+				m_diagram->selectedElementCount() >= 2);
+			m_ungroup_elements->setEnabled(
+				m_diagram->selectionHasGroupedElement());
 			list << qde->m_cut;
 			list << qde->m_copy;
 			list << m_multi_paste;
 			list << m_separators.at(0);
+			list << m_group_elements;
+			list << m_ungroup_elements;
 			list << m_create_template; // Add the create template action
 			list << qde->m_conductor_reset;
 			list << m_separators.at(1);
