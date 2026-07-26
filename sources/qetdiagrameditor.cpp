@@ -1700,17 +1700,6 @@ void QETDiagramEditor::setUpMenu()
 		this, SLOT(openRecentFile(const QString &)));
 	menu_fichier -> addActions(m_file_actions_group.actions());
 	menu_fichier -> addSeparator();
-	// 簡易 PDF 檢視器(開檔、翻頁、縮放)
-	{
-		QAction *open_pdf = menu_fichier->addAction(tr("開啟 PDF 檢視…"));
-		connect(open_pdf, &QAction::triggered, this, [this]() {
-			auto *v = new PdfViewerWindow(this);
-			v->setAttribute(Qt::WA_DeleteOnClose);
-			v->show();
-			v->openFileDialog();
-		});
-	}
-	menu_fichier -> addSeparator();
 	//menu_fichier -> addAction(import_diagram);
 	menu_fichier -> addAction(m_export_to_images);
 	menu_fichier -> addAction(m_export_to_pdf);
@@ -1950,7 +1939,8 @@ bool QETDiagramEditor::openProject()
 		this,
 		tr("Ouvrir un fichier"),
 		open_dialog_dir.absolutePath(),
-		tr("Projets QElectroTech (*.qet);;Fichiers XML (*.xml);;Tous les fichiers (*)")
+		tr("QElectroTech / PDF (*.qet *.pdf);;Projets QElectroTech (*.qet);;"
+		   "PDF (*.pdf);;Fichiers XML (*.xml);;Tous les fichiers (*)")
 	);
 	if (filepath.isEmpty()) return(false);
 
@@ -2005,6 +1995,22 @@ bool QETDiagramEditor::openAndAddProject(
 	if (filepath.isEmpty()) return(false);
 
 	QFileInfo filepath_info(filepath);
+
+	// PDF:用同一個「開啟」即可,以檢視面板嵌入主視窗的分頁區(不另開視窗)
+	if (filepath_info.suffix().compare(QLatin1String("pdf"),
+					   Qt::CaseInsensitive) == 0) {
+		auto *v = new PdfViewerWindow();
+		v->openFile(filepath);
+		QWidget *cur = m_workspace.activeSubWindow();
+		const bool maximise = (!cur)
+			|| (cur->windowState() & Qt::WindowMaximized);
+		QMdiSubWindow *sub = m_workspace.addSubWindow(v);
+		sub->setWindowTitle(v->windowTitle());
+		sub->setAttribute(Qt::WA_DeleteOnClose);
+		sub->systemMenu()->clear();
+		if (maximise) v->showMaximized(); else v->show();
+		return true;
+	}
 
 	//Check if project is not open in another editor
 	if (QETDiagramEditor *diagram_editor = QETApp::diagramEditorForFile(filepath))

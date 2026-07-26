@@ -18,17 +18,21 @@
 #ifndef PDFVIEWERWINDOW_H
 #define PDFVIEWERWINDOW_H
 
-#include <QMainWindow>
+#include <QWidget>
 
 class QPdfDocument;
 class QPdfView;
+class QPdfBookmarkModel;
 class QLabel;
+class QTreeView;
+class QModelIndex;
 
 /**
-	@brief 簡易 PDF 檢視視窗:開檔、翻頁、縮放。
-	以 Qt PDF 模組(QPdfDocument + QPdfView)實作。
+	@brief 簡易 PDF 檢視面板:開檔、翻頁、縮放。
+	以 Qt PDF 模組(QPdfDocument + QPdfView)實作。作為 QWidget 嵌入主視窗
+	的 MDI 分頁區(與專案分頁並列),不另開獨立視窗。
 */
-class PdfViewerWindow : public QMainWindow
+class PdfViewerWindow : public QWidget
 {
 	Q_OBJECT
 
@@ -47,11 +51,16 @@ class PdfViewerWindow : public QMainWindow
 		void zoomIn();
 		void zoomOut();
 		void fitWidth();
+		void fitPage();
 		void updatePageLabel();
+		void bookmarkActivated(const QModelIndex &index);
+		void refreshBookmarks();
 
 		QPdfDocument *m_doc = nullptr;
 		QPdfView *m_view = nullptr;
 		QLabel *m_page_label = nullptr;
+		QPdfBookmarkModel *m_bmodel = nullptr;
+		QTreeView *m_bookmarks = nullptr;
 };
 
 #endif // PDFVIEWERWINDOW_H
