@@ -89,11 +89,11 @@ DiagramPropertiesDialog::DiagramPropertiesDialog(Diagram *diagram, QWidget *pare
 	m_cpw->hide();
 	// 整個範本群組框(範本下拉/圖框顯示位置/編輯鈕)都不顯示
 	titleblock_infos->setTemplateGroupVisible(false);
+	// 隱藏塊不進版面(元件保留、值不動),避免殘留空白/擠壓寬度
+	titleblock_infos->setMinimumSize(560, 560);
 
 	QGridLayout *glayout = new QGridLayout;
-	glayout->addWidget(border_infos,0,0);
-	glayout->addWidget(titleblock_infos, 1, 0);
-	glayout->addWidget(m_cpw, 0, 1, 0, 1);
+	glayout->addWidget(titleblock_infos, 0, 0);
 
 	QVBoxLayout vlayout(this);
 	vlayout.addLayout(glayout);
