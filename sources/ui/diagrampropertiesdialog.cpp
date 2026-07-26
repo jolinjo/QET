@@ -81,6 +81,12 @@ DiagramPropertiesDialog::DiagramPropertiesDialog(Diagram *diagram, QWidget *pare
 	connect(&boutons, SIGNAL(accepted()), this, SLOT(accept()));
 	connect(&boutons, SIGNAL(rejected()), this, SLOT(reject()));
 
+	// 只顯示「圖框資訊」:版面設定與導線屬性隱藏(元件仍建立、值不動,
+	// 確定時 new==old 不會產生任何變更;版面尺寸由公司範本統一,導線
+	// 屬性另有工具列/專案設定入口)。
+	border_infos->hide();
+	m_cpw->hide();
+
 	QGridLayout *glayout = new QGridLayout;
 	glayout->addWidget(border_infos,0,0);
 	glayout->addWidget(titleblock_infos, 1, 0);
