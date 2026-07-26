@@ -1279,6 +1279,8 @@ void DiagramTableItem::mergeWith(QList<DiagramTableItem *> others)
 bool DiagramTableItem::fromXml(const QDomElement &e)
 {
 	if (e.tagName() != QLatin1String("drawing_table")) return false;
+	if (e.hasAttribute(QStringLiteral("uuid")))
+		m_uuid = QUuid(e.attribute(QStringLiteral("uuid")));
 	setState(e.attribute(QStringLiteral("state")));
 	QGraphicsObject::setPos(e.attribute(QStringLiteral("x")).toDouble(),
 				e.attribute(QStringLiteral("y")).toDouble());
@@ -1290,6 +1292,7 @@ bool DiagramTableItem::fromXml(const QDomElement &e)
 QDomElement DiagramTableItem::toXml(QDomDocument &doc) const
 {
 	QDomElement e = doc.createElement(QStringLiteral("drawing_table"));
+	e.setAttribute(QStringLiteral("uuid"), m_uuid.toString());
 	e.setAttribute(QStringLiteral("x"), QString::number(pos().x()));
 	e.setAttribute(QStringLiteral("y"), QString::number(pos().y()));
 	e.setAttribute(QStringLiteral("z"), QString::number(zValue()));

@@ -846,6 +846,8 @@ void QetShapeItem::handlerMouseReleaseEvent()
 bool QetShapeItem::fromXml(const QDomElement &e)
 {
 	if (e.tagName() != "shape") return (false);
+	if (e.hasAttribute("uuid"))
+		m_uuid = QUuid(e.attribute("uuid"));
 
 	is_movable_ = (e.attribute("is_movable").toInt());
 	m_closed = e.attribute("closed", "0").toInt();
@@ -888,6 +890,7 @@ bool QetShapeItem::fromXml(const QDomElement &e)
 QDomElement QetShapeItem::toXml(QDomDocument &document) const
 {
 	QDomElement result = document.createElement("shape");
+	result.setAttribute("uuid", m_uuid.toString());
 
 		//write some attribute
 	QMetaEnum me = metaObject()->enumerator(metaObject()->indexOfEnumerator("ShapeType"));

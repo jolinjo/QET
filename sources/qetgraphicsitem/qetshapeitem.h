@@ -22,6 +22,7 @@
 #include "qetgraphicsitem.h"
 
 #include <QPen>
+#include <QUuid>
 
 class QDomElement;
 class QDomDocument;
@@ -55,6 +56,7 @@ class QetShapeItem : public QetGraphicsItem
 		
 		
 	public:
+		QUuid uuid() const { return m_uuid; }
 		enum ShapeType {Line	  =1,
 						Rectangle =2,
 						Ellipse	  =4,
@@ -161,5 +163,7 @@ class QetShapeItem : public QetGraphicsItem
 				 m_yRadius = 0,
 				 m_old_xRadius,
 				 m_old_yRadius;
+		/// 供元件群組等功能識別(序列化於 uuid 屬性)
+		QUuid m_uuid = QUuid::createUuid();
 };
 #endif // QETSHAPEITEM_H

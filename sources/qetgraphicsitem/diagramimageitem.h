@@ -20,6 +20,8 @@
 
 #include "qetgraphicsitem.h"
 
+#include <QUuid>
+
 #include <QVector>
 
 class QDomElement;
@@ -39,6 +41,7 @@ class DiagramImageItem : public QetGraphicsItem {
 
 	// constructors, destructor
 	public:
+		QUuid uuid() const { return m_uuid; }
 	DiagramImageItem(QetGraphicsItem * = nullptr);
 	DiagramImageItem(const QPixmap &pixmap, QetGraphicsItem * = nullptr);
 	~DiagramImageItem() override;
@@ -102,5 +105,7 @@ class DiagramImageItem : public QetGraphicsItem {
 	QPointF m_resize_anchor_item;    ///< 對角控制點的 item 座標
 	bool m_crop_mode = false;
 	QRectF m_crop_rect;
+		/// 供元件群組等功能識別(序列化於 uuid 屬性)
+		QUuid m_uuid = QUuid::createUuid();
 };
 #endif

@@ -2190,6 +2190,28 @@ namespace {
 	};
 }
 
+namespace {
+	/// 可群組項目的識別 uuid(元件/獨立文字/形狀/圖片/繪圖表格);
+	/// 其他型別回傳 null uuid = 不可群組
+	QUuid groupableUuid(QGraphicsItem *qgi)
+	{
+		switch (qgi->type()) {
+		case Element::Type:
+			return static_cast<Element *>(qgi)->uuid();
+		case IndependentTextItem::Type:
+			return static_cast<IndependentTextItem *>(qgi)->uuid();
+		case QetShapeItem::Type:
+			return static_cast<QetShapeItem *>(qgi)->uuid();
+		case DiagramImageItem::Type:
+			return static_cast<DiagramImageItem *>(qgi)->uuid();
+		case DiagramTableItem::Type:
+			return static_cast<DiagramTableItem *>(qgi)->uuid();
+		default:
+			return QUuid();
+		}
+	}
+}
+
 QList<Element *> Diagram::selectedElements() const
 {
 	QList<Element *> out;
@@ -2201,15 +2223,22 @@ QList<Element *> Diagram::selectedElements() const
 
 int Diagram::selectedElementCount() const
 {
-	return selectedElements().count();
+	int n = 0;
+	const QList<QGraphicsItem *> sel = selectedItems();
+	for (QGraphicsItem *qgi : sel)
+		if (!groupableUuid(qgi).isNull()) ++n;
+	return n;
 }
 
 bool Diagram::selectionHasGroupedElement() const
 {
-	const QList<Element *> sel = selectedElements();
-	for (Element *e : sel)
+	const QList<QGraphicsItem *> sel = selectedItems();
+	for (QGraphicsItem *qgi : sel) {
+		const QUuid id = groupableUuid(qgi);
+		if (id.isNull()) continue;
 		for (const QSet<QUuid> &g : m_element_groups)
-			if (g.contains(e->uuid())) return true;
+			if (g.contains(id)) return true;
+	}
 	return false;
 }
 
@@ -2222,10 +2251,13 @@ void Diagram::setElementGroups(const QList<QSet<QUuid>> &groups)
 void Diagram::groupSelectedElements()
 {
 	if (isReadOnly()) return;
-	const QList<Element *> sel = selectedElements();
-	if (sel.count() < 2) return;
 	QSet<QUuid> ids;
-	for (Element *e : sel) ids << e->uuid();
+	const QList<QGraphicsItem *> sel = selectedItems();
+	for (QGraphicsItem *qgi : sel) {
+		const QUuid id = groupableUuid(qgi);
+		if (!id.isNull()) ids << id;
+	}
+	if (ids.count() < 2) return;
 
 	QList<QSet<QUuid>> groups = m_element_groups;
 	for (int i = groups.size() - 1; i >= 0; --i) {   // 先移出舊群組
@@ -2235,39 +2267,44 @@ void Diagram::groupSelectedElements()
 	groups << ids;
 	undoStack().push(new SetElementGroupsCommand(
 		this, m_element_groups, groups,
-		tr("群組 %1 個元件").arg(ids.count())));
+		tr("群組 %1 個項目").arg(ids.count())));
 }
 
 void Diagram::ungroupSelectedElements()
 {
 	if (isReadOnly()) return;
-	const QList<Element *> sel = selectedElements();
 	QSet<QUuid> ids;
-	for (Element *e : sel) ids << e->uuid();
+	const QList<QGraphicsItem *> sel = selectedItems();
+	for (QGraphicsItem *qgi : sel) {
+		const QUuid id = groupableUuid(qgi);
+		if (!id.isNull()) ids << id;
+	}
 
 	QList<QSet<QUuid>> groups = m_element_groups;
 	for (int i = groups.size() - 1; i >= 0; --i)
 		if (groups.at(i).intersects(ids)) groups.removeAt(i);
 	if (groups.count() == m_element_groups.count()) return;
 	undoStack().push(new SetElementGroupsCommand(
-		this, m_element_groups, groups, tr("取消元件群組")));
+		this, m_element_groups, groups, tr("取消群組")));
 }
 
 void Diagram::syncGroupSelection()
 {
 	if (m_group_sync_guard || m_element_groups.isEmpty()) return;
-	const QList<Element *> sel = selectedElements();
-	if (sel.isEmpty()) return;
 	QSet<QUuid> want;
-	for (Element *e : sel)
+	const QList<QGraphicsItem *> sel = selectedItems();
+	for (QGraphicsItem *qgi : sel) {
+		const QUuid id = groupableUuid(qgi);
+		if (id.isNull()) continue;
 		for (const QSet<QUuid> &g : m_element_groups)
-			if (g.contains(e->uuid())) want |= g;
+			if (g.contains(id)) want |= g;
+	}
 	if (want.isEmpty()) return;
 	m_group_sync_guard = true;
-	const QList<Element *> all = elements();
-	for (Element *e : all)
-		if (want.contains(e->uuid()) && !e->isSelected())
-			e->setSelected(true);
+	const QList<QGraphicsItem *> all = items();
+	for (QGraphicsItem *qgi : all)
+		if (!qgi->isSelected() && want.contains(groupableUuid(qgi)))
+			qgi->setSelected(true);
 	m_group_sync_guard = false;
 }
 

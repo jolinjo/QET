@@ -19,6 +19,7 @@
 #define DIAGRAM_TABLE_ITEM_H
 
 #include "qetgraphicsitem.h"
+#include <QUuid>
 
 #include <QColor>
 #include <QFont>
@@ -45,6 +46,8 @@ class DiagramTableItem : public QetGraphicsItem
 	public:
 		explicit DiagramTableItem(QetGraphicsItem *parent = nullptr);
 		~DiagramTableItem() override;
+
+		QUuid uuid() const { return m_uuid; }
 
 		enum { Type = UserType + 1012 };   // 1010 已被 DynamicElementTextItem 佔用
 		int type() const override { return Type; }
@@ -164,6 +167,8 @@ class DiagramTableItem : public QetGraphicsItem
 		QString m_drag_old_state;
 		QGraphicsProxyWidget *m_editor = nullptr;  ///< inline 儲存格編輯框
 		int m_edit_index = -1;
+		/// 供元件群組等功能識別(序列化於 uuid 屬性)
+		QUuid m_uuid = QUuid::createUuid();
 };
 
 #endif // DIAGRAM_TABLE_ITEM_H

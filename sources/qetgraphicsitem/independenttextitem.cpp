@@ -60,6 +60,8 @@ IndependentTextItem::~IndependentTextItem()
 */
 void IndependentTextItem::fromXml(const QDomElement &e) {
 	setPos(e.attribute("x").toDouble(), e.attribute("y").toDouble());
+	if (e.hasAttribute("uuid"))
+		m_uuid = QUuid(e.attribute("uuid"));
 	/* les anciens fichiers stockent du balisage html complet, les textes
 	 * bruts recents seulement la chaine : ne marquer "html" que ce qui
 	 * l'est vraiment */
@@ -89,6 +91,7 @@ void IndependentTextItem::fromXml(const QDomElement &e) {
 QDomElement IndependentTextItem::toXml(QDomDocument &document) const
 {
 	QDomElement result = document.createElement("input");
+	result.setAttribute("uuid", m_uuid.toString());
 	result.setAttribute("x", QString("%1").arg(pos().x()));
 	result.setAttribute("y", QString("%1").arg(pos().y()));
 	// un texte brut est sauvegarde brut, pour rester brut au rechargement
