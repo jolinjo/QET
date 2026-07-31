@@ -95,5 +95,38 @@ for f in LICENSE ChangeLog CREDIT README ELEMENTS.LICENSE; do
 	cp "$ROOT/$f" "$FILES/$f" 2>/dev/null || true
 done
 
+# 4. 打包 git + git-lfs(PDM 出庫/入庫用;同事機器零依賴不裝 git) --------------
+# MinGit(可攜版 git)解到 git/,git-lfs.exe 塞進 git/mingw64/bin,
+# 執行時由 PdmGitWorker 把 git/cmd 與 git/mingw64/bin 注入 PATH。
+MINGIT_VER="2.47.1"
+GITLFS_VER="3.7.1"
+MINGIT_URL="https://github.com/git-for-windows/git/releases/download/v${MINGIT_VER}.windows.1/MinGit-${MINGIT_VER}-64-bit.zip"
+GITLFS_URL="https://github.com/git-lfs/git-lfs/releases/download/v${GITLFS_VER}/git-lfs-windows-amd64-v${GITLFS_VER}.zip"
+GITCACHE="$BUILD/git-portable-cache"
+mkdir -p "$GITCACHE"
+MINGIT_ZIP="$GITCACHE/mingit-${MINGIT_VER}.zip"
+GITLFS_ZIP="$GITCACHE/git-lfs-${GITLFS_VER}.zip"
+[ -f "$MINGIT_ZIP" ] || curl -fsSL "$MINGIT_URL" -o "$MINGIT_ZIP"
+[ -f "$GITLFS_ZIP" ] || curl -fsSL "$GITLFS_URL" -o "$GITLFS_ZIP"
+
+TAR="$SYSTEMROOT/System32/tar.exe"
+GITDIR="$FILES/git"
+rm -rf "$GITDIR"; mkdir -p "$GITDIR"
+"$TAR" -xf "$MINGIT_ZIP" -C "$GITDIR"   # MinGit zip 解開即 cmd/ mingw64/ ...
+[ -f "$GITDIR/cmd/git.exe" ] || { echo "!! MinGit 解壓後找不到 cmd/git.exe"; exit 1; }
+
+LFSTMP="$GITCACHE/lfs-extract"; rm -rf "$LFSTMP"; mkdir -p "$LFSTMP"
+"$TAR" -xf "$GITLFS_ZIP" -C "$LFSTMP"
+LFSEXE=$(find "$LFSTMP" -iname git-lfs.exe | head -1)
+[ -n "$LFSEXE" ] || { echo "!! git-lfs zip 內找不到 git-lfs.exe"; exit 1; }
+cp "$LFSEXE" "$GITDIR/mingw64/bin/git-lfs.exe"
+
+# 功能驗證(勝過 hash 校驗:直接確認打包的執行檔真的能跑)
+"$GITDIR/cmd/git.exe" --version >/dev/null \
+	|| { echo "!! 打包的 git 無法執行"; exit 1; }
+PATH="$GITDIR/mingw64/bin:$PATH" "$GITDIR/cmd/git.exe" lfs version >/dev/null \
+	|| { echo "!! 打包的 git-lfs 無法執行"; exit 1; }
+echo "== 已打包 git $MINGIT_VER + git-lfs $GITLFS_VER"
+
 echo "== 完成:$FILES"
 "$BIN/QElectroTech.exe" --version || true

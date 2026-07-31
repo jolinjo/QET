@@ -84,10 +84,29 @@ void PdmGitWorker::startNext()
 	if (!job.working_dir.isEmpty())
 		process->setWorkingDirectory(job.working_dir);
 
-	// 讓 `git lfs …` 找得到隨 app 打包的 git-lfs：把 bundle 內
-	// Resources/bin 插到 PATH 最前(Finder 啟動的 app PATH 精簡,
-	// 系統/brew 的 git-lfs 找不到)。系統 git 仍走 /usr/bin。
+	// 讓 `git`／`git lfs …` 找得到隨程式打包的可攜版:插到 PATH 最前,
+	// 找不到就回退系統 PATH。
 	QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+#ifdef Q_OS_WIN
+	// 免安裝版零依賴(同事機器不裝 git):MinGit 與 git-lfs 隨包附在
+	// ../git(git/cmd/git.exe、git/mingw64/bin/git-lfs.exe)。
+	const QString git_root = QDir::cleanPath(
+		QCoreApplication::applicationDirPath()
+		+ QStringLiteral("/../git"));
+	if (QFileInfo::exists(git_root + QStringLiteral("/cmd/git.exe"))) {
+		env.insert(QStringLiteral("PATH"),
+			QDir::toNativeSeparators(git_root
+				+ QStringLiteral("/cmd"))
+			+ QLatin1Char(';')
+			+ QDir::toNativeSeparators(git_root
+				+ QStringLiteral("/mingw64/bin"))
+			+ QLatin1Char(';')
+			+ env.value(QStringLiteral("PATH")));
+		process->setProcessEnvironment(env);
+	}
+#else
+	// macOS:git-lfs 打包進 bundle Resources/bin(Finder 啟動的 app PATH
+	// 精簡,系統/brew 的 git-lfs 找不到)。系統 git 仍走 /usr/bin。
 	const QString bundled_bin = QDir::cleanPath(
 		QCoreApplication::applicationDirPath()
 		+ QStringLiteral("/../Resources/bin"));
@@ -97,6 +116,7 @@ void PdmGitWorker::startNext()
 			   + env.value(QStringLiteral("PATH")));
 		process->setProcessEnvironment(env);
 	}
+#endif
 
 	const bool is_git = job.program.isEmpty();
 	const QString program = is_git ? QStringLiteral("git") : job.program;
