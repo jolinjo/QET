@@ -164,13 +164,17 @@ void AppUpdateDialog::refreshVersionList()
 
 	QList<QVersionNumber> versions;
 #ifdef Q_OS_WIN
-	//les postes Windows n'ont pas forcement git : on interroge
-	//l'API Gitea (curl est fourni avec Windows 10+)
+	//les postes Windows n'ont pas forcement git : on interroge l'API
+	//Gitea des releases (curl fourni avec Windows 10+). Le zip portable
+	//est une "release asset" (telechargement statique) et non une archive
+	//git dynamique -- evite de faire spawn git a Gitea (bug 0xc0000142
+	//qui epuise le heap du bureau de la session de service).
+	m_win_asset_urls.clear();
 	const QUrl base(url);
 	const QString api = base.scheme() % QStringLiteral("://")
 			    % base.authority()
 			    % QStringLiteral("/api/v1/repos") % base.path()
-			    % QStringLiteral("/tags");
+			    % QStringLiteral("/releases");
 	QString output;
 	if (!run_process(QStringLiteral("curl"),
 			 { QStringLiteral("-fsS"), QStringLiteral("--max-time"),
@@ -179,15 +183,30 @@ void AppUpdateDialog::refreshVersionList()
 		m_status->setText(tr("Échec : %1").arg(output.right(600)));
 		return;
 	}
-	const QJsonArray tags =
+	const QJsonArray releases =
 		QJsonDocument::fromJson(output.toUtf8()).array();
-	for (const QJsonValue &value : tags) {
-		const QString name =
-			value.toObject().value(QLatin1String("name")).toString();
-		if (name.startsWith(TAG_PREFIX)) {
-			versions << QVersionNumber::fromString(
-				name.mid(TAG_PREFIX.size()));
+	for (const QJsonValue &value : releases) {
+		const QJsonObject rel = value.toObject();
+		const QString tag =
+			rel.value(QLatin1String("tag_name")).toString();
+		if (!tag.startsWith(TAG_PREFIX)) continue;
+		//premier asset .zip de la release
+		QString zip_url;
+		const QJsonArray assets =
+			rel.value(QLatin1String("assets")).toArray();
+		for (const QJsonValue &a : assets) {
+			const QJsonObject ao = a.toObject();
+			if (ao.value(QLatin1String("name")).toString()
+					.endsWith(QLatin1String(".zip"))) {
+				zip_url = ao.value(QLatin1String(
+					"browser_download_url")).toString();
+				break;
+			}
 		}
+		if (zip_url.isEmpty()) continue;   //release sans binaire: ignoree
+		versions << QVersionNumber::fromString(
+			tag.mid(TAG_PREFIX.size()));
+		m_win_asset_urls.insert(tag, zip_url);
 	}
 #else
 	QString output;
@@ -318,19 +337,26 @@ void AppUpdateDialog::applySelectedVersion()
 	QString log;
 	m_status->setText(tr("Téléchargement de %1...").arg(tag));
 	QCoreApplication::processEvents();
-	bool ok = run_process(QStringLiteral("curl"),
-		{ QStringLiteral("-fsS"), QStringLiteral("-o"), zip,
-		  url % QStringLiteral("/archive/") % tag
-			  % QStringLiteral(".zip") },
-		&log);
+	//telechargement statique de l'asset de la release (-L: suit la
+	//redirection Gitea vers le fichier)
+	const QString asset_url = m_win_asset_urls.value(tag);
+	bool ok = !asset_url.isEmpty();
+	if (!ok) {
+		log = tr("aucun binaire publié pour cette version");
+	} else {
+		ok = run_process(QStringLiteral("curl"),
+			{ QStringLiteral("-fsSL"), QStringLiteral("-o"), zip,
+			  asset_url }, &log);
+	}
 
 	if (ok) {
 		m_status->setText(tr("Extraction de %1...").arg(tag));
 		QCoreApplication::processEvents();
-		//tar (bsdtar) est fourni avec Windows 10+ et extrait les zip
+		//tar (bsdtar) est fourni avec Windows 10+ et extrait les zip.
+		//l'asset contient directement bin/ elements/ ... (pas de dossier
+		//racine), donc pas de --strip-components.
 		ok = run_process(QStringLiteral("tar"),
 			{ QStringLiteral("-xf"), zip,
-			  QStringLiteral("--strip-components=1"),
 			  QStringLiteral("-C"), stage }, &log);
 	}
 	if (ok && !QFileInfo::exists(

@@ -19,6 +19,9 @@
 #define APPUPDATEDIALOG_H
 
 #include <QDialog>
+#ifdef Q_OS_WIN
+#include <QHash>
+#endif
 
 class QLabel;
 class QLineEdit;
@@ -50,6 +53,10 @@ class AppUpdateDialog : public QDialog
 	QPushButton *m_refresh;
 	QPushButton *m_apply;
 	QLabel *m_status;
+#ifdef Q_OS_WIN
+	//tag(win-vX.Y) -> URL de l'asset .zip de la release Gitea
+	QHash<QString, QString> m_win_asset_urls;
+#endif
 };
 
 #endif // APPUPDATEDIALOG_H

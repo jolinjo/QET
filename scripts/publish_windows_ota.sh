@@ -1,10 +1,10 @@
 #!/bin/bash
-# Windows 版 OTA 發佈腳本(在 Windows 的 Git Bash 執行)
+# Windows 版 OTA 發佈腳本
 #
-# 這台發佈機不需要建置工具鏈:Windows 免安裝版由 GitHub Actions
-# 的 windows-ota.yml workflow 建置(Qt6/MSYS2),本腳本只負責
-# 取得 artifact → 推進內網 QET-release repo(win-stable 分支),
-# 打 win-vX.Y.Z tag 並只保留最近 KEEP 版。
+# 把免安裝版當 Gitea release asset 發佈(靜態下載,不進 git 分支;
+# 避免 Gitea 動態打包大 archive 觸發 0xc0000142)。win-stable 分支
+# 只放輕量的 README + CHANGELOG(首頁與更新紀錄)。只保留最近 KEEP
+# 個 win-v release。標準流程為本機建置(--build)。
 #
 # 用法:
 #   scripts/publish_windows_ota.sh --build
@@ -75,19 +75,28 @@ PORTABLE=$(cd "$PORTABLE" && pwd)
 [ -f "$PORTABLE/bin/QElectroTech.exe" ] || { echo "!! $PORTABLE 內找不到 bin/QElectroTech.exe"; exit 1; }
 echo "== 免安裝版來源:$PORTABLE"
 
-# 私有混合字型不在公開 repo/CI:發佈時由本機注入(app 執行時從
-# fonts/ 載入)。本機沒有就略過並提醒。
-HYBRID_FONT="$ROOT/fonts/YaHei.Consolas.1.11b.ttf"
-if [ -f "$HYBRID_FONT" ]; then
-	mkdir -p "$PORTABLE/fonts"
-	cp -f "$HYBRID_FONT" "$PORTABLE/fonts/"
-	echo "== 已注入混合字型 YaHei.Consolas.1.11b.ttf"
-else
-	echo "!! 提醒:$HYBRID_FONT 不存在,本版不含混合字型"
-	echo "   (從 mac 機的 QET/fonts/ 複製過來即可,檔案已被 gitignore)"
-fi
+# Gitea API 位址與認證(建 release / 上傳 asset 要寫入權限;用 git 憑證的
+# basic auth)。免安裝包(含 400MB git)當 release asset 靜態下載,不進
+# git 分支 -- 避免 Gitea 動態打包大 archive 觸發 0xc0000142。
+HOST=$(echo "$REPO_URL" | sed -E 's#(^https?://[^/]+).*#\1#')
+OWNER_REPO=$(echo "$REPO_URL" | sed -E 's#^https?://[^/]+/##')
+API_BASE="$HOST/api/v1/repos/$OWNER_REPO"
+CRED=$(printf 'protocol=%s\nhost=%s\n\n' "${HOST%%://*}" "${HOST#*://}" \
+	| git credential fill 2>/dev/null)
+GU=$(echo "$CRED" | sed -n 's/^username=//p')
+GP=$(echo "$CRED" | sed -n 's/^password=//p')
+[ -n "$GU" ] && [ -n "$GP" ] || { echo "!! 取不到 $HOST 的 git 認證"; exit 1; }
+api() { curl -fsS -u "$GU:$GP" "$@"; }
 
-# 2. 推進 release repo -------------------------------------------------------
+# 2. 打包免安裝版為 zip(release asset;zip 根直接是 bin/ elements/...) --------
+ZIPNAME="qelectrotech-${TAG}-win64.zip"
+ZIPPATH="$STAGE/$ZIPNAME"
+echo "== 打包 $ZIPNAME"
+( cd "$PORTABLE" && "$BSDTAR" -a -cf "$ZIPPATH" . )
+[ -f "$ZIPPATH" ] || { echo "!! 打包失敗"; exit 1; }
+echo "   $ZIPNAME ($(du -h "$ZIPPATH" | cut -f1))"
+
+# 3. win-stable 分支只放 README + CHANGELOG(輕量,首頁與更新紀錄用) -----------
 if [ ! -d "$CACHE/.git" ]; then
 	git clone "$REPO_URL" "$CACHE"
 fi
@@ -103,13 +112,12 @@ else
 	git rm -rfq --cached . 2>/dev/null || true
 	find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
 fi
-# 免安裝內容放 repo 根(client 端 tar --strip-components=1 直接對應),
-# 保留更新紀錄與發佈狀態檔
+# 只保留文字檔:清掉舊方案殘留在分支的 portable 內容(bin/ 等 400MB),
+# 分支瘦身後 archive/web 不再吃重。
 find . -mindepth 1 -maxdepth 1 ! -name .git \
 	! -name CHANGELOG-win.md ! -name .fork-sha-win -exec rm -rf {} +
-cp -a "$PORTABLE"/. "$CACHE"/
 
-# 3. 更新紀錄:彙整自上次發佈以來 fork 的所有 commit ---------------------------
+# 更新紀錄:彙整自上次發佈以來 fork 的所有 commit
 FORK_SHA=$(git -C "$ROOT" rev-parse HEAD)
 NOTES=""
 if [ -f "$CACHE/.fork-sha-win" ]; then
@@ -135,8 +143,8 @@ else
 fi
 printf '%s\n' "$FORK_SHA" > "$CACHE/.fork-sha-win"
 
-# 4. 產生 Gitea 首頁說明(README.md):安裝資訊 + 最新版更新內容 ----------------
 LATEST_NOTES=$(awk '/^## /{n++} n==1' "$CHANGELOG")
+DL_URL="$REPO_URL/releases/download/$TAG/$ZIPNAME"
 cat > "$CACHE/README.md" <<EOF
 # QElectroTech Windows 免安裝版
 
@@ -144,7 +152,7 @@ cat > "$CACHE/README.md" <<EOF
 
 ## 首次安裝
 
-1. 下載 [${TAG}.zip]($REPO_URL/archive/${TAG}.zip)
+1. 下載 [$ZIPNAME]($DL_URL)
 2. 解壓到任意資料夾(例如 \`D:\\QET\`)
 3. 執行 \`Lancer QET.bat\`(或 \`bin\\QElectroTech.exe\`)
 
@@ -165,22 +173,44 @@ EOF
 
 git add -A
 if ! git diff --cached --quiet; then
-	git commit -q -m "win 版 v$VERSION"
+	git commit -q -m "win 版 v$VERSION 說明(release asset)"
 fi
-git tag -f "$TAG"
+git push origin "$BRANCH" --force-with-lease 2>/dev/null \
+	|| git push origin "$BRANCH"
 
-# 只保留最近 KEEP 個 win tag
-ALL_TAGS=$(git tag -l "${TAG_PREFIX}*" | sort -V)
-TAG_COUNT=$(printf '%s\n' "$ALL_TAGS" | grep -c . || true)
-if [ "$TAG_COUNT" -gt "$KEEP" ]; then
-	OLD_TAGS=$(printf '%s\n' "$ALL_TAGS" | head -n $((TAG_COUNT - KEEP)))
-	for t in $OLD_TAGS; do
-		git tag -d "$t"
-		git push origin ":refs/tags/$t" 2>/dev/null || true
+# 4. 建 Gitea release + 上傳 asset(取代舊的 archive 下載) --------------------
+# 冪等:先刪同名 release 與 tag,再重建
+OLD_ID=$(api "$API_BASE/releases/tags/$TAG" 2>/dev/null \
+	| grep -o '"id":[0-9]*' | head -1 | cut -d: -f2 || true)
+[ -n "$OLD_ID" ] && api -X DELETE "$API_BASE/releases/$OLD_ID" >/dev/null 2>&1 || true
+api -X DELETE "$API_BASE/tags/$TAG" >/dev/null 2>&1 || true
+
+# release body = 最新版更新內容(JSON escape:反斜線/引號/換行)
+BODY_ESC=$(printf '%s' "$LATEST_NOTES" \
+	| sed ':a;N;$!ba;s/\\/\\\\/g;s/"/\\"/g;s/\r//g;s/\n/\\n/g')
+RID=$(api -X POST "$API_BASE/releases" -H "Content-Type: application/json" \
+	-d "{\"tag_name\":\"$TAG\",\"target_commitish\":\"$BRANCH\",\"name\":\"$TAG\",\"body\":\"$BODY_ESC\"}" \
+	| grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+[ -n "$RID" ] || { echo "!! 建 release 失敗"; exit 1; }
+echo "== 上傳 asset(release id $RID)"
+api -X POST "$API_BASE/releases/$RID/assets?name=$ZIPNAME" \
+	-F "attachment=@$ZIPPATH;type=application/zip" >/dev/null \
+	|| { echo "!! 上傳 asset 失敗"; exit 1; }
+
+# 只保留最近 KEEP 個 win-v release(連同 tag)
+ALL=$(api "$API_BASE/releases?limit=50" \
+	| grep -o '"tag_name":"'"$TAG_PREFIX"'[0-9.]*"' | cut -d'"' -f4 | sort -V)
+COUNT=$(printf '%s\n' "$ALL" | grep -c . || true)
+if [ "$COUNT" -gt "$KEEP" ]; then
+	printf '%s\n' "$ALL" | head -n $((COUNT - KEEP)) | while read -r t; do
+		[ -n "$t" ] || continue
+		rid=$(api "$API_BASE/releases/tags/$t" \
+			| grep -o '"id":[0-9]*' | head -1 | cut -d: -f2 || true)
+		[ -n "$rid" ] && api -X DELETE "$API_BASE/releases/$rid" >/dev/null 2>&1 || true
+		api -X DELETE "$API_BASE/tags/$t" >/dev/null 2>&1 || true
+		echo "   清理舊版 $t"
 	done
 fi
 
-git push origin "$BRANCH" --force-with-lease 2>/dev/null \
-	|| git push origin "$BRANCH"
-git push origin "$TAG" --force
-echo "== 發佈完成:$TAG(保留 tags:$(git tag -l "${TAG_PREFIX}*" | sort -V | tr '\n' ' '))"
+echo "== 發佈完成:$TAG(release asset $ZIPNAME)"
+echo "   保留 release:$(api "$API_BASE/releases?limit=50" | grep -o '"tag_name":"'"$TAG_PREFIX"'[0-9.]*"' | cut -d'"' -f4 | sort -V | tr '\n' ' ')"
