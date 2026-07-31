@@ -206,7 +206,10 @@ void AppUpdateDialog::refreshVersionList()
 		if (zip_url.isEmpty()) continue;   //release sans binaire: ignoree
 		versions << QVersionNumber::fromString(
 			tag.mid(TAG_PREFIX.size()));
-		m_win_asset_urls.insert(tag, zip_url);
+		//on ne garde que le chemin: le host du browser_download_url est
+		//le ROOT_URL de Gitea (IP LAN figee), injoignable en Tailscale.
+		//Le telechargement utilisera le host courant (m_url).
+		m_win_asset_urls.insert(tag, QUrl(zip_url).path());
 	}
 #else
 	QString output;
@@ -338,12 +341,17 @@ void AppUpdateDialog::applySelectedVersion()
 	m_status->setText(tr("Téléchargement de %1...").arg(tag));
 	QCoreApplication::processEvents();
 	//telechargement statique de l'asset de la release (-L: suit la
-	//redirection Gitea vers le fichier)
-	const QString asset_url = m_win_asset_urls.value(tag);
-	bool ok = !asset_url.isEmpty();
+	//redirection Gitea vers le fichier). On reconstruit l'URL avec le
+	//host courant (m_url, choisi joignable) au lieu du host figé renvoyé
+	//par Gitea.
+	const QString asset_path = m_win_asset_urls.value(tag);
+	bool ok = !asset_path.isEmpty();
 	if (!ok) {
 		log = tr("aucun binaire publié pour cette version");
 	} else {
+		const QUrl b(url);
+		const QString asset_url = b.scheme() % QStringLiteral("://")
+			% b.authority() % asset_path;
 		ok = run_process(QStringLiteral("curl"),
 			{ QStringLiteral("-fsSL"), QStringLiteral("-o"), zip,
 			  asset_url }, &log);

@@ -183,18 +183,28 @@ git push origin "$BRANCH" --force-with-lease 2>/dev/null \
 OLD_ID=$(api "$API_BASE/releases/tags/$TAG" 2>/dev/null \
 	| grep -o '"id":[0-9]*' | head -1 | cut -d: -f2 || true)
 [ -n "$OLD_ID" ] && api -X DELETE "$API_BASE/releases/$OLD_ID" >/dev/null 2>&1 || true
-api -X DELETE "$API_BASE/tags/$TAG" >/dev/null 2>&1 || true
+# 刪 tag 走 git(Gitea 的 DELETE /tags API 此版本回 404);tag 由建
+# release 時在 win-stable 重新建立
+git push origin ":refs/tags/$TAG" 2>/dev/null || true
 
-# release body = 最新版更新內容(JSON escape:反斜線/引號/換行)
-BODY_ESC=$(printf '%s' "$LATEST_NOTES" \
-	| sed ':a;N;$!ba;s/\\/\\\\/g;s/"/\\"/g;s/\r//g;s/\n/\\n/g')
+# release body 用純 ASCII 單行:此 shell 環境 locale 非 UTF-8,中文經
+# 命令列傳給 curl 會變無效 UTF-8 而 422。更新內容 client 走 CHANGELOG
+# raw(中文)顯示,不依賴此 body。
+RELEASE_BODY="QElectroTech Windows portable $TAG. See README / CHANGELOG-win.md for details."
 RID=$(api -X POST "$API_BASE/releases" -H "Content-Type: application/json" \
-	-d "{\"tag_name\":\"$TAG\",\"target_commitish\":\"$BRANCH\",\"name\":\"$TAG\",\"body\":\"$BODY_ESC\"}" \
+	-d "{\"tag_name\":\"$TAG\",\"target_commitish\":\"$BRANCH\",\"name\":\"$TAG\",\"body\":\"$RELEASE_BODY\",\"draft\":false,\"prerelease\":false}" \
 	| grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
 [ -n "$RID" ] || { echo "!! 建 release 失敗"; exit 1; }
+# 此版 Gitea 對「連同新 tag 一起建立」的 release 會強制設為 draft
+# (建立時傳 draft:false 不吃),draft 匿名不可見/asset 404,故建立後
+# 補 PATCH 轉為正式發佈。
+api -X PATCH "$API_BASE/releases/$RID" -H "Content-Type: application/json" \
+	-d '{"draft":false}' >/dev/null || { echo "!! 轉正式發佈失敗"; exit 1; }
 echo "== 上傳 asset(release id $RID)"
+# curl 為 Windows 原生,-F 的檔案路徑要用它認得的 C:/ 形式(非 MSYS /tmp)
+ZIP_WIN=$(cygpath -m "$ZIPPATH" 2>/dev/null || echo "$ZIPPATH")
 api -X POST "$API_BASE/releases/$RID/assets?name=$ZIPNAME" \
-	-F "attachment=@$ZIPPATH;type=application/zip" >/dev/null \
+	-F "attachment=@$ZIP_WIN;type=application/zip" >/dev/null \
 	|| { echo "!! 上傳 asset 失敗"; exit 1; }
 
 # 只保留最近 KEEP 個 win-v release(連同 tag)
@@ -207,7 +217,7 @@ if [ "$COUNT" -gt "$KEEP" ]; then
 		rid=$(api "$API_BASE/releases/tags/$t" \
 			| grep -o '"id":[0-9]*' | head -1 | cut -d: -f2 || true)
 		[ -n "$rid" ] && api -X DELETE "$API_BASE/releases/$rid" >/dev/null 2>&1 || true
-		api -X DELETE "$API_BASE/tags/$t" >/dev/null 2>&1 || true
+		git push origin ":refs/tags/$t" 2>/dev/null || true
 		echo "   清理舊版 $t"
 	done
 fi
