@@ -72,6 +72,11 @@ void PdmGitWorker::cancelPending()
 
 void PdmGitWorker::startNext()
 {
+	// 已有行程在跑就不再啟動:維持嚴格序列化。若 done-callback 一次
+	// enqueue 多個 job,第一個會因 m_process 暫為 null 而自動起跑,此時
+	// finished lambda 尾端的 startNext() 不能再起第二個,否則 git add 與
+	// git commit 會並行 → commit 撞到空索引「nothing to commit」而漏檔。
+	if (m_process) return;
 	if (m_queue.isEmpty()) {
 		emit allFinished();
 		return;

@@ -189,7 +189,9 @@ QETDiagramEditor::QETDiagramEditor(const QStringList &files, QWidget *parent) :
 	connect(&windowMapper, &QSignalMapper::mappedObject, this,
 		[this](QObject *o) { activateWidget(qobject_cast<QWidget *>(o)); });
 
-	setWindowTitle(tr("QElectroTech", "window title") + " " + QetVersion::displayedVersion());
+	// 品牌寫死(不靠翻譯):跨平台、跨介面語言一律顯示「虎氶科技」。
+	// 原以 zh_TW 翻譯覆蓋 QElectroTech,只有繁中介面才會生效,Windows/他語言會露回原名。
+	setWindowTitle(QStringLiteral("虎氶科技") + " " + QetVersion::displayedVersion());
 	setWindowIcon(QET::Icons::QETLogo);
 	statusBar() -> showMessage(tr("QElectroTech", "status bar message"));
 

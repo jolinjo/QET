@@ -28,6 +28,7 @@
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDialogButtonBox>
+#include <QDesktopServices>
 #include <QDir>
 #include <QFont>
 #include <QDomDocument>
@@ -100,6 +101,8 @@ namespace
 			return QColor(0xD1, 0xC4, 0xE9);   // 紫:已入庫未送審
 		if (s.contains(QStringLiteral("可出庫")))
 			return QColor(0xEC, 0xEF, 0xF1);   // 灰:閒置可出庫
+		if (s.contains(QStringLiteral("文件")))
+			return QColor(0xCF, 0xD8, 0xDC);   // 石板灰藍:非 .qet 文件附件
 		return QColor();
 	}
 
@@ -443,6 +446,10 @@ void PdmDialog::setUpWidget()
 	m_release_button = new QPushButton(tr("核准發行…"), content);
 	m_reject_button2 = new QPushButton(tr("退回…"), content);
 	m_revert_button = new QPushButton(tr("退回上一發行版…"), content);
+	// 文件附件(非 .qet:PDF 等,只新增/刪除/開啟,不出庫不簽核)
+	m_add_document_button = new QPushButton(tr("新增文件…"), content);
+	m_open_document_button = new QPushButton(tr("開啟"), content);
+	m_del_document_button = new QPushButton(tr("刪除文件…"), content);
 
 	auto *stages = new QHBoxLayout();
 	stages->addWidget(make_stage(tr("繪製"),
@@ -454,6 +461,9 @@ void PdmDialog::setUpWidget()
 	stages->addWidget(make_stage(tr("核准"),
 		{m_review_button2, m_release_button, m_reject_button2,
 		 m_revert_button}), 1);
+	stages->addWidget(make_stage(tr("文件附件"),
+		{m_add_document_button, m_open_document_button,
+		 m_del_document_button}), 1);
 	layout->addLayout(stages);
 
 	// 管理員維護（僅核准者可見,結構性變更直接改 main）
@@ -483,11 +493,16 @@ void PdmDialog::setUpWidget()
 		});
 	connect(m_tree, &QTreeWidget::itemSelectionChanged, this, [this]() {
 		updateButtons();
-		// 選檔即在右側面板載入該檔發行歷史
+		// 選檔即在右側面板載入歷史:圖檔看發行史,文件看 commit 歷史
 		const QTreeWidgetItem *item = selectedFileItem();
 		m_history_tree->clear();
-		if (item)
-			loadReleaseHistory(item->data(0, Qt::UserRole).toString());
+		if (item) {
+			const QString rp = item->data(0, Qt::UserRole).toString();
+			if (m_files.value(rp).is_document)
+				loadDocumentHistory(rp);
+			else
+				loadReleaseHistory(rp);
+		}
 	});
 	// 雙擊發行歷史某版本→唯讀開啟
 	connect(m_history_tree, &QTreeWidget::itemDoubleClicked, this,
@@ -565,6 +580,19 @@ void PdmDialog::setUpWidget()
 		this, &PdmDialog::deleteFolder);
 	connect(m_del_drawing_button, &QPushButton::clicked,
 		this, &PdmDialog::deleteDrawing);
+	connect(m_add_document_button, &QPushButton::clicked,
+		this, &PdmDialog::addDocument);
+	connect(m_open_document_button, &QPushButton::clicked,
+		this, &PdmDialog::openDocument);
+	connect(m_del_document_button, &QPushButton::clicked,
+		this, &PdmDialog::deleteDocument);
+	// 雙擊文件列 = 開啟(雙擊 .qet 無此行為,型別感知)
+	connect(m_tree, &QTreeWidget::itemDoubleClicked, this,
+		[this](QTreeWidgetItem *it) {
+			if (it && m_files.value(
+				it->data(0, Qt::UserRole).toString()).is_document)
+				openDocument();
+		});
 
 	updateButtons();
 }
@@ -853,6 +881,29 @@ void PdmDialog::loadFileStates()
 				// 版本/狀態/繪製者/審核者/核准者讀自 vault 的 .qet 首頁圖框
 				readDocFields(vault + '/' + state.rel_path, &state);
 				m_files.insert(state.rel_path, state);
+			}
+		});
+
+	// 非 .qet 二進位附件(PDF/xlsx/png…):當「文件」列出,只能新增/刪除/開啟。
+	// 排在 work 分支發現(→ applyFileMetadata)之前,確保套用中繼資料時已在清單。
+	// 排除 repo 中繼檔(.gitkeep/.gitattributes/.gitignore 等點檔)。
+	m_git->enqueue({"ls-files"}, vault,
+		[this](const PdmGitWorker::Result &result) {
+			const QStringList lines = result.output.split('\n',
+				Qt::SkipEmptyParts);
+			for (const QString &line : lines) {
+				const QString rp = line.trimmed();
+				if (rp.isEmpty()
+				    || rp.endsWith(QLatin1String(".qet"))
+				    || m_files.contains(rp))
+					continue;
+				if (QFileInfo(rp).fileName().startsWith(
+					QLatin1Char('.')))
+					continue;   // 點檔(.gitkeep 等)非文件
+				FileState state;
+				state.rel_path = rp;
+				state.is_document = true;
+				m_files.insert(rp, state);
 			}
 		});
 
@@ -1214,9 +1265,9 @@ void PdmDialog::rebuildFolderTree()
 	QStringList folders;
 	for (const QString &path : m_files.keys()) {
 		const QString dir = QFileInfo(path).path();   // 無資料夾時為 "."
-		const QString folder = (dir == QLatin1String("."))
-			? tr("(根目錄)") : dir;
-		if (!folders.contains(folder)) folders << folder;
+		if (dir == QLatin1String("."))
+			continue;   // 根目錄不顯示(檔案一律歸在專案資料夾下)
+		if (!folders.contains(dir)) folders << dir;
 	}
 	// 加入以 .gitkeep 佔位、尚無圖檔的空資料夾
 	for (const QString &dir : m_extra_folders)
@@ -1288,10 +1339,14 @@ void PdmDialog::populateFileList()
 		// 檔內狀態尚未合併回 main,以即時狀態呈現才不會顯示成舊值。
 		const bool active = !state.lock_owner.isEmpty()
 			|| state.pr_index > 0 || state.has_work_branch;
-		const QString status = active
-			? lifecycleStatus(state)
-			: (state.doc_status.isEmpty()
-				? lifecycleStatus(state) : state.doc_status);
+		// 文件附件無生命週期,固定顯示「文件」
+		const QString status = state.is_document
+			? tr("文件")
+			: (active
+				? lifecycleStatus(state)
+				: (state.doc_status.isEmpty()
+					? lifecycleStatus(state)
+					: state.doc_status));
 		// 右側只顯示檔名;完整相對路徑存在 UserRole 供動作用
 		auto *item = new QTreeWidgetItem(m_tree,
 			{state.revision,
@@ -1364,6 +1419,23 @@ void PdmDialog::updateButtons()
 	if (m_admin_box) m_admin_box->setVisible(m_is_releaser);
 	m_del_folder_button->setEnabled(folder_selected);
 	m_del_drawing_button->setEnabled(idle);
+
+	// 文件附件(非 .qet):新增只要連線;開啟/刪除需選到文件列。
+	// 選到文件時,.qet 生命週期按鈕全部停用(它沒有出庫/簽核/發行)。
+	const bool is_doc = has_selection && state.is_document;
+	m_add_document_button->setEnabled(!m_username.isEmpty());
+	m_open_document_button->setEnabled(is_doc);
+	m_del_document_button->setEnabled(is_doc);
+	if (is_doc) {
+		for (QPushButton *b : {m_checkout_button, m_checkin_button,
+			m_cancel_button, m_submit_direct_button,
+			m_submit_button, m_view_released_button,
+			m_review_button, m_review_button2, m_approve_button,
+			m_reject_button, m_reject_button2, m_release_button,
+			m_revert_button, m_force_unlock_button,
+			m_del_drawing_button})
+			b->setEnabled(false);
+	}
 }
 
 void PdmDialog::addNewDrawing()
@@ -2702,6 +2774,93 @@ void PdmDialog::deleteDrawing()
 	}, tr("刪除圖檔：%1").arg(rel_path));
 }
 
+void PdmDialog::addDocument()
+{
+	if (m_username.isEmpty()) return;   // 尚未連線
+	const QString vault = vaultDir();
+	// 目標資料夾 = 目前選取資料夾(根目錄則放 vault 根)
+	QString folder = m_current_folder;
+	if (folder == tr("(根目錄)")) folder.clear();
+
+	const QString src = QFileDialog::getOpenFileName(this,
+		tr("選擇要入庫的文件"), QString(), tr("所有檔案 (*)"));
+	if (src.isEmpty()) return;
+	const QString base = QFileInfo(src).fileName();
+	if (base.endsWith(QLatin1String(".qet"), Qt::CaseInsensitive)) {
+		QMessageBox::warning(this, tr("新增文件"),
+			tr(".qet 圖檔請用「新檔入庫」納入管理,不走文件附件。"));
+		return;
+	}
+	const QString rel = folder.isEmpty() ? base : folder + '/' + base;
+
+	// 覆蓋既有文件需填原因(當 commit 說明,留下換檔稽核紀錄)
+	QString message;
+	if (m_files.contains(rel)) {
+		// 內容與現有版本相同 → git 無變更可提交,不會產生新版本;
+		// 先比對,相同就直接告知,免使用者白填原因、也免「靜默無事發生」。
+		auto sameContent = [](const QString &a, const QString &b) {
+			QFile fa(a), fb(b);
+			if (!fa.open(QIODevice::ReadOnly)
+			    || !fb.open(QIODevice::ReadOnly))
+				return false;
+			return fa.size() == fb.size()
+			       && fa.readAll() == fb.readAll();
+		};
+		if (sameContent(src, vault + '/' + rel)) {
+			QMessageBox::information(this, tr("覆蓋文件"),
+				tr("所選檔案內容與現有版本相同,未產生新版本。"));
+			return;
+		}
+		bool ok = false;
+		const QString reason = QInputDialog::getText(this, tr("覆蓋文件"),
+			tr("「%1」已存在。請填寫覆蓋原因(必填):").arg(base),
+			QLineEdit::Normal, QString(), &ok).trimmed();
+		if (!ok || reason.isEmpty()) return;
+		message = tr("覆蓋(原因:%1)").arg(reason);
+	} else {
+		message = tr("初次入庫");
+	}
+
+	mutateMain([this, vault, src, rel, folder]() {
+		if (!folder.isEmpty()) QDir(vault).mkpath(folder);
+		QFile::remove(vault + '/' + rel);   // 覆蓋:先移除舊檔再複製
+		QFile::copy(src, vault + '/' + rel);
+		m_git->enqueue({"add", "--", rel}, vault, {});
+	}, message);
+}
+
+void PdmDialog::openDocument()
+{
+	const QTreeWidgetItem *item = selectedFileItem();
+	if (!item) return;
+	const QString rel = item->data(0, Qt::UserRole).toString();
+	if (!m_files.value(rel).is_document) return;
+	const QString abs = vaultDir() + '/' + rel;
+	if (!QFileInfo::exists(abs)) {
+		QMessageBox::warning(this, tr("開啟文件"),
+			tr("本機找不到「%1」,請先按重新整理。").arg(rel));
+		return;
+	}
+	QDesktopServices::openUrl(QUrl::fromLocalFile(abs));
+}
+
+void PdmDialog::deleteDocument()
+{
+	const QTreeWidgetItem *item = selectedFileItem();
+	if (!item) return;
+	const QString rel = item->data(0, Qt::UserRole).toString();
+	if (!m_files.value(rel).is_document) return;
+	if (QMessageBox::warning(this, tr("刪除文件"),
+		tr("將從圖庫刪除文件「%1」(git 歷史仍保留),確定?").arg(rel),
+		QMessageBox::Yes | QMessageBox::No, QMessageBox::No)
+	    != QMessageBox::Yes)
+		return;
+	const QString vault = vaultDir();
+	mutateMain([this, vault, rel]() {
+		m_git->enqueue({"rm", "--", rel}, vault, {});
+	}, tr("刪除文件:%1").arg(rel));
+}
+
 void PdmDialog::loadReleaseHistory(const QString &rel_path)
 {
 	const QString stem = sanitizedStem(rel_path);
@@ -2870,6 +3029,33 @@ void PdmDialog::loadReleaseHistory(const QString &rel_path)
 				// 樹建好後才插入送審修訂區(才不會被上面的 clear 清掉)
 				insert_review_section(*review_entries);
 			});
+		}
+	});
+}
+
+void PdmDialog::loadDocumentHistory(const QString &rel_path)
+{
+	// 文件附件無版本/發行生命週期,直接列出它在 main 上的 commit 歷史。
+	// 訊息欄即含「新增文件」或「覆蓋文件(原因:…)」,供換檔稽核。
+	const QString vault = vaultDir();
+	m_git->enqueue({QStringLiteral("log"),
+		QStringLiteral("--date=format:%Y-%m-%d %H:%M"),
+		QStringLiteral("--format=%s%x1f%cd%x1f%cn"),
+		QStringLiteral("origin/") + QLatin1String(DEFAULT_BRANCH),
+		QStringLiteral("--"), rel_path}, vault,
+		[this, rel_path](const PdmGitWorker::Result &r) {
+		const QTreeWidgetItem *cur = selectedFileItem();
+		if (!cur || cur->data(0, Qt::UserRole).toString() != rel_path)
+			return;
+		m_history_tree->clear();
+		if (!r.ok) return;
+		const QStringList lines = r.output.split('\n', Qt::SkipEmptyParts);
+		for (const QString &line : lines) {
+			const QStringList f = line.split(QChar(0x1f));
+			if (f.size() < 3) continue;
+			// 版本欄留空;日期 / 提交者 / 訊息
+			new QTreeWidgetItem(m_history_tree,
+				{QString(), f.at(1), f.at(2), f.at(0)});
 		}
 	});
 }

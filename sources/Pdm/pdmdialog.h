@@ -123,6 +123,7 @@ class PdmDialog : public QDialog
 			QString checked_by;    ///< 審核者(讀自 .qet 的 checked-by)
 			QString approved_by;   ///< 核准者(讀自 .qet 的 approved-by)
 			QString work_author;   ///< work 分支末次 commit 作者 email
+			bool is_document = false;  ///< true=非 .qet 二進位附件(只新增/刪除/開啟)
 		};
 
 		void setUpWidget();
@@ -139,6 +140,8 @@ class PdmDialog : public QDialog
 		void updateButtons();
 		/// 選取圖檔後自動載入其發行歷史到右側面板
 		void loadReleaseHistory(const QString &rel_path);
+		/// 文件附件無發行生命週期:改列 main 上該檔的 commit 歷史(含覆蓋原因)
+		void loadDocumentHistory(const QString &rel_path);
 		/// 唯讀開啟某個發行 tag
 		void openReleaseRevision(const QString &tag, const QString &rel_path);
 
@@ -222,6 +225,12 @@ class PdmDialog : public QDialog
 		void addFolder();       ///< 新增專案資料夾(.gitkeep 佔位)
 		void deleteFolder();    ///< 刪除選取資料夾及其下所有圖檔
 		void deleteDrawing();   ///< 刪除選取圖檔
+
+		// 非 .qet 二進位附件(PDF 等):不出庫、不簽核、不發行,只新增/刪除/開啟。
+		// 直接進 main(複用 mutateMain);覆蓋既有檔需填原因當 commit 說明。
+		void addDocument();     ///< 選檔入庫成文件附件(同名則需填覆蓋原因)
+		void openDocument();    ///< 用系統預設程式開啟選取的文件附件
+		void deleteDocument();  ///< 刪除選取的文件附件
 		/// 在 vault 的 main 上做結構性變更:準備→change(內含 git add/rm)→
 		/// commit(訊息)→push→重整
 		void mutateMain(const std::function<void ()> &change,
@@ -300,7 +309,10 @@ class PdmDialog : public QDialog
 			    *m_revert_button = nullptr,
 			    *m_add_folder_button = nullptr,
 			    *m_del_folder_button = nullptr,
-			    *m_del_drawing_button = nullptr;
+			    *m_del_drawing_button = nullptr,
+			    *m_add_document_button = nullptr,  ///< 新增文件附件
+			    *m_open_document_button = nullptr, ///< 開啟文件附件
+			    *m_del_document_button = nullptr;  ///< 刪除文件附件
 		QLabel *m_status_label = nullptr;
 
 		// 專用的出入庫進度對話框(所有 PDM 造成的延遲都用它,不再借用主視窗)
